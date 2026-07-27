@@ -1,0 +1,1 @@
+- [Clerk auth setup](clerk-auth-setup.md) — Clerk wired with per-user movie scoping; root `/` is landing page, `/watched` is authenticated home; Google login on by default.

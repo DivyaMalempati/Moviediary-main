@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "ign-ZpvjVqQDTF-iOBADa"
+uri = "file://movies_export.csv"
+type = "table"
+title = "Your 87 movies — orphaned library export"

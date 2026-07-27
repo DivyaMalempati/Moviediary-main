@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "Indian Cinema Tracker"
+version = "1.0.0"
+id = "artifacts/movie-tracker"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18645
+
+[services.development]
+run = "pnpm --filter @workspace/movie-tracker run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/movie-tracker", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/movie-tracker/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18645"
+BASE_PATH = "/"

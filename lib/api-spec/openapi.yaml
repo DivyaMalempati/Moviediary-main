@@ -1,0 +1,574 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Indian Cinema Tracker API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: movies
+    description: Movie library operations
+  - name: tmdb
+    description: TMDB proxy operations
+  - name: suggestions
+    description: Movie suggestion operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /movies:
+    get:
+      operationId: listMovies
+      tags: [movies]
+      summary: List movies in library
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [watched, watchlist]
+        - name: language
+          in: query
+          schema:
+            type: string
+        - name: rating
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of movies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Movie"
+    post:
+      operationId: createMovie
+      tags: [movies]
+      summary: Add a movie to library
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MovieInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Movie"
+
+  /movies/stats:
+    get:
+      operationId: getMovieStats
+      tags: [movies]
+      summary: Get library statistics
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovieStats"
+
+  /movies/match-all:
+    post:
+      operationId: matchAllMovies
+      tags: [movies]
+      summary: Bulk match all unmatched movies to TMDB
+      responses:
+        "200":
+          description: Match results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkMatchResult"
+
+  /movies/{id}:
+    get:
+      operationId: getMovie
+      tags: [movies]
+      summary: Get a movie by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Movie
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Movie"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateMovie
+      tags: [movies]
+      summary: Update a movie
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MovieUpdate"
+      responses:
+        "200":
+          description: Updated movie
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Movie"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteMovie
+      tags: [movies]
+      summary: Delete a movie
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /movies/{id}/match:
+    post:
+      operationId: matchMovieToTmdb
+      tags: [movies]
+      summary: Match a single movie to TMDB
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated movie with TMDB data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Movie"
+        "404":
+          description: Not found
+
+  /tmdb/search:
+    get:
+      operationId: searchTmdb
+      tags: [tmdb]
+      summary: Search TMDB for movies
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: region
+          in: query
+          schema:
+            type: string
+            default: "IN"
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TmdbMovie"
+
+  /tmdb/trending-india:
+    get:
+      operationId: getTrendingIndia
+      tags: [tmdb]
+      summary: Get trending movies in India
+      responses:
+        "200":
+          description: Trending movies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TmdbMovie"
+
+  /tmdb/discover-indian:
+    get:
+      operationId: discoverIndian
+      tags: [tmdb]
+      summary: Discover Indian films by language
+      parameters:
+        - name: language
+          in: query
+          schema:
+            type: string
+            description: "Language code: te, ta, ml, kn, hi"
+      responses:
+        "200":
+          description: Discovered movies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TmdbMovie"
+
+  /tmdb/similar/{tmdbId}:
+    get:
+      operationId: getSimilarMovies
+      tags: [tmdb]
+      summary: Get movies similar to a given TMDB movie
+      parameters:
+        - name: tmdbId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Similar movies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TmdbMovie"
+
+  /tmdb/watch-providers/{tmdbId}:
+    get:
+      operationId: getWatchProviders
+      tags: [tmdb]
+      summary: Get streaming/watch providers for a movie (India region)
+      parameters:
+        - name: tmdbId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Watch providers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WatchProviders"
+
+  /tmdb/recommendations/{tmdbId}:
+    get:
+      operationId: getTmdbRecommendations
+      tags: [tmdb]
+      summary: Get TMDB recommendations for a movie
+      parameters:
+        - name: tmdbId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Recommended movies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TmdbMovie"
+
+  /suggestions/ai:
+    post:
+      operationId: getAiSuggestions
+      tags: [suggestions]
+      summary: Get AI-powered movie suggestions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiSuggestionsInput"
+      responses:
+        "200":
+          description: AI suggestions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AiSuggestion"
+
+  /suggestions/because-you-liked:
+    get:
+      operationId: getBecauseYouLiked
+      tags: [suggestions]
+      summary: Get suggestions based on top-rated watched films
+      responses:
+        "200":
+          description: Suggestions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TmdbMovie"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+
+    Movie:
+      type: object
+      required: [id, title, status, createdAt]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        status:
+          type: string
+          enum: [watched, watchlist]
+        rating:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        tmdbId:
+          type: ["integer", "null"]
+        posterPath:
+          type: ["string", "null"]
+        releaseYear:
+          type: ["integer", "null"]
+        originalLanguage:
+          type: ["string", "null"]
+        genres:
+          type: ["array", "null"]
+          items:
+            type: string
+        overview:
+          type: ["string", "null"]
+        watchedAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    MovieInput:
+      type: object
+      required: [title, status]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        status:
+          type: string
+          enum: [watched, watchlist]
+        rating:
+          type: string
+        notes:
+          type: string
+        tmdbId:
+          type: integer
+        posterPath:
+          type: string
+        releaseYear:
+          type: integer
+        originalLanguage:
+          type: string
+        genres:
+          type: array
+          items:
+            type: string
+        overview:
+          type: string
+        watchedAt:
+          type: string
+
+    MovieUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+        status:
+          type: string
+          enum: [watched, watchlist]
+        rating:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        tmdbId:
+          type: ["integer", "null"]
+        posterPath:
+          type: ["string", "null"]
+        releaseYear:
+          type: ["integer", "null"]
+        originalLanguage:
+          type: ["string", "null"]
+        genres:
+          type: ["array", "null"]
+          items:
+            type: string
+        overview:
+          type: ["string", "null"]
+        watchedAt:
+          type: ["string", "null"]
+
+    MovieStats:
+      type: object
+      required: [totalWatched, totalWatchlist, byLanguage, byRating, byGenre, byMonth]
+      properties:
+        totalWatched:
+          type: integer
+        totalWatchlist:
+          type: integer
+        byLanguage:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountByKey"
+        byRating:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountByKey"
+        byGenre:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountByKey"
+        byMonth:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountByKey"
+        recentlyWatched:
+          type: array
+          items:
+            $ref: "#/components/schemas/Movie"
+
+    CountByKey:
+      type: object
+      required: [key, count]
+      properties:
+        key:
+          type: string
+        count:
+          type: integer
+
+    BulkMatchResult:
+      type: object
+      required: [matched, failed, total]
+      properties:
+        matched:
+          type: integer
+        failed:
+          type: integer
+        total:
+          type: integer
+
+    TmdbMovie:
+      type: object
+      required: [tmdbId, title]
+      properties:
+        tmdbId:
+          type: integer
+        title:
+          type: string
+        originalTitle:
+          type: ["string", "null"]
+        posterPath:
+          type: ["string", "null"]
+        releaseYear:
+          type: ["integer", "null"]
+        originalLanguage:
+          type: ["string", "null"]
+        genres:
+          type: ["array", "null"]
+          items:
+            type: string
+        overview:
+          type: ["string", "null"]
+        voteAverage:
+          type: ["number", "null"]
+
+    AiSuggestionsInput:
+      type: object
+      properties:
+        count:
+          type: integer
+          default: 10
+
+    WatchProvider:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        logoPath:
+          type: ["string", "null"]
+
+    WatchProviders:
+      type: object
+      required: [tmdbId]
+      properties:
+        tmdbId:
+          type: integer
+        flatrate:
+          type: ["array", "null"]
+          items:
+            $ref: "#/components/schemas/WatchProvider"
+        rent:
+          type: ["array", "null"]
+          items:
+            $ref: "#/components/schemas/WatchProvider"
+        buy:
+          type: ["array", "null"]
+          items:
+            $ref: "#/components/schemas/WatchProvider"
+        link:
+          type: ["string", "null"]
+
+    AiSuggestion:
+      type: object
+      required: [title, language, reason]
+      properties:
+        title:
+          type: string
+        year:
+          type: ["integer", "null"]
+        language:
+          type: string
+        reason:
+          type: string
+        posterPath:
+          type: ["string", "null"]
+        tmdbId:
+          type: ["integer", "null"]

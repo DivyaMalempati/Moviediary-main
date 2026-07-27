@@ -1,0 +1,159 @@
+Personal Movie Tracker (Indian-cinema focused)
+
+Single-user movie database (no login) to track watched / watchlist and get suggestions, with suggestions weighted toward Indian cinema — Telugu, Tamil, Malayalam, Kannada, Hindi (plus the occasional world/English pick when it fits your taste). Data lives in Lovable Cloud so it survives across devices.
+
+Scope
+
+
+
+
+
+No profiles / no login. One shared library.
+
+
+
+TMDB for posters, year, genres, synopsis, cast, original language.
+
+
+
+Seed import: your 42 watched (with rating buckets parsed from notes) + 169 unwatched, as raw titles. TMDB match happens on demand or in bulk from a "Match all" button.
+
+
+
+Suggestions: Indian-first — filter/boost results whose original_language is te, ta, ml, kn, hi and region IN. English/world films appear only as a small secondary section.
+
+Pages
+
+
+
+
+
+Watched (home) — poster grid, filter by rating and by language (Telugu / Tamil / Malayalam / Kannada / Hindi / Other).
+
+
+
+Watchlist — same shape; "Mark watched" opens rating modal.
+
+
+
+Add — TMDB search (region=IN by default, toggle for global); quick add by title.
+
+
+
+Suggestions — tabs:
+
+
+
+
+
+For You (AI) — Lovable AI, prompt tells it to prioritize Telugu/Tamil/Malayalam/Kannada/Hindi films matching your taste. Returns 10 with a one-line reason and language tag.
+
+
+
+Because you liked… — TMDB /similar + /recommendations seeded from your top-rated watched films, filtered to Indian languages first, then dedup'd against your library.
+
+
+
+Trending in India — TMDB /trending + /discover with region=IN and with_original_language=te|ta|ml|kn|hi.
+
+
+
+Movie detail — poster, metadata (language badge), your rating/notes, move between lists.
+
+Data model (Lovable Cloud / Postgres)
+
+movies
+  id uuid pk
+  title text not null
+  status text check in ('watched','watchlist')
+  rating text nullable         -- loved | great | very_good | good | ok | avg | meh
+  notes text nullable
+  tmdb_id int nullable
+  poster_path text nullable
+  release_year int nullable
+  original_language text nullable   -- te|ta|ml|kn|hi|en|...
+  genres text[] nullable
+  overview text nullable
+  watched_at timestamptz nullable
+  created_at timestamptz default now()
+  unique (lower(title), coalesce(tmdb_id, 0))
+
+RLS enabled, permissive policies (single-user app), grants to anon + authenticated.
+
+Seed migration inserts 42 watched (ratings parsed: excellent/loved/best→loved, great→great, "very good"→very_good, good→good, ok→ok, avg/average→avg) and 169 unwatched.
+
+Integrations
+
+
+
+
+
+TMDB (needs TMDB_API_KEY secret). Server fns in src/lib/tmdb.functions.ts: searchMovies({query, region:'IN'}), getMovieDetails, getSimilar, getRecommendations, discoverIndian({lang}), trendingIN.
+
+
+
+Bulk match: server fn iterates unmatched rows, calls TMDB search, stores tmdb_id, poster_path, release_year, original_language, genres, overview.
+
+
+
+Lovable AI (auto-provisioned). Server fn aiSuggestions sends a compact {title, language, rating} list plus the rule "prioritize Telugu, Tamil, Malayalam, Kannada, Hindi films; only include non-Indian films when strongly matched." Returns structured JSON {title, year, language, reason}[]. Model: google/gemini-2.5-flash.
+
+Tech
+
+
+
+
+
+TanStack Start routes: /, /watchlist, /add, /suggestions, /movie/$id.
+
+
+
+TanStack Query for reads; server fns for TMDB, AI, mutations.
+
+
+
+shadcn/ui; dark cinema-inspired design with a warm accent; language badges (TE / TA / ML / KN / HI). Semantic tokens only.
+
+
+
+Per-route head() with unique titles.
+
+Build order
+
+
+
+
+
+Enable Lovable Cloud.
+
+
+
+Prompt you for TMDB_API_KEY.
+
+
+
+Migration: movies table, grants, RLS, seed 42 + 169.
+
+
+
+Server fns: movies.functions.ts, tmdb.functions.ts, ai.functions.ts.
+
+
+
+Layout + design tokens.
+
+
+
+Pages: Watched → Watchlist → Add → Movie detail → Suggestions.
+
+
+
+"Match all on TMDB" one-click enrichment for the seed rows.
+
+
+
+Build/smoke check.
+
+Open item
+
+Grab a free TMDB API key at https://www.themoviedb.org/settings/api — I'll open a secret form for TMDB_API_KEY during build.
