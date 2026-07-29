@@ -385,14 +385,17 @@ export const GetWatchProvidersParams = zod.object({
 export const GetWatchProvidersResponse = zod.object({
   "tmdbId": zod.number(),
   "flatrate": zod.array(zod.object({
+  "providerId": zod.number().optional(),
   "name": zod.string(),
   "logoPath": zod.string().nullish()
 })).nullish(),
   "rent": zod.array(zod.object({
+  "providerId": zod.number().optional(),
   "name": zod.string(),
   "logoPath": zod.string().nullish()
 })).nullish(),
   "buy": zod.array(zod.object({
+  "providerId": zod.number().optional(),
   "name": zod.string(),
   "logoPath": zod.string().nullish()
 })).nullish(),

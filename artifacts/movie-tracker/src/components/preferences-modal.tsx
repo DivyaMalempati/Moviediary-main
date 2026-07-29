@@ -9,7 +9,7 @@ import {
   SheetDescription,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { LanguagePicker, GenrePicker } from "@/components/taste-picker";
+import { LanguagePicker, GenrePicker, ProviderPicker } from "@/components/taste-picker";
 import { usePreferences, useSavePreferences } from "@/lib/preferences";
 import { toast } from "sonner";
 
@@ -19,11 +19,13 @@ export function PreferencesModal() {
   const { mutate: savePrefs, isPending } = useSavePreferences();
   const [languages, setLanguages] = useState<string[]>([]);
   const [genres, setGenres] = useState<string[]>([]);
+  const [providers, setProviders] = useState<number[]>([]);
 
   const handleOpen = (val: boolean) => {
     if (val && prefs) {
       setLanguages(prefs.preferredLanguages ?? []);
       setGenres(prefs.preferredGenres ?? []);
+      setProviders(prefs.preferredProviders ?? []);
     }
     setOpen(val);
   };
@@ -34,9 +36,17 @@ export function PreferencesModal() {
   const toggleGenre = (name: string) =>
     setGenres((prev) => (prev.includes(name) ? prev.filter((g) => g !== name) : [...prev, name]));
 
+  const toggleProvider = (id: number) =>
+    setProviders((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]));
+
   const handleSave = () => {
     savePrefs(
-      { preferredLanguages: languages, preferredGenres: genres },
+      {
+        preferredLanguages: languages,
+        preferredGenres: genres,
+        preferredProviders: providers,
+        watchRegion: prefs?.watchRegion ?? "IN",
+      },
       {
         onSuccess: () => {
           toast.success("Preferences saved");
@@ -65,8 +75,7 @@ export function PreferencesModal() {
         <SheetHeader className="px-6 py-5 border-b border-border">
           <SheetTitle className="text-base font-semibold">Cinema Preferences</SheetTitle>
           <SheetDescription className="text-sm text-muted-foreground">
-            Languages and genres you enjoy. Swipe, Suggestions, and Discover all prioritise these.
-            Leave everything unselected to browse all world cinema.
+            Languages, genres, and streaming services. Swipe and Search can prioritise films you can stream tonight.
           </SheetDescription>
         </SheetHeader>
 
@@ -89,15 +98,27 @@ export function PreferencesModal() {
               </h3>
               <GenrePicker selected={genres} onToggle={toggleGenre} />
             </section>
+
+            <section className="space-y-4">
+              <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Streaming services
+              </h3>
+              <ProviderPicker
+                selected={providers}
+                onToggle={toggleProvider}
+                watchRegion={prefs?.watchRegion ?? "IN"}
+              />
+            </section>
           </div>
         )}
 
         <div className="px-6 py-4 border-t border-border flex items-center justify-between gap-3">
-          {(languages.length > 0 || genres.length > 0) && (
+          {(languages.length > 0 || genres.length > 0 || providers.length > 0) && (
             <button
               onClick={() => {
                 setLanguages([]);
                 setGenres([]);
+                setProviders([]);
               }}
               className="text-xs text-muted-foreground hover:text-foreground transition-colors"
             >

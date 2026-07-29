@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { TmdbMovieCard } from "@/components/tmdb-movie-card";
 import { Input } from "@/components/ui/input";
@@ -13,27 +13,60 @@ import {
   getListMoviesQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Search, Globe, MapPin, Loader2, Sparkles } from "lucide-react";
+import { Search, Globe, MapPin, Loader2, Sparkles, Tv } from "lucide-react";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks/use-debounce";
 import { RatingPickerDialog } from "@/components/rating-picker-dialog";
+import { usePreferences } from "@/lib/preferences";
+import { getGuestHeaders } from "@/lib/demo-auth";
+import { cn } from "@/lib/utils";
+import { Link } from "wouter";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+async function isOnMyServices(
+  tmdbId: number,
+  providerIds: number[],
+  watchRegion: string,
+): Promise<boolean> {
+  try {
+    const res = await fetch(
+      `${BASE}/api/tmdb/watch-providers/${tmdbId}?watchRegion=${encodeURIComponent(watchRegion)}`,
+      { credentials: "include", headers: { ...getGuestHeaders() } },
+    );
+    if (!res.ok) return false;
+    const data = await res.json() as {
+      flatrate?: Array<{ providerId?: number; name?: string }> | null;
+    };
+    const flatrate = data.flatrate ?? [];
+    const wanted = new Set(providerIds);
+    return flatrate.some((p) => p.providerId != null && wanted.has(p.providerId));
+  } catch {
+    return false;
+  }
+}
 
 export default function AddPage() {
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebounce(query, 500);
   const [region, setRegion] = useState("IN");
   const [pendingWatched, setPendingWatched] = useState<any | null>(null);
+  const [onMyServices, setOnMyServices] = useState(false);
+  const [streamingIds, setStreamingIds] = useState<Set<number> | null>(null);
+  const [filteringStreaming, setFilteringStreaming] = useState(false);
+
+  const { data: prefs } = usePreferences();
+  const preferredProviders = prefs?.preferredProviders ?? [];
+  const watchRegion = prefs?.watchRegion ?? "IN";
 
   const queryClient = useQueryClient();
   const createMovie = useCreateMovie();
   const matchAll = useMatchAllMovies();
 
-  // Load library so we can show "In Library" on cards already saved
   const { data: library } = useListMovies(undefined, {
     query: { queryKey: getListMoviesQueryKey() },
   });
 
-  // Map tmdbId → { status } for fast lookup
   const libraryMap = useMemo(() => {
     const m = new Map<number, { status: string }>();
     (library ?? []).forEach((mv) => {
@@ -55,6 +88,48 @@ export default function AddPage() {
     }
   );
 
+  useEffect(() => {
+    let cancelled = false;
+    setStreamingIds(null);
+
+    if (!onMyServices || !results?.length || preferredProviders.length === 0) {
+      setFilteringStreaming(false);
+      return;
+    }
+
+    setFilteringStreaming(true);
+    (async () => {
+      const matched = new Set<number>();
+      // Bound concurrency so we don't hammer TMDB on long result lists.
+      const chunkSize = 4;
+      for (let i = 0; i < results.length; i += chunkSize) {
+        const chunk = results.slice(i, i + chunkSize);
+        const checks = await Promise.all(
+          chunk.map(async (movie) => {
+            const ok = await isOnMyServices(movie.tmdbId, preferredProviders, watchRegion);
+            return ok ? movie.tmdbId : null;
+          }),
+        );
+        if (cancelled) return;
+        for (const id of checks) if (id != null) matched.add(id);
+      }
+      if (!cancelled) {
+        setStreamingIds(matched);
+        setFilteringStreaming(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [onMyServices, results, preferredProviders, watchRegion]);
+
+  const visibleResults = useMemo(() => {
+    if (!results) return results;
+    if (!onMyServices) return results;
+    if (preferredProviders.length === 0) return results;
+    if (!streamingIds) return [];
+    return results.filter((m) => streamingIds.has(m.tmdbId));
+  }, [results, onMyServices, preferredProviders, streamingIds]);
+
   const doAdd = (movie: any, status: "watched" | "watchlist", rating?: string | null) => {
     createMovie.mutate(
       {
@@ -62,7 +137,6 @@ export default function AddPage() {
           title: movie.title,
           status,
           ...(rating ? { rating } : {}),
-          // Strip nulls — schema uses .optional() which rejects null
           ...(movie.tmdbId != null && { tmdbId: movie.tmdbId }),
           ...(movie.posterPath != null && { posterPath: movie.posterPath }),
           ...(movie.releaseYear != null && { releaseYear: movie.releaseYear }),
@@ -106,6 +180,20 @@ export default function AddPage() {
     });
   };
 
+  const toggleOnMyServices = () => {
+    if (!onMyServices && preferredProviders.length === 0) {
+      toast.message("Pick your streaming services in Preferences first", {
+        description: "Profile → Streaming services, then try again.",
+        action: {
+          label: "Open profile",
+          onClick: () => { window.location.href = `${BASE}/profile`; },
+        },
+      });
+      return;
+    }
+    setOnMyServices((v) => !v);
+  };
+
   return (
     <Layout>
       <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
@@ -127,21 +215,37 @@ export default function AddPage() {
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <ToggleGroup
-              type="single"
-              value={region}
-              onValueChange={(v) => v && setRegion(v)}
-              className="justify-start"
-            >
-              <ToggleGroupItem value="IN" aria-label="Indian Cinema">
-                <MapPin className="w-4 h-4 mr-2" />
-                India
-              </ToggleGroupItem>
-              <ToggleGroupItem value="GLOBAL" aria-label="Global">
-                <Globe className="w-4 h-4 mr-2" />
-                Global
-              </ToggleGroupItem>
-            </ToggleGroup>
+            <div className="flex flex-wrap items-center gap-2">
+              <ToggleGroup
+                type="single"
+                value={region}
+                onValueChange={(v) => v && setRegion(v)}
+                className="justify-start"
+              >
+                <ToggleGroupItem value="IN" aria-label="Indian Cinema">
+                  <MapPin className="w-4 h-4 mr-2" />
+                  India
+                </ToggleGroupItem>
+                <ToggleGroupItem value="GLOBAL" aria-label="Global">
+                  <Globe className="w-4 h-4 mr-2" />
+                  Global
+                </ToggleGroupItem>
+              </ToggleGroup>
+
+              <button
+                type="button"
+                onClick={toggleOnMyServices}
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
+                  onMyServices
+                    ? "bg-emerald-400 text-black border-emerald-400"
+                    : "bg-transparent text-muted-foreground border-border hover:border-foreground/40 hover:text-foreground",
+                )}
+              >
+                <Tv className="w-3.5 h-3.5" />
+                Available on my streaming services
+              </button>
+            </div>
 
             <Button
               variant="outline"
@@ -158,16 +262,23 @@ export default function AddPage() {
               Match Unlinked
             </Button>
           </div>
+
+          {onMyServices && preferredProviders.length > 0 && (
+            <p className="text-[11px] text-muted-foreground">
+              Showing titles with flatrate availability in {watchRegion} on your selected services.
+              {filteringStreaming ? " Checking…" : ""}
+            </p>
+          )}
         </div>
 
         <div className="space-y-4 pb-20">
-          {isSearching && debouncedQuery.length > 1 ? (
+          {(isSearching || filteringStreaming) && debouncedQuery.length > 1 ? (
             <div className="flex justify-center py-20">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
-          ) : results && results.length > 0 ? (
+          ) : visibleResults && visibleResults.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {results.map((movie) => {
+              {visibleResults.map((movie) => {
                 const lib = libraryMap.get(movie.tmdbId);
                 const isPendingThis =
                   createMovie.isPending &&
@@ -187,8 +298,21 @@ export default function AddPage() {
               })}
             </div>
           ) : debouncedQuery.length > 1 ? (
-            <div className="text-center py-20">
-              <p className="text-muted-foreground">No results found for "{debouncedQuery}"</p>
+            <div className="text-center py-20 space-y-2">
+              <p className="text-muted-foreground">
+                {onMyServices
+                  ? `No results for "${debouncedQuery}" on your streaming services`
+                  : `No results found for "${debouncedQuery}"`}
+              </p>
+              {onMyServices && (
+                <p className="text-xs text-muted-foreground">
+                  Try turning off the streaming filter, or{" "}
+                  <Link href="/profile" className="underline underline-offset-2 hover:text-foreground">
+                    update your services
+                  </Link>
+                  .
+                </p>
+              )}
             </div>
           ) : (
             <div className="text-center py-20 text-muted-foreground/50">
@@ -202,6 +326,7 @@ export default function AddPage() {
       <RatingPickerDialog
         open={!!pendingWatched}
         movieTitle={pendingWatched?.title ?? ""}
+        confirmOnSelect
         onConfirm={(rating) => {
           const movie = pendingWatched;
           setPendingWatched(null);

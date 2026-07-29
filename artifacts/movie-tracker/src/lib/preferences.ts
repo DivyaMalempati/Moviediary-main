@@ -6,19 +6,25 @@ const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 export interface UserPreferences {
   preferredLanguages: string[];
   preferredGenres: string[];
+  preferredProviders: number[];
+  watchRegion: string;
   onboardingCompletedAt: string | null;
 }
+
+export type PreferencesInput = {
+  preferredLanguages: string[];
+  preferredGenres: string[];
+  preferredProviders?: number[];
+  watchRegion?: string;
+};
 
 const defaultPreferences: UserPreferences = {
   preferredLanguages: [],
   preferredGenres: [],
+  preferredProviders: [],
+  watchRegion: "IN",
   onboardingCompletedAt: null,
 };
-
-// ── API helpers ──────────────────────────────────────────────────────────────
-// Guest users now get real isolated DB rows (via x-guest-token), so no
-// localStorage fallback is needed — preferences are stored server-side for
-// both Clerk users and guests alike.
 
 async function fetchPreferences(): Promise<UserPreferences> {
   const res = await fetch(`${API_BASE}/api/preferences`, {
@@ -26,26 +32,42 @@ async function fetchPreferences(): Promise<UserPreferences> {
     headers: { ...getGuestHeaders() },
   });
   if (!res.ok) return defaultPreferences;
-  return res.json();
+  const data = await res.json();
+  return {
+    ...defaultPreferences,
+    ...data,
+    preferredProviders: Array.isArray(data.preferredProviders) ? data.preferredProviders : [],
+    watchRegion: data.watchRegion || "IN",
+  };
 }
 
 export class PreferencesAuthError extends Error {
   constructor() { super("Session expired"); }
 }
 
-async function savePreferences(prefs: { preferredLanguages: string[]; preferredGenres: string[] }): Promise<UserPreferences> {
+async function savePreferences(prefs: PreferencesInput): Promise<UserPreferences> {
   const res = await fetch(`${API_BASE}/api/preferences`, {
     method: "PUT",
     credentials: "include",
     headers: { "Content-Type": "application/json", ...getGuestHeaders() },
-    body: JSON.stringify(prefs),
+    body: JSON.stringify({
+      preferredLanguages: prefs.preferredLanguages,
+      preferredGenres: prefs.preferredGenres,
+      preferredProviders: prefs.preferredProviders ?? [],
+      watchRegion: prefs.watchRegion ?? "IN",
+    }),
   });
   if (res.status === 401) throw new PreferencesAuthError();
   if (!res.ok) throw new Error("Failed to save preferences");
-  return res.json();
+  const data = await res.json();
+  return {
+    ...defaultPreferences,
+    ...data,
+    preferredProviders: Array.isArray(data.preferredProviders) ? data.preferredProviders : [],
+    watchRegion: data.watchRegion || "IN",
+  };
 }
 
-// ── Hooks ────────────────────────────────────────────────────────────────────
 export function usePreferences() {
   return useQuery({
     queryKey: ["preferences"],
@@ -63,3 +85,40 @@ export function useSavePreferences() {
     },
   });
 }
+
+export type WatchProviderCatalogItem = {
+  providerId: number;
+  name: string;
+  logoPath: string | null;
+  displayPriority?: number;
+};
+
+export async function fetchWatchProviderCatalog(watchRegion = "IN"): Promise<WatchProviderCatalogItem[]> {
+  const res = await fetch(
+    `${API_BASE}/api/tmdb/watch-provider-catalog?watchRegion=${encodeURIComponent(watchRegion)}`,
+    { credentials: "include", headers: { ...getGuestHeaders() } },
+  );
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export function useWatchProviderCatalog(watchRegion = "IN") {
+  return useQuery({
+    queryKey: ["watch-provider-catalog", watchRegion],
+    queryFn: () => fetchWatchProviderCatalog(watchRegion),
+    staleTime: 24 * 60 * 60 * 1000,
+  });
+}
+
+/** Popular India streaming services shown first in the picker. */
+export const FEATURED_PROVIDER_IDS = [
+  8,    // Netflix
+  119,  // Amazon Prime Video
+  122,  // Hotstar / Disney+ Hotstar
+  337,  // Disney Plus
+  220,  // JioCinema
+  237,  // Sony LIV
+  232,  // Zee5
+  350,  // Apple TV
+  11,   // MUBI
+];

@@ -11,6 +11,14 @@ import {
   Clapperboard, Search, Loader2, Upload, X, Download, ChevronDown, RotateCcw,
 } from "lucide-react";
 import { RatingPickerDialog } from "@/components/rating-picker-dialog";
+import {
+  findAnniversaryReminders,
+  formatAnniversaryCopy,
+  isAnniversaryDismissed,
+  dismissAnniversary,
+  anniversaryPosterUrl,
+  type AnniversaryFilm,
+} from "@/lib/rewatch-reminders";
 
 // ── CSV export ────────────────────────────────────────────────────────────────
 function exportCSV(movies: any[], filename: string) {
@@ -174,6 +182,7 @@ export default function WatchedPage() {
   const queryClient = useQueryClient();
   const rewatchMovie = useRewatchMovie();
   const [pendingRewatch, setPendingRewatch] = useState<any | null>(null);
+  const [reminderDismissed, setReminderDismissed] = useState(false);
   const [genreFilter, setGenreFilter]     = useState("all");
   const [languageFilter, setLanguageFilter] = useState("all");
   const [ratingFilter, setRatingFilter]   = useState("all");
@@ -196,11 +205,7 @@ export default function WatchedPage() {
       { id, data: rating != null ? { rating } : {} },
       {
         onSuccess: (movie) => {
-          toast.success(
-            movie.rewatchCount > 1
-              ? `Rewatch logged · ×${1 + movie.rewatchCount}`
-              : "Rewatch logged"
-          );
+          toast.success(`Rewatch logged · ×${1 + movie.rewatchCount}`);
           queryClient.invalidateQueries({ queryKey: getListMoviesQueryKey({ status: "watched" }) });
           queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
           queryClient.invalidateQueries({ queryKey: getGetMovieStatsQueryKey() });
@@ -216,6 +221,12 @@ export default function WatchedPage() {
   const claim = useClaimOrphaned();
 
   const showBanner = !bannerDismissed && (orphaned?.count ?? 0) > 0;
+
+  const anniversaryReminder: AnniversaryFilm | null = useMemo(() => {
+    if (!movies?.length || reminderDismissed) return null;
+    const candidates = findAnniversaryReminders(movies).filter((f) => !isAnniversaryDismissed(f.id));
+    return candidates[0] ?? null;
+  }, [movies, reminderDismissed]);
 
   // Unique genres from user's library
   const allGenres = useMemo(() => {
@@ -284,6 +295,56 @@ export default function WatchedPage() {
                 <X className="w-4 h-4" />
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Smart rewatch anniversary reminder */}
+        {anniversaryReminder && (
+          <div className="relative flex items-start gap-4 rounded-xl border border-amber-400/30 bg-amber-400/5 px-5 py-4">
+            {anniversaryPosterUrl(anniversaryReminder) ? (
+              <img
+                src={anniversaryPosterUrl(anniversaryReminder)!}
+                alt=""
+                className="w-12 h-[72px] rounded-md object-cover shrink-0 shadow"
+              />
+            ) : (
+              <div className="w-12 h-[72px] rounded-md bg-secondary flex items-center justify-center shrink-0">
+                <RotateCcw className="w-5 h-5 text-muted-foreground" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium leading-snug">
+                {formatAnniversaryCopy(anniversaryReminder)}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Based on the last time you logged this film as watched.
+              </p>
+              <div className="flex items-center gap-2 mt-3">
+                <Button
+                  size="sm"
+                  className="bg-white text-black hover:bg-white/90 h-7 text-xs gap-1"
+                  onClick={() => setPendingRewatch(anniversaryReminder)}
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  Log rewatch
+                </Button>
+                <Link href={`/movie/${anniversaryReminder.id}`}>
+                  <Button size="sm" variant="outline" className="h-7 text-xs">
+                    Open film
+                  </Button>
+                </Link>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                dismissAnniversary(anniversaryReminder.id);
+                setReminderDismissed(true);
+              }}
+              className="text-muted-foreground hover:text-foreground transition-colors p-1 shrink-0"
+              aria-label="Dismiss reminder"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         )}
 

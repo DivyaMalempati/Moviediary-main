@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useClerk, useUser } from "@clerk/react";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
-import { LanguagePicker, GenrePicker } from "@/components/taste-picker";
+import { LanguagePicker, GenrePicker, ProviderPicker } from "@/components/taste-picker";
 import { usePreferences, useSavePreferences } from "@/lib/preferences";
 import { isDemoMode, disableDemoMode } from "@/lib/demo-auth";
 import { toast } from "sonner";
@@ -14,10 +14,12 @@ function CinemaPreferences() {
   const { mutate: savePrefs, isPending } = useSavePreferences();
   const [languages, setLanguages] = useState<string[] | null>(null);
   const [genres, setGenres] = useState<string[] | null>(null);
+  const [providers, setProviders] = useState<number[] | null>(null);
 
   // Initialise from server once loaded
   const effectiveLanguages = languages ?? prefs?.preferredLanguages ?? [];
   const effectiveGenres = genres ?? prefs?.preferredGenres ?? [];
+  const effectiveProviders = providers ?? prefs?.preferredProviders ?? [];
 
   const toggleLanguage = (code: string) => {
     const base = languages ?? prefs?.preferredLanguages ?? [];
@@ -29,9 +31,19 @@ function CinemaPreferences() {
     setGenres(base.includes(name) ? base.filter((g) => g !== name) : [...base, name]);
   };
 
+  const toggleProvider = (id: number) => {
+    const base = providers ?? prefs?.preferredProviders ?? [];
+    setProviders(base.includes(id) ? base.filter((p) => p !== id) : [...base, id]);
+  };
+
   const handleSave = () => {
     savePrefs(
-      { preferredLanguages: effectiveLanguages, preferredGenres: effectiveGenres },
+      {
+        preferredLanguages: effectiveLanguages,
+        preferredGenres: effectiveGenres,
+        preferredProviders: effectiveProviders,
+        watchRegion: prefs?.watchRegion ?? "IN",
+      },
       {
         onSuccess: () => toast.success("Preferences saved"),
         onError: () => toast.error("Failed to save preferences"),
@@ -46,8 +58,7 @@ function CinemaPreferences() {
   return (
     <div className="space-y-8">
       <p className="text-sm text-muted-foreground">
-        Languages and genres you enjoy. Swipe, Suggestions, and Discover all prioritise these.
-        Leave everything unselected to browse all world cinema.
+        Languages, genres, and streaming services. Swipe and Search can prioritise films you can stream tonight.
       </p>
 
       <section className="space-y-4">
@@ -64,12 +75,24 @@ function CinemaPreferences() {
         <GenrePicker selected={effectiveGenres} onToggle={toggleGenre} />
       </section>
 
+      <section className="space-y-4">
+        <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+          Streaming services
+        </h3>
+        <ProviderPicker
+          selected={effectiveProviders}
+          onToggle={toggleProvider}
+          watchRegion={prefs?.watchRegion ?? "IN"}
+        />
+      </section>
+
       <div className="flex items-center gap-3 pt-2">
-        {(effectiveLanguages.length > 0 || effectiveGenres.length > 0) && (
+        {(effectiveLanguages.length > 0 || effectiveGenres.length > 0 || effectiveProviders.length > 0) && (
           <button
             onClick={() => {
               setLanguages([]);
               setGenres([]);
+              setProviders([]);
             }}
             className="text-xs text-muted-foreground hover:text-foreground transition-colors"
           >

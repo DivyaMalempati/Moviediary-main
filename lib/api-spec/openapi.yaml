@@ -570,6 +570,8 @@ components:
       type: object
       required: [name]
       properties:
+        providerId:
+          type: integer
         name:
           type: string
         logoPath:

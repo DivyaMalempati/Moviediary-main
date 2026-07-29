@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { useGenreList } from "@/lib/genres";
+import { FEATURED_PROVIDER_IDS, useWatchProviderCatalog } from "@/lib/preferences";
 
 // ── Language catalogue ────────────────────────────────────────────────────
 export const LANGUAGE_GROUPS = [
@@ -137,3 +138,62 @@ export function GenrePicker({
     </div>
   );
 }
+
+export function ProviderPicker({
+  selected,
+  onToggle,
+  watchRegion = "IN",
+}: {
+  selected: number[];
+  onToggle: (providerId: number) => void;
+  watchRegion?: string;
+}) {
+  const { data: catalog, isLoading, isError, refetch } = useWatchProviderCatalog(watchRegion);
+
+  if (isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading streaming services…</p>;
+  }
+
+  if (isError || !catalog?.length) {
+    return (
+      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+        <span>Couldn't load streaming services.</span>
+        <button
+          onClick={() => refetch()}
+          className="underline underline-offset-2 hover:text-foreground transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  const featured = FEATURED_PROVIDER_IDS
+    .map((id) => catalog.find((p) => p.providerId === id))
+    .filter(Boolean) as typeof catalog;
+  const featuredIds = new Set(featured.map((p) => p.providerId));
+  const selectedExtra = catalog.filter(
+    (p) => selected.includes(p.providerId) && !featuredIds.has(p.providerId),
+  );
+  const shown = [...featured, ...selectedExtra];
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        {shown.map((p) => (
+          <Pill
+            key={p.providerId}
+            active={selected.includes(p.providerId)}
+            onClick={() => onToggle(p.providerId)}
+          >
+            {p.name}
+          </Pill>
+        ))}
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        Region: {watchRegion}. Used by Search and Swipe when “Available on my streaming services” is on.
+      </p>
+    </div>
+  );
+}
+

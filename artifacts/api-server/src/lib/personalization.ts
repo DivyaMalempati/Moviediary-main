@@ -24,6 +24,8 @@ const UNRATED_WEIGHT = 0.25;
 export interface ExplicitPreferences {
   languages: string[]; // ISO 639-1 codes, from onboarding/settings
   genres: string[]; // genre names, from onboarding/settings
+  providerIds?: number[]; // TMDB watch provider IDs
+  watchRegion?: string; // ISO country for watch availability
 }
 
 export interface TasteProfile {
@@ -205,6 +207,14 @@ export async function getPersonalizedSwipePool(opts: {
   const languages = mergeRanked(profile.topLanguages, explicitPrefs.languages, 6);
   const effectiveLanguages = languages.length > 0 ? languages : fallbackLanguages;
 
+  const watch =
+    explicitPrefs.providerIds && explicitPrefs.providerIds.length > 0
+      ? {
+          providerIds: explicitPrefs.providerIds,
+          watchRegion: explicitPrefs.watchRegion || "IN",
+        }
+      : undefined;
+
   const nameToId = await getGenreNameToIdMap().catch(() => new Map<string, number>());
   const idToName = new Map([...nameToId.entries()].map(([name, id]) => [id, name]));
   const genreNames = mergeRanked(profile.topGenres, explicitPrefs.genres, 4);
@@ -224,11 +234,11 @@ export async function getPersonalizedSwipePool(opts: {
   //    and seed-similar, which is what was flooding Action decks with hybrids) ──
   if (genreIdFilter) {
     const [primaryPage, nextPage, iconic, latest] = await Promise.all([
-      discoverMovies(effectiveLanguages, undefined, page, genreIdFilter).catch(() => []),
-      discoverMovies(effectiveLanguages, undefined, page + 1, genreIdFilter).catch(() => []),
-      discoverIconicMovies(effectiveLanguages, page, genreIdFilter).catch(() => []),
+      discoverMovies(effectiveLanguages, undefined, page, genreIdFilter, watch).catch(() => []),
+      discoverMovies(effectiveLanguages, undefined, page + 1, genreIdFilter, watch).catch(() => []),
+      discoverIconicMovies(effectiveLanguages, page, genreIdFilter, watch).catch(() => []),
       // Offset latest page so it doesn't duplicate the primary discover page
-      discoverMovies(effectiveLanguages, undefined, page + 2, genreIdFilter).catch(() => []),
+      discoverMovies(effectiveLanguages, undefined, page + 2, genreIdFilter, watch).catch(() => []),
     ]);
     const pools = {
       genreWeighted: prep([...primaryPage, ...nextPage]),
@@ -243,16 +253,16 @@ export async function getPersonalizedSwipePool(opts: {
 
   // ── Cold start: no rated watch history yet ──────────────────────────────
   if (!profile.hasImplicitData || profile.seedMovies.length === 0) {
-    if (genreIds.length > 0 || explicitPrefs.languages.length > 0) {
+    if (genreIds.length > 0 || explicitPrefs.languages.length > 0 || watch) {
       // They told us what they like at onboarding — use it immediately.
       // Use up to 3 genre IDs so more of the stated taste is covered.
       const genreCalls = genreIds
         .slice(0, 3)
-        .map((gid) => discoverMovies(effectiveLanguages, undefined, page, gid).catch(() => []));
+        .map((gid) => discoverMovies(effectiveLanguages, undefined, page, gid, watch).catch(() => []));
       const [genreResults, iconic, latest] = await Promise.all([
-        Promise.all(genreCalls.length ? genreCalls : [discoverMovies(effectiveLanguages, undefined, page, iconicGenreId).catch(() => [])]),
-        discoverIconicMovies(effectiveLanguages, page, iconicGenreId).catch(() => []),
-        discoverMovies(effectiveLanguages, undefined, page, latestGenreId).catch(() => []),
+        Promise.all(genreCalls.length ? genreCalls : [discoverMovies(effectiveLanguages, undefined, page, iconicGenreId, watch).catch(() => [])]),
+        discoverIconicMovies(effectiveLanguages, page, iconicGenreId, watch).catch(() => []),
+        discoverMovies(effectiveLanguages, undefined, page, latestGenreId, watch).catch(() => []),
       ]);
       const pools = {
         genreWeighted: prep(genreResults.flat()),
@@ -265,8 +275,8 @@ export async function getPersonalizedSwipePool(opts: {
     // No signal at all (shouldn't normally happen once onboarding is in
     // place, but covers users who skip it) — old generic behavior.
     const [iconic, latest] = await Promise.all([
-      discoverIconicMovies(effectiveLanguages, page, genreIdFilter).catch(() => []),
-      discoverMovies(effectiveLanguages, undefined, page, genreIdFilter).catch(() => []),
+      discoverIconicMovies(effectiveLanguages, page, genreIdFilter, watch).catch(() => []),
+      discoverMovies(effectiveLanguages, undefined, page, genreIdFilter, watch).catch(() => []),
     ]);
     const pools = { iconic: prep(iconic), latest: prep(latest) };
     return assemble(pools, MIX_COLD_NO_PREFS, TARGET_BATCH);
@@ -287,17 +297,23 @@ export async function getPersonalizedSwipePool(opts: {
     }
   }
 
+  // When filtering to "on my services", seed-similar/recs ignore providers —
+  // lean on discover buckets instead so the deck stays streamable tonight.
+  if (watch) seedBased = [];
+
   let genreWeighted: SwipeCandidate[] = [];
   if (genreIds.length > 0) {
     // Use up to 3 genre IDs — more coverage of stated/learned taste.
-    const genreCalls = genreIds.slice(0, 3).map((gid) => discoverMovies(effectiveLanguages, undefined, page, gid).catch(() => []));
+    const genreCalls = genreIds.slice(0, 3).map((gid) => discoverMovies(effectiveLanguages, undefined, page, gid, watch).catch(() => []));
     genreWeighted = (await Promise.all(genreCalls)).flat();
+  } else if (watch) {
+    genreWeighted = await discoverMovies(effectiveLanguages, undefined, page, undefined, watch).catch(() => []);
   }
 
   // Iconic and latest also respect the user's genre preferences (not just the
   // optional UI filter), so Drama/Romance don't flood the non-genre-weighted slots.
-  const iconic = await discoverIconicMovies(effectiveLanguages, page, iconicGenreId).catch(() => []);
-  const latest = await discoverMovies(effectiveLanguages, undefined, page, latestGenreId).catch(() => []);
+  const iconic = await discoverIconicMovies(effectiveLanguages, page, iconicGenreId, watch).catch(() => []);
+  const latest = await discoverMovies(effectiveLanguages, undefined, page, latestGenreId, watch).catch(() => []);
 
   const pools = {
     seedBased: prep(seedBased),
@@ -306,7 +322,7 @@ export async function getPersonalizedSwipePool(opts: {
     latest: prep(latest),
   };
 
-  return assemble(pools, MIX_WARM, TARGET_BATCH);
+  return assemble(pools, watch ? MIX_COLD_WITH_PREFS : MIX_WARM, TARGET_BATCH);
 }
 
 function assemble<K extends string>(

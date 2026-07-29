@@ -12,7 +12,7 @@ const router: IRouter = Router();
 const WORLD_CINEMA_DEFAULT = ["ml", "ta", "te", "hi", "ko", "ja", "fr", "de", "it", "es", "zh", "fa", "tr", "bn", "kn"];
 
 /**
- * GET /discover/swipe?page=1&genreId=28&excludeIds=603,680
+ * GET /discover/swipe?page=1&genreId=28&excludeIds=603,680&onMyServices=1
  *
  * Personalized batch for the swipe screen. Blends:
  *  - implicit taste learned from rated watch history (once it exists)
@@ -20,11 +20,17 @@ const WORLD_CINEMA_DEFAULT = ["ml", "ta", "te", "hi", "ko", "ja", "fr", "de", "i
  *
  * A brand-new user who just finished onboarding gets a genre/language
  * weighted deck immediately, not a generic popular/iconic fallback.
+ *
+ * When onMyServices=1 and the user has preferredProviders, discover is
+ * filtered to films available on those streaming services tonight.
  */
 router.get("/discover/swipe", requireAuth, async (req: any, res): Promise<void> => {
   const page = Math.max(1, parseInt((req.query.page as string) || "1", 10) || 1);
   const genreIdRaw = req.query.genreId as string | undefined;
   const genreIdFilter = genreIdRaw ? parseInt(genreIdRaw, 10) || undefined : undefined;
+  const onMyServices =
+    req.query.onMyServices === "1" ||
+    req.query.onMyServices === "true";
 
   const excludeIdsRaw = req.query.excludeIds as string | undefined;
   const clientExcluded = excludeIdsRaw
@@ -45,9 +51,16 @@ router.get("/discover/swipe", requireAuth, async (req: any, res): Promise<void> 
     ...clientExcluded,
   ]);
 
+  const preferredProviders = prefsRow[0]?.preferredProviders ?? [];
   const explicitPrefs = {
     languages: prefsRow[0]?.preferredLanguages ?? [],
     genres: prefsRow[0]?.preferredGenres ?? [],
+    ...(onMyServices && preferredProviders.length > 0
+      ? {
+          providerIds: preferredProviders,
+          watchRegion: prefsRow[0]?.watchRegion ?? "IN",
+        }
+      : {}),
   };
 
   const pool = await getPersonalizedSwipePool({
