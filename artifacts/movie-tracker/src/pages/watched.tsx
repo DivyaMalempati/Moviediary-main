@@ -10,7 +10,7 @@ import { useListMovies, useGetMovieStats, useRewatchMovie, getListMoviesQueryKey
 import {
   Clapperboard, Search, Loader2, Upload, X, Download, ChevronDown, RotateCcw,
 } from "lucide-react";
-import { RatingPickerDialog } from "@/components/rating-picker-dialog";
+import { RewatchLogDialog } from "@/components/rewatch-log-dialog";
 import {
   findAnniversaryReminders,
   formatAnniversaryCopy,
@@ -19,7 +19,7 @@ import {
   anniversaryPosterUrl,
   type AnniversaryFilm,
 } from "@/lib/rewatch-reminders";
-import { RATING_LABELS } from "@/lib/movie-utils";
+import { RATING_LABELS, formatWatchDate } from "@/lib/movie-utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getAuthHeaders } from "@/lib/demo-auth";
@@ -127,6 +127,8 @@ function Section({ title, movies, badge, defaultOpen = true, onRewatch }: {
               rating={movie.rating}
               year={movie.releaseYear}
               rewatchCount={movie.rewatchCount}
+              rewatchDates={movie.rewatchDates}
+              watchedAt={movie.watchedAt}
               overlayAction={
                 <Button
                   size="sm"
@@ -170,21 +172,29 @@ export default function WatchedPage() {
     try { localStorage.setItem("cinevault:sort", s); } catch {}
   };
 
-  const submitRewatch = (rating: string | null) => {
+  const submitRewatch = (payload: { rating: string | null; watchedAt?: string | null }) => {
     if (!pendingRewatch) return;
     const id = pendingRewatch.id as number;
     setPendingRewatch(null);
+    const data: { rating?: string | null; watchedAt?: string | null } = {};
+    if (payload.rating != null) data.rating = payload.rating;
+    if (payload.watchedAt) data.watchedAt = payload.watchedAt;
     rewatchMovie.mutate(
-      { id, data: rating != null ? { rating } : {} },
+      { id, data },
       {
         onSuccess: (movie) => {
-          toast.success(`Rewatch logged · ×${1 + movie.rewatchCount}`);
+          const times = 1 + movie.rewatchCount;
+          toast.success(
+            payload.watchedAt
+              ? `Rewatch logged · ×${times} · ${formatWatchDate(payload.watchedAt)}`
+              : `Rewatch logged · ×${times}`,
+          );
           queryClient.invalidateQueries({ queryKey: getListMoviesQueryKey({ status: "watched" }) });
           queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
           queryClient.invalidateQueries({ queryKey: getGetMovieStatsQueryKey() });
         },
         onError: () => toast.error("Failed to log rewatch"),
-      }
+      },
     );
   };
 
@@ -462,6 +472,8 @@ export default function WatchedPage() {
                 rating={movie.rating}
                 year={movie.releaseYear}
                 rewatchCount={movie.rewatchCount}
+                rewatchDates={movie.rewatchDates}
+                watchedAt={movie.watchedAt}
                 overlayAction={
                   <Button
                     size="sm"
@@ -482,12 +494,9 @@ export default function WatchedPage() {
           </div>
         )}
 
-        <RatingPickerDialog
+        <RewatchLogDialog
           open={!!pendingRewatch}
           movieTitle={pendingRewatch?.title ?? ""}
-          confirmOnSelect
-          titleSuffix=" this time"
-          skipLabel="Skip rating · still log rewatch"
           onConfirm={submitRewatch}
           onCancel={() => setPendingRewatch(null)}
         />

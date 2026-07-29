@@ -9,13 +9,14 @@ export type AnniversaryFilm = {
   rating?: string | null;
 };
 
-/** Films whose last-watched month/day matches today, at least 1 year ago. */
+/** Films whose watch/rewatch month/day matches today, at least 1 year ago. */
 export function findAnniversaryReminders(
   movies: Array<{
     id: number;
     title: string;
     posterPath?: string | null;
     watchedAt?: string | null;
+    rewatchDates?: string[] | null;
     rating?: string | null;
   }>,
   today = new Date(),
@@ -25,20 +26,29 @@ export function findAnniversaryReminders(
 
   return movies
     .flatMap((m) => {
-      if (!m.watchedAt) return [];
-      const watched = new Date(m.watchedAt);
-      if (Number.isNaN(watched.getTime())) return [];
-      if (watched.getMonth() !== month || watched.getDate() !== day) return [];
-      const yearsAgo = today.getFullYear() - watched.getFullYear();
-      if (yearsAgo < 1) return [];
-      return [{
-        id: m.id,
-        title: m.title,
-        posterPath: m.posterPath,
-        watchedAt: m.watchedAt,
-        yearsAgo,
-        rating: m.rating,
-      }];
+      const dates = [
+        ...(m.watchedAt ? [m.watchedAt] : []),
+        ...(m.rewatchDates ?? []),
+      ];
+      let best: AnniversaryFilm | null = null;
+      for (const iso of dates) {
+        const watched = new Date(iso);
+        if (Number.isNaN(watched.getTime())) continue;
+        if (watched.getMonth() !== month || watched.getDate() !== day) continue;
+        const yearsAgo = today.getFullYear() - watched.getFullYear();
+        if (yearsAgo < 1) continue;
+        if (!best || yearsAgo > best.yearsAgo) {
+          best = {
+            id: m.id,
+            title: m.title,
+            posterPath: m.posterPath,
+            watchedAt: iso,
+            yearsAgo,
+            rating: m.rating,
+          };
+        }
+      }
+      return best ? [best] : [];
     })
     .sort((a, b) => b.yearsAgo - a.yearsAgo || a.title.localeCompare(b.title));
 }

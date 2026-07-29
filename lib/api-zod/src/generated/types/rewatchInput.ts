@@ -12,4 +12,9 @@ export interface RewatchInput {
      * @nullable
      */
   rating?: string | null;
+  /**
+     * Optional date for this rewatch (ISO 8601 date or datetime). Omit or null to log a rewatch without recording a date.
+     * @nullable
+     */
+  watchedAt?: string | null;
 }

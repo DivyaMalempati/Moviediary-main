@@ -21,7 +21,7 @@ import {
   useRewatchMovie,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getPosterUrl, RATING_LABELS } from "@/lib/movie-utils";
+import { getPosterUrl, RATING_LABELS, formatWatchDate } from "@/lib/movie-utils";
 import { LanguageBadge } from "@/components/language-badge";
 import { MoviePosterCard } from "@/components/movie-card";
 import { Star, Heart, Bookmark, Check, Trash2, ArrowLeft, Loader2, Calendar, Clapperboard, Tv, Eye, BookmarkPlus, Film, FolderOpen, Plus, X, RotateCcw } from "lucide-react";
@@ -39,6 +39,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { RatingPickerDialog } from "@/components/rating-picker-dialog";
+import { RewatchLogDialog } from "@/components/rewatch-log-dialog";
 import { ChangeLanguageDialog } from "@/components/change-language-dialog";
 import { Input } from "@/components/ui/input";
 import {
@@ -128,6 +129,7 @@ export default function MovieDetailsPage() {
     titleSuffix?: string;
     skipLabel?: string;
   } | null>(null);
+  const [rewatchDialogOpen, setRewatchDialogOpen] = useState(false);
   const [newColName, setNewColName] = useState("");
 
   // Collections
@@ -198,29 +200,34 @@ export default function MovieDetailsPage() {
 
   const handleRewatch = () => {
     if (!movie) return;
-    setRatingDialogMovie({
-      title: movie.title,
-      titleSuffix: " this time",
-      skipLabel: "Skip rating · still log rewatch",
-      action: (selectedRating) => {
-        setRatingDialogMovie(null);
-        rewatchMovie.mutate(
-          { id, data: selectedRating != null ? { rating: selectedRating } : {} },
-          {
-            onSuccess: (updated) => {
-              toast.success(`Rewatch logged · ×${1 + updated.rewatchCount}`);
-              if (selectedRating) {
-                setRating(selectedRating);
-                lastSaved.current = { ...lastSaved.current, rating: selectedRating };
-              }
-              queryClient.invalidateQueries({ queryKey: getGetMovieQueryKey(id) });
-              queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
-            },
-            onError: () => toast.error("Failed to log rewatch"),
+    setRewatchDialogOpen(true);
+  };
+
+  const submitRewatch = (payload: { rating: string | null; watchedAt?: string | null }) => {
+    setRewatchDialogOpen(false);
+    const data: { rating?: string | null; watchedAt?: string | null } = {};
+    if (payload.rating != null) data.rating = payload.rating;
+    if (payload.watchedAt) data.watchedAt = payload.watchedAt;
+    rewatchMovie.mutate(
+      { id, data },
+      {
+        onSuccess: (updated) => {
+          const times = 1 + updated.rewatchCount;
+          toast.success(
+            payload.watchedAt
+              ? `Rewatch logged · ×${times} · ${formatWatchDate(payload.watchedAt)}`
+              : `Rewatch logged · ×${times}`,
+          );
+          if (payload.rating) {
+            setRating(payload.rating);
+            lastSaved.current = { ...lastSaved.current, rating: payload.rating };
           }
-        );
+          queryClient.invalidateQueries({ queryKey: getGetMovieQueryKey(id) });
+          queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
+        },
+        onError: () => toast.error("Failed to log rewatch"),
       },
-    });
+    );
   };
 
   const doAddTmdb = (tmdbMovie: any, status: "watched" | "watchlist", rating?: string | null) => {
@@ -411,6 +418,77 @@ export default function MovieDetailsPage() {
               </p>
             </section>
           )}
+
+          {/* Watch history */}
+          {movie.status === "watched" && (() => {
+            const times = 1 + (movie.rewatchCount ?? 0);
+            const dated = [...(movie.rewatchDates ?? [])].slice().reverse();
+            const lastIso = movie.watchedAt ?? null;
+            const lastMatchesRewatch =
+              !!lastIso &&
+              dated.some((iso) => {
+                const a = new Date(iso);
+                const b = new Date(lastIso);
+                return (
+                  !Number.isNaN(a.getTime()) &&
+                  !Number.isNaN(b.getTime()) &&
+                  a.toDateString() === b.toDateString()
+                );
+              });
+            const undated =
+              (movie.rewatchCount ?? 0) - (movie.rewatchDates?.length ?? 0);
+            return (
+              <section>
+                <h3 className="text-xl font-semibold mb-3 flex items-center gap-2">
+                  <RotateCcw className="w-5 h-5 text-primary" />
+                  Watch history
+                </h3>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Watched ×{times}
+                  {(movie.rewatchCount ?? 0) > 0
+                    ? ` · ${movie.rewatchCount} rewatch${movie.rewatchCount === 1 ? "" : "es"}`
+                    : ""}
+                </p>
+                <ul className="space-y-2 text-sm">
+                  {lastIso && !lastMatchesRewatch && (
+                    <li className="flex items-center gap-2 text-muted-foreground">
+                      <Calendar className="w-3.5 h-3.5 shrink-0" />
+                      <span>
+                        {(movie.rewatchCount ?? 0) > 0 ? "Last watched" : "Watched"}{" "}
+                        <span className="text-foreground font-medium">
+                          {formatWatchDate(lastIso)}
+                        </span>
+                      </span>
+                    </li>
+                  )}
+                  {dated.map((iso, i) => (
+                    <li
+                      key={`${iso}-${i}`}
+                      className="flex items-center gap-2 text-muted-foreground"
+                    >
+                      <Calendar className="w-3.5 h-3.5 shrink-0" />
+                      <span>
+                        Rewatched{" "}
+                        <span className="text-foreground font-medium">
+                          {formatWatchDate(iso)}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                  {undated > 0 && (
+                    <li className="text-xs text-muted-foreground/80 pl-5">
+                      {undated} rewatch{undated === 1 ? "" : "es"} logged without a date
+                    </li>
+                  )}
+                  {!lastIso && dated.length === 0 && (
+                    <li className="text-sm text-muted-foreground italic">
+                      No dates logged yet — dates are optional when you rewatch.
+                    </li>
+                  )}
+                </ul>
+              </section>
+            );
+          })()}
 
           {/* Where to Watch */}
           {movie.tmdbId && (() => {
@@ -686,6 +764,12 @@ export default function MovieDetailsPage() {
         onConfirm={(r) => ratingDialogMovie?.action(r)}
         onCancel={() => setRatingDialogMovie(null)}
       />
+      <RewatchLogDialog
+        open={rewatchDialogOpen}
+        movieTitle={movie.title}
+        onConfirm={submitRewatch}
+        onCancel={() => setRewatchDialogOpen(false)}
+      />
       <ChangeLanguageDialog
         open={languageOpen}
         onOpenChange={setLanguageOpen}
@@ -693,7 +777,7 @@ export default function MovieDetailsPage() {
         title={movie.title}
         currentLanguage={movie.originalLanguage}
         currentTmdbId={movie.tmdbId}
-        libraryTmdbIds={libraryTmdbIds as Set<number>}
+        libraryTmdbIds={libraryTmdbIds}
       />
     </Layout>
   );

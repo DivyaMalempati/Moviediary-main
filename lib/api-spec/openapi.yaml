@@ -381,7 +381,7 @@ components:
 
     Movie:
       type: object
-      required: [id, title, status, createdAt, rewatchCount]
+      required: [id, title, status, createdAt, rewatchCount, rewatchDates]
       properties:
         id:
           type: integer
@@ -416,6 +416,13 @@ components:
           type: integer
           minimum: 0
           description: Number of rewatches after the first watch (0 = watched once)
+        rewatchDates:
+          type: array
+          items:
+            type: string
+          description: >
+            Optional dates logged for rewatches (ISO 8601). Length may be less
+            than rewatchCount when some rewatches were logged without a date.
 
     MovieInput:
       type: object
@@ -484,6 +491,11 @@ components:
         rating:
           type: ["string", "null"]
           description: Optional updated rating from this rewatch
+        watchedAt:
+          type: ["string", "null"]
+          description: >
+            Optional date for this rewatch (ISO 8601 date or datetime).
+            Omit or null to log a rewatch without recording a date.
 
     MovieStats:
       type: object
