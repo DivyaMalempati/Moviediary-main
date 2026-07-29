@@ -10,9 +10,11 @@ export function isDemoMode(): boolean {
 
 /**
  * Returns the x-guest-token header for raw fetch() calls.
- * Returns {} for signed-in Clerk users (token is not stored).
+ * Only sent while demo mode is active — never for signed-in Clerk users,
+ * even if a stale guest token remains in localStorage.
  */
 export function getGuestHeaders(): Record<string, string> {
+  if (!isDemoMode()) return {};
   const token = localStorage.getItem(GUEST_TOKEN_KEY);
   return token ? { "x-guest-token": token } : {};
 }
@@ -52,5 +54,9 @@ export function initDemoMode(): void {
   if (isDemoMode()) {
     const token = localStorage.getItem(GUEST_TOKEN_KEY);
     if (token) setExtraHeaders({ "x-guest-token": token });
+  } else {
+    // Avoid a stale guest token hijacking Clerk-authenticated API calls.
+    clearExtraHeaders();
+    localStorage.removeItem(GUEST_TOKEN_KEY);
   }
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,19 +13,27 @@ import { LanguagePicker, GenrePicker, ProviderPicker } from "@/components/taste-
 import { usePreferences, useSavePreferences } from "@/lib/preferences";
 import { toast } from "sonner";
 
-export function PreferencesModal() {
+export function PreferencesModal({
+  trigger,
+}: {
+  /** Custom trigger. Defaults to a settings gear icon. */
+  trigger?: ReactNode;
+}) {
   const [open, setOpen] = useState(false);
-  const { data: prefs, isLoading } = usePreferences();
+  const { data: prefs, isLoading, refetch } = usePreferences();
   const { mutate: savePrefs, isPending } = useSavePreferences();
   const [languages, setLanguages] = useState<string[]>([]);
   const [genres, setGenres] = useState<string[]>([]);
   const [providers, setProviders] = useState<number[]>([]);
 
   const handleOpen = (val: boolean) => {
-    if (val && prefs) {
-      setLanguages(prefs.preferredLanguages ?? []);
-      setGenres(prefs.preferredGenres ?? []);
-      setProviders(prefs.preferredProviders ?? []);
+    if (val) {
+      void refetch().then((result) => {
+        const next = result.data ?? prefs;
+        setLanguages(next?.preferredLanguages ?? []);
+        setGenres(next?.preferredGenres ?? []);
+        setProviders(next?.preferredProviders ?? []);
+      });
     }
     setOpen(val);
   };
@@ -60,12 +68,14 @@ export function PreferencesModal() {
   return (
     <Sheet open={open} onOpenChange={handleOpen}>
       <SheetTrigger asChild>
-        <button
-          className="text-muted-foreground hover:text-foreground transition-colors"
-          title="Preferences"
-        >
-          <Settings className="w-4 h-4" />
-        </button>
+        {trigger ?? (
+          <button
+            className="text-muted-foreground hover:text-foreground transition-colors"
+            title="Preferences"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
+        )}
       </SheetTrigger>
 
       <SheetContent

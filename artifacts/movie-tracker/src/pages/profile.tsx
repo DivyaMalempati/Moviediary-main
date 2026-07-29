@@ -2,9 +2,11 @@ import type { ReactNode } from "react";
 import { useClerk, useUser } from "@clerk/react";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
+import { PreferencesModal } from "@/components/preferences-modal";
 import { isDemoMode, disableDemoMode, getGuestHeaders } from "@/lib/demo-auth";
+import { usePreferences } from "@/lib/preferences";
 import { toast } from "sonner";
-import { Download, LogOut, Upload } from "lucide-react";
+import { ChevronRight, Download, LogOut, Settings, Upload } from "lucide-react";
 import { Link } from "wouter";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -29,6 +31,25 @@ async function exportLibrary() {
   }
 }
 
+function preferencesSummary(prefs: {
+  preferredLanguages: string[];
+  preferredGenres: string[];
+  preferredProviders: number[];
+} | undefined): string {
+  if (!prefs) return "Loading…";
+  const parts: string[] = [];
+  if (prefs.preferredLanguages.length) {
+    parts.push(`${prefs.preferredLanguages.length} language${prefs.preferredLanguages.length === 1 ? "" : "s"}`);
+  }
+  if (prefs.preferredGenres.length) {
+    parts.push(`${prefs.preferredGenres.length} genre${prefs.preferredGenres.length === 1 ? "" : "s"}`);
+  }
+  if (prefs.preferredProviders.length) {
+    parts.push(`${prefs.preferredProviders.length} service${prefs.preferredProviders.length === 1 ? "" : "s"}`);
+  }
+  return parts.length ? parts.join(" · ") : "Not set yet";
+}
+
 function ProfileShell({
   name,
   subtitle,
@@ -42,6 +63,8 @@ function ProfileShell({
   onSignOut: () => void;
   signOutLabel: string;
 }) {
+  const { data: prefs } = usePreferences();
+
   return (
     <Layout>
       <div className="max-w-md mx-auto px-4 py-10 space-y-8">
@@ -54,6 +77,24 @@ function ProfileShell({
         </div>
 
         <div className="space-y-1">
+          <PreferencesModal
+            trigger={
+              <button
+                type="button"
+                className="w-full flex items-center gap-3 px-1 py-3 text-left transition-colors hover:text-foreground"
+              >
+                <Settings className="w-4 h-4 text-muted-foreground shrink-0" />
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm text-foreground/90">Preferences</span>
+                  <span className="block text-xs text-muted-foreground truncate">
+                    {preferencesSummary(prefs)}
+                  </span>
+                </span>
+                <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+              </button>
+            }
+          />
+
           <Link href="/import">
             <button
               type="button"

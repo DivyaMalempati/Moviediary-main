@@ -141,6 +141,8 @@ function ClerkQueryClientCacheInvalidator() {
   useEffect(() => {
     const unsubscribe = addListener(({ user }) => {
       const userId = user?.id ?? null;
+      // Signed-in Clerk session must never keep sending a demo guest token.
+      if (userId) disableDemoMode();
       if (prevUserIdRef.current !== undefined && prevUserIdRef.current !== userId) {
         qc.clear();
       }
