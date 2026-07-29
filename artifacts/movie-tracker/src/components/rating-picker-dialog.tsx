@@ -93,7 +93,7 @@ export function RatingPickerDialog({
           })}
         </div>
 
-        <div className={`flex gap-2 mt-2 ${confirmOnSelect ? "" : ""}`}>
+        <div className="flex gap-2 mt-2">
           <Button
             variant="ghost"
             size="sm"
