@@ -3,7 +3,8 @@ import { Layout } from "@/components/layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { LanguageBadge } from "@/components/language-badge";
-import { getPosterUrl } from "@/lib/movie-utils";
+import { RatingPickerDialog } from "@/components/rating-picker-dialog";
+import { getPosterUrl, RATING_LABELS } from "@/lib/movie-utils";
 import {
   useGetTrendingIndia,
   getGetTrendingIndiaQueryKey,
@@ -285,6 +286,7 @@ export default function SuggestionsPage() {
   const getAiSuggestions = useGetAiSuggestions();
   const [aiResults, setAiResults] = useState<any[] | null>(null);
   const [aiSource, setAiSource] = useState<"ai" | "tmdb" | null>(null);
+  const [pendingWatched, setPendingWatched] = useState<any | null>(null);
 
   const handleGenerateAi = () => {
     getAiSuggestions.mutate({ data: { count: 10 } }, {
@@ -298,7 +300,10 @@ export default function SuggestionsPage() {
     });
   };
 
-  const handleAdd = (movie: any, status: "watched" | "watchlist") => {
+  const doAdd = (movie: any, status: "watched" | "watchlist", rating?: string | null) => {
+    const safeRating =
+      rating && rating in RATING_LABELS ? rating : null;
+
     createMovie.mutate({
       data: {
         title: movie.title,
@@ -306,14 +311,30 @@ export default function SuggestionsPage() {
         ...(movie.tmdbId != null && { tmdbId: movie.tmdbId }),
         ...(movie.posterPath != null && { posterPath: movie.posterPath }),
         ...((movie.releaseYear ?? movie.year) != null && { releaseYear: movie.releaseYear ?? movie.year }),
-        ...((movie.originalLanguage ?? movie.language) != null && { originalLanguage: movie.originalLanguage ?? movie.language }),
+        ...((movie.originalLanguage ?? movie.language) != null && {
+          originalLanguage: movie.originalLanguage ?? movie.language,
+        }),
+        ...(status === "watched" && safeRating ? { rating: safeRating } : {}),
       },
     }, {
       onSuccess: () => {
-        toast.success(`Added "${movie.title}" to ${status}`);
-        queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
+        toast.success(
+          status === "watched"
+            ? `Logged "${movie.title}" as watched`
+            : `Added "${movie.title}" to watchlist`,
+        );
+        queryClient.invalidateQueries({ queryKey: getListMoviesQueryKey() });
       },
+      onError: () => toast.error(`Couldn't add "${movie.title}". Try again.`),
     });
+  };
+
+  const handleAdd = (movie: any, status: "watched" | "watchlist") => {
+    if (status === "watched") {
+      setPendingWatched(movie);
+      return;
+    }
+    doAdd(movie, "watchlist");
   };
 
   const trendingData = trendingLang === "all" ? trending : discover;
@@ -493,6 +514,18 @@ export default function SuggestionsPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <RatingPickerDialog
+        open={!!pendingWatched}
+        movieTitle={pendingWatched?.title ?? ""}
+        confirmOnSelect
+        onCancel={() => setPendingWatched(null)}
+        onConfirm={(rating) => {
+          const movie = pendingWatched;
+          setPendingWatched(null);
+          if (movie) doAdd(movie, "watched", rating);
+        }}
+      />
     </Layout>
   );
 }
