@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Heart, Star, X } from "lucide-react";
 import { RATING_LABELS } from "@/lib/movie-utils";
 import {
@@ -24,6 +24,11 @@ export function RatingPickerDialog({
 }: RatingPickerDialogProps) {
   const [selected, setSelected] = useState<string | null>(null);
 
+  // Fresh selection every time the dialog opens for a film.
+  useEffect(() => {
+    if (open) setSelected(null);
+  }, [open, movieTitle]);
+
   const handleOpenChange = (isOpen: boolean) => {
     if (!isOpen) onCancel();
   };
@@ -38,7 +43,6 @@ export function RatingPickerDialog({
     setSelected(null);
   };
 
-  // Reset selection when dialog opens
   const handleSelect = (val: string) => {
     setSelected((prev) => (prev === val ? null : val));
   };

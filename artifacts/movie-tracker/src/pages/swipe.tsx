@@ -9,7 +9,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
-import { getPosterUrl } from "@/lib/movie-utils";
+import { getPosterUrl, RATING_LABELS } from "@/lib/movie-utils";
 import { getGuestHeaders } from "@/lib/demo-auth";
 import { toast } from "sonner";
 import {
@@ -829,6 +829,7 @@ function SwipeDeck() {
   const [ratingFilm, setRatingFilm] = useState<SwipeFilm | null>(null);
   const seenRef = useRef<Set<number>>(getSeenToday());
   const finishingRef = useRef(false);
+  const pendingFinishRef = useRef(false);
 
   const startDeck = useCallback(async (page: number, genreId: GenreId, nextDeckNumber?: number) => {
     setLoading(true);
@@ -838,6 +839,8 @@ function SwipeDeck() {
     setDeckActions(0);
     setUndoStack([]);
     finishingRef.current = false;
+    pendingFinishRef.current = false;
+    setRatingFilm(null);
     if (nextDeckNumber != null) setDeckNumber(nextDeckNumber);
 
     const { films, nextPage } = await fillDeck(page, genreId, seenRef.current, DECK_SIZE);
@@ -887,18 +890,25 @@ function SwipeDeck() {
     }
   }, [deckSize]);
 
-  const advance = useCallback(() => {
+  const advance = useCallback((opts?: { deferFinish?: boolean }) => {
     setQueue((q) => {
       const next = q.slice(1);
       setDeckActions((a) => {
         const nextActions = a + 1;
-        // defer finish check until after both updates settle
-        queueMicrotask(() => maybeFinishDeck(nextActions, next.length));
+        const shouldFinish = nextActions >= deckSize || next.length <= 0;
+        if (shouldFinish) {
+          if (opts?.deferFinish) {
+            // Watched flow: wait until RatingPickerDialog resolves before finish-line.
+            pendingFinishRef.current = true;
+          } else {
+            queueMicrotask(() => maybeFinishDeck(nextActions, next.length));
+          }
+        }
         return nextActions;
       });
       return next;
     });
-  }, [maybeFinishDeck]);
+  }, [deckSize, maybeFinishDeck]);
 
   const pushUndo = useCallback((item: UndoItem) => {
     setUndoStack((s) => [...s.slice(-9), item]);
@@ -946,8 +956,13 @@ function SwipeDeck() {
   }, [advance, isOnline, pushUndo, qc, savedFilms.length]);
 
   const commitWatched = useCallback(async (film: SwipeFilm, rating: string | null) => {
+    // MovieInput.rating is optional string; only send when set.
+    // Values must match DB enum / RATING_LABELS: loved|great|very_good|good|ok|avg|meh
+    const safeRating =
+      rating && rating in RATING_LABELS ? rating : null;
+
     if (!isOnline) {
-      enqueueOffline(film, "watched", rating);
+      enqueueOffline(film, "watched", safeRating);
       setPendingCount(getOfflineQueue().length);
       pushUndo({ film, action: "watched" });
       toast.warning("Logged offline — will sync when you're back online", {
@@ -956,23 +971,38 @@ function SwipeDeck() {
       return;
     }
 
-    const { ok, id } = await saveFilm(film, "watched", rating);
+    const { ok, id } = await saveFilm(film, "watched", safeRating);
     if (ok) {
       setWatchedFilms((w) => [...w, film]);
       pushUndo({ film, action: "watched", movieId: id ?? null });
       qc.invalidateQueries({ queryKey: ["movies"] });
     } else {
-      enqueueOffline(film, "watched", rating);
+      enqueueOffline(film, "watched", safeRating);
       setPendingCount(getOfflineQueue().length);
       pushUndo({ film, action: "watched" });
       toast.error("Log failed — queued for retry when connection improves", { duration: 4000 });
     }
   }, [isOnline, pushUndo, qc]);
 
+  const resolveWatchedRating = useCallback(async (rating: string | null) => {
+    const film = ratingFilm;
+    setRatingFilm(null);
+    if (!film) return;
+    await commitWatched(film, rating);
+    if (pendingFinishRef.current && !finishingRef.current) {
+      pendingFinishRef.current = false;
+      finishingRef.current = true;
+      setShowFinishLine(true);
+    }
+  }, [ratingFilm, commitWatched]);
+
+  // Swipe-up / Watched button: advance the deck immediately, then open the
+  // existing RatingPickerDialog. POST /api/movies happens only after the
+  // dialog resolves (with optional rating), matching add.tsx.
   const handleWatched = useCallback((film: SwipeFilm) => {
     markSeenToday(film.tmdbId);
     seenRef.current.add(film.tmdbId);
-    advance();
+    advance({ deferFinish: true });
     setRatingFilm(film);
   }, [advance]);
 
@@ -1018,7 +1048,7 @@ function SwipeDeck() {
     return () => window.removeEventListener("keydown", handler);
   }, [queue, showFinishLine, ratingFilm, handleSave, handleSkip, handleWatched, handleUndo]);
 
-  if (showFinishLine) {
+  if (showFinishLine && !ratingFilm) {
     return (
       <FinishLineScreen
         saved={savedFilms}
@@ -1194,12 +1224,12 @@ function SwipeDeck() {
         open={!!ratingFilm}
         movieTitle={ratingFilm?.title ?? ""}
         onCancel={() => {
-          if (ratingFilm) void commitWatched(ratingFilm, null);
-          setRatingFilm(null);
+          // Gesture already committed — dismiss still logs watched, no rating
+          // (same as dialog "Skip rating", unlike add.tsx which aborts entirely).
+          void resolveWatchedRating(null);
         }}
         onConfirm={(rating) => {
-          if (ratingFilm) void commitWatched(ratingFilm, rating);
-          setRatingFilm(null);
+          void resolveWatchedRating(rating);
         }}
       />
     </Layout>
