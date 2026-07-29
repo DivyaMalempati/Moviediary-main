@@ -10,7 +10,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { getPosterUrl, RATING_LABELS } from "@/lib/movie-utils";
-import { getGuestHeaders } from "@/lib/demo-auth";
+import { getAuthHeaders } from "@/lib/demo-auth";
 import { usePreferences } from "@/lib/preferences";
 import { toast } from "sonner";
 import {
@@ -194,7 +194,7 @@ async function fetchSwipeBatch(
     if (excludeIds && excludeIds.size > 0) params.set("excludeIds", [...excludeIds].join(","));
     if (onMyServices) params.set("onMyServices", "1");
     const res = await fetch(`${BASE}/api/discover/swipe?${params}`, {
-      headers: { ...getGuestHeaders() },
+      headers: await getAuthHeaders(),
       credentials: "include",
     });
     if (!res.ok) return [];
@@ -222,7 +222,7 @@ async function saveFilm(
 
     const res = await fetch(`${BASE}/api/movies`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...getGuestHeaders() },
+      headers: await getAuthHeaders({ "Content-Type": "application/json" }),
       credentials: "include",
       body: JSON.stringify(body),
     });
@@ -239,7 +239,7 @@ async function deleteMovie(id: number): Promise<boolean> {
   try {
     const res = await fetch(`${BASE}/api/movies/${id}`, {
       method: "DELETE",
-      headers: { ...getGuestHeaders() },
+      headers: await getAuthHeaders(),
       credentials: "include",
     });
     return res.ok;
@@ -247,7 +247,7 @@ async function deleteMovie(id: number): Promise<boolean> {
 }
 
 async function fetchFilmFlipDetails(tmdbId: number): Promise<FilmFlipDetails> {
-  const headers = { ...getGuestHeaders() };
+  const headers = await getAuthHeaders();
   const [detailsRes, providersRes] = await Promise.all([
     fetch(`${BASE}/api/tmdb/movie/${tmdbId}`, { headers, credentials: "include" }),
     fetch(`${BASE}/api/tmdb/watch-providers/${tmdbId}`, { headers, credentials: "include" }),

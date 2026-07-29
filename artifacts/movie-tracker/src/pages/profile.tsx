@@ -3,7 +3,7 @@ import { useClerk, useUser } from "@clerk/react";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { PreferencesModal } from "@/components/preferences-modal";
-import { isDemoMode, disableDemoMode, getGuestHeaders } from "@/lib/demo-auth";
+import { isDemoMode, disableDemoMode, getAuthHeaders } from "@/lib/demo-auth";
 import { usePreferences } from "@/lib/preferences";
 import { toast } from "sonner";
 import { ChevronRight, Download, LogOut, Settings, Upload } from "lucide-react";
@@ -15,7 +15,7 @@ async function exportLibrary() {
   try {
     const res = await fetch(`${BASE}/api/movies/export`, {
       credentials: "include",
-      headers: { ...getGuestHeaders() },
+      headers: await getAuthHeaders(),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const blob = await res.blob();

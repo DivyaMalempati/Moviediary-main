@@ -22,7 +22,7 @@ import {
 import { RATING_LABELS } from "@/lib/movie-utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { getGuestHeaders } from "@/lib/demo-auth";
+import { getAuthHeaders } from "@/lib/demo-auth";
 import { cn } from "@/lib/utils";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -33,8 +33,7 @@ function useOrphanedCount() {
   return useQuery({
     queryKey: ["orphaned-count"],
     queryFn: async () => {
-      const headers: HeadersInit = {};
-      Object.assign(headers, getGuestHeaders());
+      const headers = await getAuthHeaders();
       const res = await fetch(`${BASE}/api/movies/orphaned-count`, { headers, credentials: "include" });
       if (!res.ok) return { count: 0 };
       return res.json() as Promise<{ count: number }>;
@@ -47,8 +46,7 @@ function useClaimOrphaned() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async () => {
-      const headers: HeadersInit = { "Content-Type": "application/json" };
-      Object.assign(headers, getGuestHeaders());
+      const headers = await getAuthHeaders({ "Content-Type": "application/json" });
       const res = await fetch(`${BASE}/api/movies/claim-orphaned`, { method: "POST", headers, credentials: "include" });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

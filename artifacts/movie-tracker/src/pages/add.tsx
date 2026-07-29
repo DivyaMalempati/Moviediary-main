@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { useDebounce } from "@/hooks/use-debounce";
 import { RatingPickerDialog } from "@/components/rating-picker-dialog";
 import { usePreferences } from "@/lib/preferences";
-import { getGuestHeaders } from "@/lib/demo-auth";
+import { getAuthHeaders } from "@/lib/demo-auth";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
 
@@ -32,7 +32,7 @@ async function isOnMyServices(
   try {
     const res = await fetch(
       `${BASE}/api/tmdb/watch-providers/${tmdbId}?watchRegion=${encodeURIComponent(watchRegion)}`,
-      { credentials: "include", headers: { ...getGuestHeaders() } },
+      { credentials: "include", headers: await getAuthHeaders() },
     );
     if (!res.ok) return false;
     const data = await res.json() as {

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getGuestHeaders } from "./demo-auth";
+import { getAuthHeaders } from "./demo-auth";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -29,7 +29,7 @@ const defaultPreferences: UserPreferences = {
 async function fetchPreferences(): Promise<UserPreferences> {
   const res = await fetch(`${API_BASE}/api/preferences`, {
     credentials: "include",
-    headers: { ...getGuestHeaders() },
+    headers: await getAuthHeaders(),
   });
   if (!res.ok) return defaultPreferences;
   const data = await res.json();
@@ -49,7 +49,7 @@ async function savePreferences(prefs: PreferencesInput): Promise<UserPreferences
   const res = await fetch(`${API_BASE}/api/preferences`, {
     method: "PUT",
     credentials: "include",
-    headers: { "Content-Type": "application/json", ...getGuestHeaders() },
+    headers: await getAuthHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({
       preferredLanguages: prefs.preferredLanguages,
       preferredGenres: prefs.preferredGenres,
@@ -96,7 +96,7 @@ export type WatchProviderCatalogItem = {
 export async function fetchWatchProviderCatalog(watchRegion = "IN"): Promise<WatchProviderCatalogItem[]> {
   const res = await fetch(
     `${API_BASE}/api/tmdb/watch-provider-catalog?watchRegion=${encodeURIComponent(watchRegion)}`,
-    { credentials: "include", headers: { ...getGuestHeaders() } },
+    { credentials: "include", headers: await getAuthHeaders() },
   );
   if (!res.ok) return [];
   return res.json();
