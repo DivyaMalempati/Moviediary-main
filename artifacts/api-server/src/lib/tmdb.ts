@@ -66,6 +66,7 @@ export interface TmdbMovieRaw {
   genres?: Array<{ id: number; name: string }>;
   overview?: string;
   vote_average?: number;
+  runtime?: number | null;
 }
 
 function mapTmdbMovie(m: TmdbMovieRaw, idToName?: Map<number, string>) {
@@ -120,7 +121,9 @@ export async function getMovieDetails(tmdbId: number) {
     .sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
     .slice(0, 5)
     .map((c) => c.name);
-  return { ...mapped, director, cast };
+  const runtimeMinutes =
+    typeof data.runtime === "number" && data.runtime > 0 ? data.runtime : null;
+  return { ...mapped, director, cast, runtimeMinutes };
 }
 
 export async function getSimilarMovies(tmdbId: number) {
