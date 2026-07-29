@@ -92,6 +92,39 @@ function mergeRanked(implicit: string[], explicit: string[], cap: number): strin
   return merged.slice(0, cap);
 }
 
+/**
+ * Resolve discover languages.
+ *
+ * Explicit onboarding/settings languages are a hard allowlist — selecting
+ * only Hindi/Telugu/Tamil must not pull in Korean/French via watch history
+ * or the world-cinema fallback. Implicit taste only reorders within that set.
+ */
+export function resolveLanguages(
+  implicit: string[],
+  explicit: string[],
+  fallback: string[],
+  cap = 8,
+): string[] {
+  if (explicit.length > 0) {
+    const ranked = [
+      ...implicit.filter((l) => explicit.includes(l)),
+      ...explicit.filter((l) => !implicit.includes(l)),
+    ];
+    return ranked.slice(0, cap);
+  }
+  if (implicit.length > 0) return implicit.slice(0, cap);
+  return fallback.slice(0, cap);
+}
+
+function filterByLanguages(
+  films: SwipeCandidate[],
+  allowed: string[] | null,
+): SwipeCandidate[] {
+  if (!allowed || allowed.length === 0) return films;
+  const set = new Set(allowed);
+  return films.filter((f) => !f.originalLanguage || set.has(f.originalLanguage));
+}
+
 // ── Pool assembly ────────────────────────────────────────────────────────────
 
 export interface SwipeCandidate {
@@ -204,8 +237,13 @@ export async function getPersonalizedSwipePool(opts: {
 }): Promise<SwipeCandidate[]> {
   const { profile, explicitPrefs, fallbackLanguages, page, genreIdFilter, excludeIds } = opts;
 
-  const languages = mergeRanked(profile.topLanguages, explicitPrefs.languages, 6);
-  const effectiveLanguages = languages.length > 0 ? languages : fallbackLanguages;
+  const languageAllowlist =
+    explicitPrefs.languages.length > 0 ? explicitPrefs.languages : null;
+  const effectiveLanguages = resolveLanguages(
+    profile.topLanguages,
+    explicitPrefs.languages,
+    fallbackLanguages,
+  );
 
   const watch =
     explicitPrefs.providerIds && explicitPrefs.providerIds.length > 0
@@ -220,7 +258,8 @@ export async function getPersonalizedSwipePool(opts: {
   const genreNames = mergeRanked(profile.topGenres, explicitPrefs.genres, 4);
   const genreIds = genreNames.map((g) => nameToId.get(g)).filter((id): id is number => !!id);
 
-  const clean = (list: SwipeCandidate[]) => dedupeAndFilter(list, excludeIds, genreIdFilter, idToName);
+  const clean = (list: SwipeCandidate[]) =>
+    filterByLanguages(dedupeAndFilter(list, excludeIds, genreIdFilter, idToName), languageAllowlist);
   // When a UI chip is active, keep rank order from clean(); otherwise shuffle for variety.
   const prep = (list: SwipeCandidate[]) => (genreIdFilter ? clean(list) : shuffle(clean(list)));
 
@@ -283,7 +322,7 @@ export async function getPersonalizedSwipePool(opts: {
   }
 
   // ── Warm: has rated watch history — implicit taste leads, explicit prefs
-  //    still fill in the genre/language pool (mergeRanked already blended them) ──
+  //    still fill in the genre/language pool (resolveLanguages already constrained) ──
   const seedResults = await Promise.allSettled(
     profile.seedMovies.map((s) => Promise.all([getSimilarMovies(s.tmdbId), getRecommendations(s.tmdbId)])),
   );

@@ -8,8 +8,26 @@ const router: IRouter = Router();
 
 // World-cinema default used only when the user has no watched films AND no
 // stated language preference (shouldn't normally happen once onboarding is
-// in place, but covers users who skip it).
-const WORLD_CINEMA_DEFAULT = ["ml", "ta", "te", "hi", "ko", "ja", "fr", "de", "it", "es", "zh", "fa", "tr", "bn", "kn"];
+// in place, but covers users who skip it). Indian languages lead so a
+// skipped onboarding still feels local-first for this product.
+const WORLD_CINEMA_DEFAULT = [
+  "hi",
+  "te",
+  "ta",
+  "ml",
+  "kn",
+  "bn",
+  "mr",
+  "ko",
+  "ja",
+  "fr",
+  "de",
+  "it",
+  "es",
+  "zh",
+  "fa",
+  "tr",
+];
 
 /**
  * GET /discover/swipe?page=1&genreId=28&excludeIds=603,680&onMyServices=1
