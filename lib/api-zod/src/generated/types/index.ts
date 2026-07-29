@@ -21,6 +21,7 @@ export * from './movieStats';
 export * from './movieStatus';
 export * from './movieUpdate';
 export * from './movieUpdateStatus';
+export * from './rewatchInput';
 export * from './searchTmdbParams';
 export * from './tmdbMovie';
 export * from './watchProvider';

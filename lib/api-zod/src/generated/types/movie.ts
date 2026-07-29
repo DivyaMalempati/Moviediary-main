@@ -30,4 +30,9 @@ export interface Movie {
   /** @nullable */
   watchedAt?: string | null;
   createdAt: string;
+  /**
+     * Number of rewatches after the first watch (0 = watched once)
+     * @minimum 0
+     */
+  rewatchCount: number;
 }

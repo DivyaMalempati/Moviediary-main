@@ -30,6 +30,7 @@ import type {
   MovieInput,
   MovieStats,
   MovieUpdate,
+  RewatchInput,
   SearchTmdbParams,
   TmdbMovie,
   WatchProviders
@@ -731,6 +732,78 @@ export const useMatchMovieToTmdb = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getMatchMovieToTmdbMutationOptions(options));
+    }
+
+export const getRewatchMovieUrl = (id: number,) => {
+
+
+
+
+  return `/api/movies/${id}/rewatch`
+}
+
+/**
+ * @summary Log a rewatch for an already-watched movie
+ */
+export const rewatchMovie = async (id: number,
+    rewatchInput?: RewatchInput, options?: RequestInit): Promise<Movie> => {
+
+  return customFetch<Movie>(getRewatchMovieUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(rewatchInput)
+  }
+);}
+
+
+
+
+
+export const getRewatchMovieMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rewatchMovie>>, TError,{id: number;data?: BodyType<RewatchInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rewatchMovie>>, TError,{id: number;data?: BodyType<RewatchInput>}, TContext> => {
+
+const mutationKey = ['rewatchMovie'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rewatchMovie>>, {id: number;data?: BodyType<RewatchInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  rewatchMovie(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RewatchMovieMutationResult = NonNullable<Awaited<ReturnType<typeof rewatchMovie>>>
+    export type RewatchMovieMutationBody = BodyType<RewatchInput> | undefined
+    export type RewatchMovieMutationError = ErrorType<void>
+
+    /**
+ * @summary Log a rewatch for an already-watched movie
+ */
+export const useRewatchMovie = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rewatchMovie>>, TError,{id: number;data?: BodyType<RewatchInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof rewatchMovie>>,
+        TError,
+        {id: number;data?: BodyType<RewatchInput>},
+        TContext
+      > => {
+      return useMutation(getRewatchMovieMutationOptions(options));
     }
 
 export const getSearchTmdbUrl = (params: SearchTmdbParams,) => {

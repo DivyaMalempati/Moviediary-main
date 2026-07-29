@@ -9,6 +9,8 @@ import {
   UpdateMovieBody,
   DeleteMovieParams,
   MatchMovieToTmdbParams,
+  RewatchMovieParams,
+  RewatchMovieBody,
 } from "@workspace/api-zod";
 import { searchMovies, getMovieDetails } from "../../lib/tmdb.js";
 import { logger } from "../../lib/logger.js";
@@ -31,6 +33,7 @@ function dbMovieToResponse(m: typeof moviesTable.$inferSelect) {
     overview: m.overview ?? null,
     watchedAt: m.watchedAt ? m.watchedAt.toISOString() : null,
     createdAt: m.createdAt.toISOString(),
+    rewatchCount: m.rewatchCount ?? 0,
   };
 }
 
@@ -248,6 +251,57 @@ router.patch("/movies/:id", requireAuth, async (req: any, res): Promise<void> =>
   if ("overview" in data) updateValues.overview = data.overview ?? null;
   if ("watchedAt" in data) updateValues.watchedAt = data.watchedAt ? new Date(data.watchedAt) : null;
   if (data.status === "watched" && !("watchedAt" in data)) updateValues.watchedAt = new Date();
+
+  const [movie] = await db
+    .update(moviesTable)
+    .set(updateValues)
+    .where(and(eq(moviesTable.userId, req.userId), eq(moviesTable.id, params.data.id)))
+    .returning();
+
+  if (!movie) {
+    res.status(404).json({ error: "Movie not found" });
+    return;
+  }
+
+  res.json(dbMovieToResponse(movie));
+});
+
+// POST /movies/:id/rewatch
+router.post("/movies/:id/rewatch", requireAuth, async (req: any, res): Promise<void> => {
+  const params = RewatchMovieParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const body = RewatchMovieBody.safeParse(req.body ?? {});
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(moviesTable)
+    .where(and(eq(moviesTable.userId, req.userId), eq(moviesTable.id, params.data.id)));
+
+  if (!existing) {
+    res.status(404).json({ error: "Movie not found" });
+    return;
+  }
+
+  if (existing.status !== "watched") {
+    res.status(400).json({ error: "Only watched movies can be rewatched" });
+    return;
+  }
+
+  const updateValues: Partial<typeof moviesTable.$inferInsert> = {
+    rewatchCount: (existing.rewatchCount ?? 0) + 1,
+    watchedAt: new Date(),
+  };
+  if ("rating" in body.data) {
+    updateValues.rating = body.data.rating ?? null;
+  }
 
   const [movie] = await db
     .update(moviesTable)
