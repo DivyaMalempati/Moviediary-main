@@ -39,6 +39,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { RatingPickerDialog } from "@/components/rating-picker-dialog";
+import { ChangeLanguageDialog } from "@/components/change-language-dialog";
 import { Input } from "@/components/ui/input";
 import {
   useCollections,
@@ -61,7 +62,10 @@ export default function MovieDetailsPage() {
   const rewatchMovie = useRewatchMovie();
 
   const { data: library } = useListMovies(undefined, { query: { queryKey: getListMoviesQueryKey() } });
-  const libraryTmdbIds = new Set((library ?? []).map((m) => m.tmdbId).filter(Boolean));
+  const libraryTmdbIds = useMemo(
+    () => new Set((library ?? []).map((m) => m.tmdbId).filter((id): id is number => id != null)),
+    [library],
+  );
 
   const { data: similarMovies } = useGetSimilarMovies(movie?.tmdbId || 0, { query: { enabled: !!movie?.tmdbId, queryKey: getGetSimilarMoviesQueryKey(movie?.tmdbId || 0) } });
   const { data: recommendedMovies } = useGetTmdbRecommendations(movie?.tmdbId || 0, { query: { enabled: !!movie?.tmdbId, queryKey: getGetTmdbRecommendationsQueryKey(movie?.tmdbId || 0) } });
@@ -75,6 +79,7 @@ export default function MovieDetailsPage() {
   
   const [rating, setRating] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
+  const [languageOpen, setLanguageOpen] = useState(false);
 
   const debouncedRating = useDebounce(rating, 300);
   const debouncedNotes = useDebounce(notes, 1000);
@@ -317,7 +322,17 @@ export default function MovieDetailsPage() {
           
           <div className="flex-1 space-y-4">
             <div className="flex flex-wrap items-center gap-3">
-              <LanguageBadge language={movie.originalLanguage} className="text-xs px-2 py-1" />
+              <button
+                type="button"
+                onClick={() => setLanguageOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-md hover:opacity-90 transition-opacity"
+                title="Change language / version"
+              >
+                <LanguageBadge language={movie.originalLanguage} className="text-xs px-2 py-1" />
+                <span className="text-[11px] text-white/70 underline underline-offset-2">
+                  Change
+                </span>
+              </button>
               {movie.releaseYear && (
                 <Badge variant="outline" className="bg-background/50 backdrop-blur font-mono border-white/10">
                   <Calendar className="w-3 h-3 mr-1" /> {movie.releaseYear}
@@ -670,6 +685,15 @@ export default function MovieDetailsPage() {
         skipLabel={ratingDialogMovie?.skipLabel}
         onConfirm={(r) => ratingDialogMovie?.action(r)}
         onCancel={() => setRatingDialogMovie(null)}
+      />
+      <ChangeLanguageDialog
+        open={languageOpen}
+        onOpenChange={setLanguageOpen}
+        movieId={movie.id}
+        title={movie.title}
+        currentLanguage={movie.originalLanguage}
+        currentTmdbId={movie.tmdbId}
+        libraryTmdbIds={libraryTmdbIds as Set<number>}
       />
     </Layout>
   );
