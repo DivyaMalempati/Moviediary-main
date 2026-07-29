@@ -442,7 +442,7 @@ export default function WatchedPage() {
             {(movies?.length ?? 0) === 0 && (
               <div className="flex items-center justify-center gap-3">
                 <Link href="/add"><Button size="sm" className="bg-white text-black hover:bg-white/90">Search & add</Button></Link>
-                <Link href="/profile?tab=library"><Button size="sm" variant="outline" className="gap-1.5"><Upload className="w-3.5 h-3.5" /> Import / Export</Button></Link>
+                <Link href="/profile"><Button size="sm" variant="outline" className="gap-1.5"><Upload className="w-3.5 h-3.5" /> Import / Export</Button></Link>
               </div>
             )}
           </div>
