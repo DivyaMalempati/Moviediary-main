@@ -1247,6 +1247,7 @@ function SwipeDeck() {
       <RatingPickerDialog
         open={!!ratingFilm}
         movieTitle={ratingFilm?.title ?? ""}
+        confirmOnSelect
         onCancel={() => {
           // Gesture already committed — dismiss still logs watched, no rating
           // (same as dialog "Skip rating", unlike add.tsx which aborts entirely).
