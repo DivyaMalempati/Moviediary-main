@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getAuthHeaders } from "./demo-auth";
+import { getAuthHeaders, isDemoMode, hasClerkTokenGetter } from "./demo-auth";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -26,12 +26,33 @@ const defaultPreferences: UserPreferences = {
   onboardingCompletedAt: null,
 };
 
+export class PreferencesAuthError extends Error {
+  constructor() {
+    super("Session expired");
+  }
+}
+
+function canCallPreferencesApi(): boolean {
+  if (isDemoMode()) return true;
+  if (hasClerkTokenGetter()) return true;
+  if (typeof localStorage !== "undefined" && localStorage.getItem("cinevault:app-token")) {
+    return true;
+  }
+  return false;
+}
+
 async function fetchPreferences(): Promise<UserPreferences> {
+  // Avoid firing unauthenticated preference reads that get cached as "empty".
+  if (!canCallPreferencesApi()) {
+    throw new PreferencesAuthError();
+  }
+
   const res = await fetch(`${API_BASE}/api/preferences`, {
     credentials: "include",
     headers: await getAuthHeaders(),
   });
-  if (!res.ok) return defaultPreferences;
+  if (res.status === 401) throw new PreferencesAuthError();
+  if (!res.ok) throw new Error("Failed to load preferences");
   const data = await res.json();
   return {
     ...defaultPreferences,
@@ -41,15 +62,24 @@ async function fetchPreferences(): Promise<UserPreferences> {
   };
 }
 
-export class PreferencesAuthError extends Error {
-  constructor() { super("Session expired"); }
-}
-
 async function savePreferences(prefs: PreferencesInput): Promise<UserPreferences> {
+  if (!canCallPreferencesApi()) {
+    throw new PreferencesAuthError();
+  }
+
+  const headers = await getAuthHeaders({ "Content-Type": "application/json" });
+  if (
+    !isDemoMode() &&
+    !headers.Authorization &&
+    !headers["x-cinevault-token"]
+  ) {
+    throw new PreferencesAuthError();
+  }
+
   const res = await fetch(`${API_BASE}/api/preferences`, {
     method: "PUT",
     credentials: "include",
-    headers: await getAuthHeaders({ "Content-Type": "application/json" }),
+    headers,
     body: JSON.stringify({
       preferredLanguages: prefs.preferredLanguages,
       preferredGenres: prefs.preferredGenres,
@@ -73,6 +103,10 @@ export function usePreferences() {
     queryKey: ["preferences"],
     queryFn: fetchPreferences,
     staleTime: 5 * 60 * 1000,
+    retry: (count, err) => {
+      if (err instanceof PreferencesAuthError) return false;
+      return count < 2;
+    },
   });
 }
 

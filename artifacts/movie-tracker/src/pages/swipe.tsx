@@ -11,7 +11,7 @@ import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { getPosterUrl, RATING_LABELS } from "@/lib/movie-utils";
 import { getAuthHeaders } from "@/lib/demo-auth";
-import { usePreferences } from "@/lib/preferences";
+import { usePreferences, PreferencesAuthError } from "@/lib/preferences";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -1293,7 +1293,7 @@ function SwipeDeck() {
 }
 
 export default function SwipePage() {
-  const { data: prefs, isLoading } = usePreferences();
+  const { data: prefs, isLoading, isError, error, refetch } = usePreferences();
 
   if (isLoading) {
     return (
@@ -1305,8 +1305,36 @@ export default function SwipePage() {
     );
   }
 
+  if (isError) {
+    const authFailed = error instanceof PreferencesAuthError;
+    return (
+      <Layout>
+        <div className="flex flex-col items-center justify-center gap-3 py-24 px-6 text-center">
+          <p className="text-sm text-muted-foreground max-w-sm">
+            {authFailed
+              ? "Session expired — refresh the page to sign in again."
+              : "Couldn't load your preferences. Try again."}
+          </p>
+          <button
+            type="button"
+            className="text-sm underline text-foreground"
+            onClick={() => (authFailed ? window.location.reload() : void refetch())}
+          >
+            {authFailed ? "Refresh" : "Retry"}
+          </button>
+        </div>
+      </Layout>
+    );
+  }
+
   if (!prefs?.onboardingCompletedAt) {
-    return <OnboardingPreferences onComplete={() => {}} />;
+    return (
+      <OnboardingPreferences
+        onComplete={() => {
+          void refetch();
+        }}
+      />
+    );
   }
 
   return <SwipeDeck />;

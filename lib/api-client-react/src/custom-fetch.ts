@@ -365,8 +365,14 @@ export async function customFetch<T = unknown>(
 
   // Attach bearer token when an auth getter is configured and no
   // Authorization header has been explicitly provided.
+  // Retry briefly — Clerk session JWT can lag right after OAuth redirect
+  // on proxied preview hosts.
   if (_authTokenGetter && !headers.has("authorization")) {
-    const token = await _authTokenGetter();
+    let token = await _authTokenGetter();
+    for (let i = 0; i < 6 && !token; i++) {
+      await new Promise((r) => setTimeout(r, 40 * (i + 1)));
+      token = await _authTokenGetter();
+    }
     if (token) {
       headers.set("authorization", `Bearer ${token}`);
     }

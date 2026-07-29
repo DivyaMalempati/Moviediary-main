@@ -3,7 +3,7 @@ import { useClerk, useUser } from "@clerk/react";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { PreferencesModal } from "@/components/preferences-modal";
-import { isDemoMode, disableDemoMode, getAuthHeaders } from "@/lib/demo-auth";
+import { isDemoMode, disableDemoMode, clearAppSession, getAuthHeaders } from "@/lib/demo-auth";
 import { usePreferences } from "@/lib/preferences";
 import { toast } from "sonner";
 import { ChevronRight, Download, LogOut, Settings, Upload } from "lucide-react";
@@ -164,7 +164,10 @@ function ClerkProfile() {
       name={user?.fullName || user?.emailAddresses?.[0]?.emailAddress || "Account"}
       subtitle={user?.fullName ? (user?.emailAddresses?.[0]?.emailAddress ?? "") : "Signed in"}
       signOutLabel="Sign out"
-      onSignOut={() => signOut({ redirectUrl: basePath || "/" })}
+      onSignOut={() => {
+        clearAppSession();
+        void signOut({ redirectUrl: basePath || "/" });
+      }}
       avatar={
         user?.imageUrl ? (
           <img src={user.imageUrl} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />

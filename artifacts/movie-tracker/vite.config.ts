@@ -76,6 +76,35 @@ export default defineConfig({
       '/api': {
         target: process.env.API_PROXY_TARGET || 'http://127.0.0.1:5000',
         changeOrigin: true,
+        // Preserve the browser-facing host/proto and Authorization so Clerk
+        // can verify session JWTs on proxied preview hosts (agent.cvm.dev).
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq, req) => {
+            const host = req.headers['x-forwarded-host'] || req.headers.host;
+            if (host) {
+              proxyReq.setHeader(
+                'X-Forwarded-Host',
+                Array.isArray(host) ? host[0] : host,
+              );
+            }
+            const proto =
+              req.headers['x-forwarded-proto'] ||
+              ((req.socket as { encrypted?: boolean })?.encrypted
+                ? 'https'
+                : 'http');
+            proxyReq.setHeader(
+              'X-Forwarded-Proto',
+              Array.isArray(proto) ? proto[0] : proto,
+            );
+            const auth = req.headers.authorization;
+            if (auth) {
+              proxyReq.setHeader(
+                'Authorization',
+                Array.isArray(auth) ? auth[0] : auth,
+              );
+            }
+          });
+        },
       },
     },
   },

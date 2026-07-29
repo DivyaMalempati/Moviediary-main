@@ -1,26 +1,148 @@
-import { useLayoutEffect } from "react";
-import { useAuth } from "@clerk/react";
-import { setClerkTokenGetter } from "@/lib/demo-auth";
+import { useLayoutEffect, useState, type ReactNode } from "react";
+import { useAuth, useClerk } from "@clerk/react";
+import {
+  setClerkTokenGetter,
+  establishAppSession,
+  clearAppSession,
+} from "@/lib/demo-auth";
+import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 /**
  * Bridges Clerk session JWTs into API requests (api-client-react + raw fetch).
  * Cookie-based auth fails on proxied preview hosts with
  * X-Clerk-Auth-Reason: dev-browser-missing — Bearer tokens fix that.
  *
- * useLayoutEffect so the token getter is registered before child queries fire.
+ * After the first JWT, exchanges it for a first-party x-cinevault-token so
+ * subsequent API calls stay authenticated even if getToken() flakes.
  */
-export function ClerkAuthTokenBridge() {
-  const { getToken, isSignedIn } = useAuth();
+export function ClerkAuthTokenBridge({ children }: { children?: ReactNode }) {
+  const { getToken, isSignedIn, isLoaded } = useAuth();
+  const clerk = useClerk();
+  const [phase, setPhase] = useState<"loading" | "ready" | "no-token">("loading");
 
   useLayoutEffect(() => {
-    if (!isSignedIn) {
-      setClerkTokenGetter(null);
-      return;
+    let cancelled = false;
+
+    async function resolveToken(): Promise<string | null> {
+      for (let attempt = 0; attempt < 30; attempt++) {
+        try {
+          const token =
+            (await getToken({ skipCache: attempt > 0 })) ??
+            (await clerk.session?.getToken({ skipCache: attempt > 0 })) ??
+            null;
+          if (token) return token;
+        } catch {
+          // Session still hydrating
+        }
+        await new Promise((r) => setTimeout(r, 50 + attempt * 25));
+      }
+      return null;
     }
 
-    setClerkTokenGetter(() => getToken());
-    return () => setClerkTokenGetter(null);
-  }, [getToken, isSignedIn]);
+    async function sync() {
+      if (!isLoaded) {
+        if (!cancelled) setPhase("loading");
+        return;
+      }
 
-  return null;
+      if (!isSignedIn) {
+        setClerkTokenGetter(null);
+        clearAppSession();
+        if (!cancelled) setPhase("ready");
+        return;
+      }
+
+      if (!cancelled) setPhase("loading");
+
+      setClerkTokenGetter(async () => {
+        try {
+          return (
+            (await getToken()) ??
+            (await clerk.session?.getToken()) ??
+            null
+          );
+        } catch {
+          return null;
+        }
+      });
+
+      const token = await resolveToken();
+      if (cancelled) return;
+
+      if (!token) {
+        // Existing first-party session can still unlock the app after reload
+        // even if Clerk getToken is temporarily unavailable.
+        const existing = localStorage.getItem("cinevault:app-token");
+        if (existing) {
+          setPhase("ready");
+          return;
+        }
+        setClerkTokenGetter(null);
+        setPhase("no-token");
+        return;
+      }
+
+      let lastToken = token;
+      setClerkTokenGetter(async () => {
+        try {
+          const next =
+            (await getToken()) ??
+            (await clerk.session?.getToken()) ??
+            lastToken;
+          if (next) lastToken = next;
+          return next;
+        } catch {
+          return lastToken;
+        }
+      });
+
+      // Mint first-party session so API auth doesn't depend on Clerk cookies.
+      await establishAppSession(token);
+      if (cancelled) return;
+
+      setPhase("ready");
+    }
+
+    void sync();
+    return () => {
+      cancelled = true;
+      setClerkTokenGetter(null);
+    };
+  }, [getToken, isSignedIn, isLoaded, clerk]);
+
+  if (!isLoaded || phase === "loading") {
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center bg-background text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  if (phase === "no-token") {
+    const base = (import.meta.env.BASE_URL || "/").replace(/\/$/, "") || "/";
+    return (
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 bg-background px-6 text-center">
+        <p className="text-sm text-muted-foreground max-w-sm">
+          Signed in, but we couldn&apos;t establish an API session on this preview host.
+          Refresh the page, or sign out and try again.
+        </p>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            Refresh
+          </Button>
+          <Button
+            onClick={() => {
+              clearAppSession();
+              void clerk.signOut({ redirectUrl: `${window.location.origin}${base}` });
+            }}
+          >
+            Sign out
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
 }
