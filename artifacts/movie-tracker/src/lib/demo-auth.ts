@@ -1,11 +1,25 @@
-import { setExtraHeaders, clearExtraHeaders } from "@workspace/api-client-react";
+import { setExtraHeaders, clearExtraHeaders, setAuthTokenGetter } from "@workspace/api-client-react";
 
 const DEMO_KEY        = "cinevault:demo";
 const GUEST_TOKEN_KEY = "cinevault:guest-token";
 const BASE            = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+type TokenGetter = () => Promise<string | null> | string | null;
+
+let clerkTokenGetter: TokenGetter | null = null;
+
 export function isDemoMode(): boolean {
   return localStorage.getItem(DEMO_KEY) === "1";
+}
+
+/**
+ * Register Clerk's getToken for authenticated API calls.
+ * Required on proxied / cross-origin hosts where session cookies aren't enough
+ * (Clerk reports X-Clerk-Auth-Reason: dev-browser-missing).
+ */
+export function setClerkTokenGetter(getter: TokenGetter | null): void {
+  clerkTokenGetter = getter;
+  setAuthTokenGetter(getter);
 }
 
 /**
@@ -17,6 +31,18 @@ export function getGuestHeaders(): Record<string, string> {
   if (!isDemoMode()) return {};
   const token = localStorage.getItem(GUEST_TOKEN_KEY);
   return token ? { "x-guest-token": token } : {};
+}
+
+/** Guest headers + Clerk Bearer token when signed in. */
+export async function getAuthHeaders(
+  extra?: Record<string, string>,
+): Promise<Record<string, string>> {
+  const headers: Record<string, string> = { ...getGuestHeaders(), ...extra };
+  if (clerkTokenGetter) {
+    const token = await clerkTokenGetter();
+    if (token) headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
 }
 
 /**
