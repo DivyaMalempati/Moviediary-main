@@ -102,9 +102,25 @@ export async function searchMovies(query: string, region = "IN") {
 }
 
 export async function getMovieDetails(tmdbId: number) {
-  const res = await tmdbFetch(`/movie/${tmdbId}`);
-  const data = (await res.json()) as TmdbMovieRaw;
-  return mapTmdbMovie(data);
+  // append_to_response=credits pulls cast/crew in one round-trip so swipe
+  // flip-details (and any other callers) can show director + top billed actors
+  // without a second TMDB request.
+  const res = await tmdbFetch(`/movie/${tmdbId}`, { append_to_response: "credits" });
+  const data = (await res.json()) as TmdbMovieRaw & {
+    credits?: {
+      cast?: Array<{ name: string; order?: number }>;
+      crew?: Array<{ name: string; job: string }>;
+    };
+  };
+  const mapped = mapTmdbMovie(data);
+  const director =
+    data.credits?.crew?.find((c) => c.job === "Director")?.name ?? null;
+  const cast = (data.credits?.cast ?? [])
+    .slice()
+    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
+    .slice(0, 5)
+    .map((c) => c.name);
+  return { ...mapped, director, cast };
 }
 
 export async function getSimilarMovies(tmdbId: number) {
