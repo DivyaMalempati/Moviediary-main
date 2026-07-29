@@ -23,6 +23,11 @@ import {
   WifiOff,
   Clock,
   CheckCircle2,
+  Star,
+  RotateCcw,
+  Tv,
+  Clapperboard,
+  Users,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
@@ -30,6 +35,7 @@ import { usePreferences } from "@/lib/preferences";
 import { OnboardingPreferences } from "@/components/onboarding-preferences";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const TMDB_IMG = "https://image.tmdb.org/t/p";
 
 // ── Genre chips ────────────────────────────────────────────────────────────────
 const GENRES = [
@@ -54,6 +60,19 @@ interface SwipeFilm {
   originalLanguage: string | null;
   overview: string | null;
   genres: string[] | null;
+  voteAverage?: number | null;
+}
+
+interface FilmFlipDetails {
+  voteAverage: number | null;
+  director: string | null;
+  cast: string[];
+  providers: {
+    flatrate: Array<{ name: string; logoPath: string | null }>;
+    rent: Array<{ name: string; logoPath: string | null }>;
+    buy: Array<{ name: string; logoPath: string | null }>;
+    link: string | null;
+  } | null;
 }
 
 // ── Language → flag ────────────────────────────────────────────────────────────
@@ -168,6 +187,77 @@ async function saveFilm(film: SwipeFilm, status: "watchlist" | "watched"): Promi
   } catch { return false; }
 }
 
+async function fetchFilmFlipDetails(tmdbId: number): Promise<FilmFlipDetails> {
+  const headers = { ...getGuestHeaders() };
+  const [detailsRes, providersRes] = await Promise.all([
+    fetch(`${BASE}/api/tmdb/movie/${tmdbId}`, { headers, credentials: "include" }),
+    fetch(`${BASE}/api/tmdb/watch-providers/${tmdbId}`, { headers, credentials: "include" }),
+  ]);
+
+  const details = detailsRes.ok
+    ? ((await detailsRes.json()) as {
+        voteAverage?: number | null;
+        director?: string | null;
+        cast?: string[];
+      })
+    : null;
+
+  const providers = providersRes.ok
+    ? ((await providersRes.json()) as {
+        flatrate?: Array<{ name: string; logoPath: string | null }> | null;
+        rent?: Array<{ name: string; logoPath: string | null }> | null;
+        buy?: Array<{ name: string; logoPath: string | null }> | null;
+        link?: string | null;
+      })
+    : null;
+
+  return {
+    voteAverage: details?.voteAverage ?? null,
+    director: details?.director ?? null,
+    cast: details?.cast ?? [],
+    providers: providers
+      ? {
+          flatrate: providers.flatrate ?? [],
+          rent: providers.rent ?? [],
+          buy: providers.buy ?? [],
+          link: providers.link ?? null,
+        }
+      : null,
+  };
+}
+
+function ProviderRow({
+  label,
+  providers,
+}: {
+  label: string;
+  providers: Array<{ name: string; logoPath: string | null }>;
+}) {
+  if (providers.length === 0) return null;
+  return (
+    <div>
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-white/45 mb-1.5">{label}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {providers.slice(0, 4).map((p) => (
+          <div
+            key={`${label}-${p.name}`}
+            className="flex items-center gap-1.5 bg-white/10 border border-white/15 rounded-lg px-2 py-1"
+          >
+            {p.logoPath && (
+              <img
+                src={`${TMDB_IMG}/original${p.logoPath}`}
+                alt=""
+                className="w-4 h-4 rounded object-cover"
+              />
+            )}
+            <span className="text-[11px] text-white/90 font-medium">{p.name}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Card component ─────────────────────────────────────────────────────────────
 interface SwipeCardProps {
   film: SwipeFilm;
@@ -179,6 +269,7 @@ interface SwipeCardProps {
 }
 
 const CARD_W = 320; // px — reference width for aspect calc
+const CARD_H = CARD_W * 1.58;
 
 function SwipeCard({ film, isTop, stackIndex, onSave, onSkip, onWatched }: SwipeCardProps) {
   const x = useMotionValue(0);
@@ -196,8 +287,39 @@ function SwipeCard({ film, isTop, stackIndex, onSave, onSkip, onWatched }: Swipe
   const skipLabelOpacity    = useTransform(x, [-80, -20], [1, 0]);
   const watchLabelOpacity   = useTransform(y, [-80, -20], [1, 0]);
 
+  const [flipped, setFlipped] = useState(false);
+  const [details, setDetails] = useState<FilmFlipDetails | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState(false);
+
   const posterUrl = getPosterUrl(film.posterPath, "w500");
   const flag = LANG_FLAG[film.originalLanguage ?? ""] ?? "🎬";
+
+  // Prefetch flip-side data while this card is on top so the turn feels instant.
+  useEffect(() => {
+    if (!isTop) return;
+    let cancelled = false;
+    setDetailsLoading(true);
+    setDetailsError(false);
+    fetchFilmFlipDetails(film.tmdbId)
+      .then((d) => {
+        if (!cancelled) setDetails(d);
+      })
+      .catch(() => {
+        if (!cancelled) setDetailsError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setDetailsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isTop, film.tmdbId]);
+
+  // New top film should always start face-up.
+  useEffect(() => {
+    setFlipped(false);
+  }, [film.tmdbId]);
 
   const handleDragEnd = async (_: unknown, info: PanInfo) => {
     const absX = Math.abs(info.offset.x);
@@ -222,6 +344,15 @@ function SwipeCard({ film, isTop, stackIndex, onSave, onSkip, onWatched }: Swipe
   const scale = 1 - stackIndex * 0.04;
   const yOffset = stackIndex * 10;
 
+  const rating =
+    details?.voteAverage ??
+    (typeof film.voteAverage === "number" ? film.voteAverage : null);
+  const streamProviders = details?.providers?.flatrate ?? [];
+  const rentProviders = details?.providers?.rent ?? [];
+  const buyProviders = details?.providers?.buy ?? [];
+  const hasAnyProvider =
+    streamProviders.length > 0 || rentProviders.length > 0 || buyProviders.length > 0;
+
   return (
     <motion.div
       style={{
@@ -232,98 +363,225 @@ function SwipeCard({ film, isTop, stackIndex, onSave, onSkip, onWatched }: Swipe
         position: "absolute",
         width: "100%",
         zIndex: 10 - stackIndex,
+        perspective: 1400,
       }}
       drag={isTop ? true : false}
       dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
       dragElastic={0.6}
       onDragEnd={handleDragEnd}
+      onTap={() => {
+        if (!isTop) return;
+        setFlipped((f) => !f);
+      }}
       className={cn(
-        "rounded-2xl overflow-hidden shadow-2xl shadow-black/60 bg-zinc-900 border border-white/10 select-none",
+        "rounded-2xl shadow-2xl shadow-black/60 select-none",
         isTop && "cursor-grab active:cursor-grabbing"
       )}
     >
-      {/* ── Poster fills the whole card ─────────────────────────────────────── */}
-      <div className="relative w-full" style={{ height: CARD_W * 1.58 }}>
-        {posterUrl ? (
-          <img
-            src={posterUrl}
-            alt={film.title}
-            className="absolute inset-0 w-full h-full object-cover object-top pointer-events-none"
-            draggable={false}
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-zinc-800">
-            <Film className="w-16 h-16 text-zinc-600" />
-          </div>
-        )}
-
-        {/* ── Coloured tint overlays ────────────────────────────────────────── */}
-        {isTop && (
-          <>
-            <motion.div style={{ opacity: saveOverlayOpacity }}  className="absolute inset-0 bg-emerald-500 pointer-events-none" />
-            <motion.div style={{ opacity: skipOverlayOpacity }}  className="absolute inset-0 bg-rose-600   pointer-events-none" />
-            <motion.div style={{ opacity: watchOverlayOpacity }} className="absolute inset-0 bg-blue-500   pointer-events-none" />
-          </>
-        )}
-
-        {/* ── Action banners ────────────────────────────────────────────────── */}
-        {isTop && (
-          <>
-            {/* SAVE — top right */}
-            <motion.div style={{ opacity: saveLabelOpacity }} className="absolute top-5 right-4 z-20 pointer-events-none">
-              <div className="px-4 py-2 rounded-xl border-[3px] border-emerald-400 rotate-[-12deg] bg-black/40 backdrop-blur-sm">
-                <span className="text-emerald-300 font-black text-xl tracking-widest uppercase">Save</span>
-              </div>
-            </motion.div>
-
-            {/* SKIP — top left */}
-            <motion.div style={{ opacity: skipLabelOpacity }} className="absolute top-5 left-4 z-20 pointer-events-none">
-              <div className="px-4 py-2 rounded-xl border-[3px] border-rose-400 rotate-[12deg] bg-black/40 backdrop-blur-sm">
-                <span className="text-rose-300 font-black text-xl tracking-widest uppercase">Skip</span>
-              </div>
-            </motion.div>
-
-            {/* WATCHED — centre top, appears when dragging up */}
-            <motion.div style={{ opacity: watchLabelOpacity }} className="absolute top-5 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-              <div className="px-4 py-2 rounded-xl border-[3px] border-blue-400 bg-black/40 backdrop-blur-sm">
-                <span className="text-blue-300 font-black text-xl tracking-widest uppercase">Watched</span>
-              </div>
-            </motion.div>
-          </>
-        )}
-
-        {/* ── Film info — gradient overlay at the bottom of the poster ─────── */}
-        <div className="absolute inset-x-0 bottom-0 pt-32 pb-5 px-4 bg-gradient-to-t from-black via-black/90 to-transparent">
-          {/* Title + year */}
-          <div className="flex items-start justify-between gap-2 mb-2">
-            <h2 className="font-bold text-base leading-snug text-white">{film.title}</h2>
-            <span className="text-xs text-white/60 shrink-0 mt-0.5">
-              {flag} {film.releaseYear ?? ""}
-            </span>
-          </div>
-
-          {/* Genres — shown first so they're always visible */}
-          {film.genres && film.genres.length > 0 && (
-            <div className="flex gap-1.5 flex-wrap mb-2.5">
-              {film.genres.slice(0, 4).map((g) => (
-                <span
-                  key={g}
-                  className="text-[11px] px-2.5 py-0.5 rounded-full bg-white/20 text-white font-medium border border-white/30"
-                >
-                  {g}
-                </span>
-              ))}
+      <motion.div
+        animate={{ rotateY: flipped ? 180 : 0 }}
+        transition={{ duration: 0.48, ease: [0.22, 1, 0.36, 1] }}
+        style={{
+          transformStyle: "preserve-3d",
+          height: CARD_H,
+          position: "relative",
+        }}
+      >
+        {/* ── Front: poster ─────────────────────────────────────────────────── */}
+        <div
+          className="absolute inset-0 rounded-2xl overflow-hidden bg-zinc-900 border border-white/10"
+          style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}
+        >
+          {posterUrl ? (
+            <img
+              src={posterUrl}
+              alt={film.title}
+              className="absolute inset-0 w-full h-full object-cover object-top pointer-events-none"
+              draggable={false}
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center bg-zinc-800">
+              <Film className="w-16 h-16 text-zinc-600" />
             </div>
           )}
 
-          {/* Overview — more lines visible */}
-          {film.overview && (
-            <p className="text-xs text-white/80 leading-relaxed line-clamp-4">
-              {film.overview}
-            </p>
+          {/* ── Coloured tint overlays ────────────────────────────────────────── */}
+          {isTop && (
+            <>
+              <motion.div style={{ opacity: saveOverlayOpacity }}  className="absolute inset-0 bg-emerald-500 pointer-events-none" />
+              <motion.div style={{ opacity: skipOverlayOpacity }}  className="absolute inset-0 bg-rose-600   pointer-events-none" />
+              <motion.div style={{ opacity: watchOverlayOpacity }} className="absolute inset-0 bg-blue-500   pointer-events-none" />
+            </>
           )}
+
+          {/* ── Action banners ────────────────────────────────────────────────── */}
+          {isTop && (
+            <>
+              <motion.div style={{ opacity: saveLabelOpacity }} className="absolute top-5 right-4 z-20 pointer-events-none">
+                <div className="px-4 py-2 rounded-xl border-[3px] border-emerald-400 rotate-[-12deg] bg-black/40 backdrop-blur-sm">
+                  <span className="text-emerald-300 font-black text-xl tracking-widest uppercase">Save</span>
+                </div>
+              </motion.div>
+
+              <motion.div style={{ opacity: skipLabelOpacity }} className="absolute top-5 left-4 z-20 pointer-events-none">
+                <div className="px-4 py-2 rounded-xl border-[3px] border-rose-400 rotate-[12deg] bg-black/40 backdrop-blur-sm">
+                  <span className="text-rose-300 font-black text-xl tracking-widest uppercase">Skip</span>
+                </div>
+              </motion.div>
+
+              <motion.div style={{ opacity: watchLabelOpacity }} className="absolute top-5 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+                <div className="px-4 py-2 rounded-xl border-[3px] border-blue-400 bg-black/40 backdrop-blur-sm">
+                  <span className="text-blue-300 font-black text-xl tracking-widest uppercase">Watched</span>
+                </div>
+              </motion.div>
+            </>
+          )}
+
+          {/* ── Film info — gradient overlay at the bottom of the poster ─────── */}
+          <div className="absolute inset-x-0 bottom-0 pt-32 pb-5 px-4 bg-gradient-to-t from-black via-black/90 to-transparent">
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <h2 className="font-bold text-base leading-snug text-white">{film.title}</h2>
+              <span className="text-xs text-white/60 shrink-0 mt-0.5">
+                {flag} {film.releaseYear ?? ""}
+              </span>
+            </div>
+
+            {film.genres && film.genres.length > 0 && (
+              <div className="flex gap-1.5 flex-wrap mb-2.5">
+                {film.genres.slice(0, 4).map((g) => (
+                  <span
+                    key={g}
+                    className="text-[11px] px-2.5 py-0.5 rounded-full bg-white/20 text-white font-medium border border-white/30"
+                  >
+                    {g}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {film.overview && (
+              <p className="text-xs text-white/80 leading-relaxed line-clamp-4">
+                {film.overview}
+              </p>
+            )}
+
+            {isTop && (
+              <p className="mt-3 text-[10px] uppercase tracking-widest text-white/40 flex items-center gap-1.5">
+                <RotateCcw className="w-3 h-3" /> Tap for details
+              </p>
+            )}
+          </div>
         </div>
-      </div>
+
+        {/* ── Back: rating / cast / director / streaming ─────────────────────── */}
+        <div
+          className="absolute inset-0 rounded-2xl overflow-hidden border border-white/10 bg-zinc-950"
+          style={{
+            backfaceVisibility: "hidden",
+            WebkitBackfaceVisibility: "hidden",
+            transform: "rotateY(180deg)",
+          }}
+        >
+          {posterUrl && (
+            <img
+              src={posterUrl}
+              alt=""
+              aria-hidden
+              className="absolute inset-0 w-full h-full object-cover object-top opacity-25 scale-110 blur-sm pointer-events-none"
+              draggable={false}
+            />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/70 via-zinc-950/92 to-zinc-950" />
+
+          <div className="relative h-full flex flex-col px-4 pt-5 pb-4 overflow-hidden">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div className="min-w-0">
+                <h2 className="font-bold text-base leading-snug text-white line-clamp-2">{film.title}</h2>
+                <p className="text-xs text-white/55 mt-1">
+                  {flag} {film.releaseYear ?? ""}
+                  {film.genres?.length ? ` · ${film.genres.slice(0, 2).join(", ")}` : ""}
+                </p>
+              </div>
+              {rating != null && rating > 0 && (
+                <div className="shrink-0 flex items-center gap-1 rounded-xl bg-amber-400/15 border border-amber-300/30 px-2.5 py-1.5">
+                  <Star className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+                  <span className="text-sm font-bold text-amber-200 tabular-nums">
+                    {rating.toFixed(1)}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 space-y-4 overflow-y-auto pr-0.5">
+              {detailsLoading && !details && (
+                <div className="flex items-center gap-2 text-white/50 text-sm py-6 justify-center">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading details…
+                </div>
+              )}
+
+              {detailsError && !details && (
+                <p className="text-sm text-white/50 text-center py-6">Couldn’t load details.</p>
+              )}
+
+              {details && (
+                <>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-white/45 mb-1.5 flex items-center gap-1.5">
+                      <Clapperboard className="w-3 h-3" /> Director
+                    </p>
+                    <p className="text-sm text-white/90 font-medium">
+                      {details.director ?? "Unknown"}
+                    </p>
+                  </div>
+
+                  {details.cast.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-white/45 mb-1.5 flex items-center gap-1.5">
+                        <Users className="w-3 h-3" /> Cast
+                      </p>
+                      <p className="text-sm text-white/85 leading-relaxed">
+                        {details.cast.join(" · ")}
+                      </p>
+                    </div>
+                  )}
+
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-white/45 mb-2 flex items-center gap-1.5">
+                      <Tv className="w-3 h-3" /> Where to watch
+                    </p>
+                    {!hasAnyProvider ? (
+                      <p className="text-xs text-white/45 italic">Not listed for streaming in India.</p>
+                    ) : (
+                      <div className="space-y-2.5">
+                        <ProviderRow label="Stream" providers={streamProviders} />
+                        <ProviderRow label="Rent" providers={rentProviders} />
+                        <ProviderRow label="Buy" providers={buyProviders} />
+                      </div>
+                    )}
+                    {details.providers?.link && (
+                      <a
+                        href={details.providers.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-block mt-2 text-[11px] text-sky-300 hover:underline"
+                      >
+                        More options on JustWatch →
+                      </a>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <p className="mt-3 text-[10px] uppercase tracking-widest text-white/35 flex items-center gap-1.5 justify-center">
+              <RotateCcw className="w-3 h-3" /> Tap to flip back
+            </p>
+          </div>
+        </div>
+      </motion.div>
     </motion.div>
   );
 }
@@ -606,7 +864,7 @@ function SwipeDeck() {
             <p className="text-xs text-muted-foreground mt-0.5">
               {sessionCount > 0
                 ? `${sessionCount} saved this session${pendingCount > 0 ? ` (${pendingCount} pending)` : ""}`
-                : "Drag right to save · left to skip"}
+                : "Tap for details · drag right to save · left to skip"}
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -718,7 +976,7 @@ function SwipeDeck() {
             {/* Keyboard hint + offline hint + view saved */}
             <div className="mt-3 flex flex-col items-center gap-2">
               <p className="hidden sm:block text-[11px] text-muted-foreground">
-                ← Skip · ↑ Watched · → Save to watchlist
+                Tap card for details · ← Skip · ↑ Watched · → Save
               </p>
               {!isOnline && (
                 <p className="text-[11px] text-amber-400/70 text-center">
