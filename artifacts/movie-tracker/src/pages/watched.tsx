@@ -19,31 +19,6 @@ import {
   anniversaryPosterUrl,
   type AnniversaryFilm,
 } from "@/lib/rewatch-reminders";
-
-// ── CSV export ────────────────────────────────────────────────────────────────
-function exportCSV(movies: any[], filename: string) {
-  const cols = ["title", "status", "rating", "year", "language", "genres", "notes", "added", "watched", "rewatches"];
-  const rows = movies.map((m) => [
-    m.title,
-    "watched",
-    m.rating ?? "",
-    m.releaseYear ?? "",
-    m.originalLanguage ?? "",
-    (m.genres as string[] | null)?.join("; ") ?? "",
-    m.notes ?? "",
-    m.createdAt ? new Date(m.createdAt).toLocaleDateString() : "",
-    m.watchedAt ? new Date(m.watchedAt).toLocaleDateString() : "",
-    m.rewatchCount ?? 0,
-  ]);
-  const csv = [cols, ...rows]
-    .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
-    .join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
-}
 import { RATING_LABELS } from "@/lib/movie-utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -361,21 +336,6 @@ export default function WatchedPage() {
                   <span className="font-mono text-primary font-bold text-lg">{stats?.totalWatched || 0}</span> films watched
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline" size="sm"
-                  className="gap-1.5 text-xs h-8 shrink-0"
-                  onClick={() => exportCSV(movies ?? [], "cinevault_watched.csv")}
-                  disabled={!movies?.length}
-                >
-                  <Download className="w-3 h-3" /> Export
-                </Button>
-                <Link href="/import">
-                  <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8 shrink-0">
-                    <Upload className="w-3 h-3" /> Import
-                  </Button>
-                </Link>
-              </div>
             </div>
             {stats?.byLanguage && stats.byLanguage.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-4">
@@ -482,7 +442,7 @@ export default function WatchedPage() {
             {(movies?.length ?? 0) === 0 && (
               <div className="flex items-center justify-center gap-3">
                 <Link href="/add"><Button size="sm" className="bg-white text-black hover:bg-white/90">Search & add</Button></Link>
-                <Link href="/import"><Button size="sm" variant="outline" className="gap-1.5"><Upload className="w-3.5 h-3.5" /> Bulk import</Button></Link>
+                <Link href="/profile?tab=library"><Button size="sm" variant="outline" className="gap-1.5"><Upload className="w-3.5 h-3.5" /> Import / Export</Button></Link>
               </div>
             )}
           </div>
