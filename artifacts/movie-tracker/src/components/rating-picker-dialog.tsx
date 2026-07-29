@@ -100,7 +100,7 @@ export function RatingPickerDialog({
             className={confirmOnSelect ? "w-full text-muted-foreground" : "flex-1 text-muted-foreground"}
             onClick={handleSkip}
           >
-            Skip rating
+            {confirmOnSelect ? "Skip rating · still mark watched" : "Skip rating"}
           </Button>
           {!confirmOnSelect && (
             <Button
