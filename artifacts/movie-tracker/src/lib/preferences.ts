@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getGuestHeaders } from "./demo-auth";
+import { getGuestHeaders, isDemoMode, refreshGuestSession } from "./demo-auth";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -34,12 +34,23 @@ export class PreferencesAuthError extends Error {
 }
 
 async function savePreferences(prefs: { preferredLanguages: string[]; preferredGenres: string[] }): Promise<UserPreferences> {
-  const res = await fetch(`${API_BASE}/api/preferences`, {
-    method: "PUT",
-    credentials: "include",
-    headers: { "Content-Type": "application/json", ...getGuestHeaders() },
-    body: JSON.stringify(prefs),
-  });
+  const doPut = () =>
+    fetch(`${API_BASE}/api/preferences`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...getGuestHeaders() },
+      body: JSON.stringify(prefs),
+    });
+
+  let res = await doPut();
+
+  // Demo/guest tokens go stale when SESSION_SECRET changes (e.g. local restarts).
+  // Mint a fresh guest session and retry once instead of dead-ending the user.
+  if (res.status === 401 && isDemoMode()) {
+    await refreshGuestSession();
+    res = await doPut();
+  }
+
   if (res.status === 401) throw new PreferencesAuthError();
   if (!res.ok) throw new Error("Failed to save preferences");
   return res.json();
