@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Heart, Star, X } from "lucide-react";
+import { Heart, Star } from "lucide-react";
 import { RATING_LABELS } from "@/lib/movie-utils";
 import {
   Dialog,
@@ -14,6 +14,8 @@ interface RatingPickerDialogProps {
   movieTitle: string;
   onConfirm: (rating: string | null) => void;
   onCancel: () => void;
+  /** When true, tapping a rating submits immediately (no Mark Watched button). */
+  confirmOnSelect?: boolean;
 }
 
 export function RatingPickerDialog({
@@ -21,6 +23,7 @@ export function RatingPickerDialog({
   movieTitle,
   onConfirm,
   onCancel,
+  confirmOnSelect = false,
 }: RatingPickerDialogProps) {
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -44,6 +47,11 @@ export function RatingPickerDialog({
   };
 
   const handleSelect = (val: string) => {
+    if (confirmOnSelect) {
+      onConfirm(val);
+      setSelected(null);
+      return;
+    }
     setSelected((prev) => (prev === val ? null : val));
   };
 
@@ -85,23 +93,25 @@ export function RatingPickerDialog({
           })}
         </div>
 
-        <div className="flex gap-2 mt-2">
+        <div className={`flex gap-2 mt-2 ${confirmOnSelect ? "" : ""}`}>
           <Button
             variant="ghost"
             size="sm"
-            className="flex-1 text-muted-foreground"
+            className={confirmOnSelect ? "w-full text-muted-foreground" : "flex-1 text-muted-foreground"}
             onClick={handleSkip}
           >
             Skip rating
           </Button>
-          <Button
-            size="sm"
-            className="flex-1"
-            disabled={!selected}
-            onClick={handleConfirm}
-          >
-            Mark Watched
-          </Button>
+          {!confirmOnSelect && (
+            <Button
+              size="sm"
+              className="flex-1"
+              disabled={!selected}
+              onClick={handleConfirm}
+            >
+              Mark Watched
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>
