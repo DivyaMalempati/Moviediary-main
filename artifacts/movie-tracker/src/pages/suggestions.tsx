@@ -342,9 +342,10 @@ export default function SuggestionsPage() {
 
   // Filter helpers
   const notDismissed = (m: any) => !dismissed.has(m.tmdbId);
-  const visibleTrending = trendingData?.filter(notDismissed) ?? [];
-  const visibleLiked = becauseLiked?.filter(notDismissed) ?? [];
-  const visibleAi = aiResults?.filter(notDismissed) ?? [];
+  const notInLibrary = (m: any) => !m.tmdbId || !inLibrarySet.has(m.tmdbId);
+  const visibleTrending = trendingData?.filter((m) => notDismissed(m) && notInLibrary(m)) ?? [];
+  const visibleLiked = becauseLiked?.filter((m) => notDismissed(m) && notInLibrary(m)) ?? [];
+  const visibleAi = aiResults?.filter((m) => notDismissed(m) && notInLibrary(m)) ?? [];
 
   const dismissedCount = dismissed.size;
 
@@ -430,9 +431,13 @@ export default function SuggestionsPage() {
 
                 {visibleAi.length === 0 && aiResults && aiResults.length > 0 && (
                   <div className="text-center py-10 text-muted-foreground text-sm">
-                    All suggestions hidden.{" "}
+                    No new picks right now — everything here is already in your library or hidden.{" "}
                     <button onClick={clearAll} className="underline underline-offset-2 hover:text-foreground">
-                      Restore them
+                      Restore hidden
+                    </button>
+                    {" · "}
+                    <button onClick={handleGenerateAi} className="underline underline-offset-2 hover:text-foreground">
+                      Find more
                     </button>
                   </div>
                 )}

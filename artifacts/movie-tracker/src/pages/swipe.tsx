@@ -35,6 +35,7 @@ import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { OnboardingPreferences } from "@/components/onboarding-preferences";
 import { RatingPickerDialog } from "@/components/rating-picker-dialog";
+import { useListMovies, getListMoviesQueryKey } from "@workspace/api-client-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const TMDB_IMG = "https://image.tmdb.org/t/p";
@@ -847,6 +848,9 @@ function SwipeDeck() {
   const [onMyServices, setOnMyServices] = useState(false);
   const { data: prefs } = usePreferences();
   const preferredProviders = prefs?.preferredProviders ?? [];
+  const { data: library, isFetched: libraryFetched } = useListMovies(undefined, {
+    query: { queryKey: getListMoviesQueryKey() },
+  });
   const [queue, setQueue] = useState<SwipeFilm[]>([]);
   const [savedFilms, setSavedFilms] = useState<SwipeFilm[]>([]);
   const [watchedFilms, setWatchedFilms] = useState<SwipeFilm[]>([]);
@@ -885,9 +889,19 @@ function SwipeDeck() {
     if (films.length === 0) setExhausted(true);
   }, [onMyServices]);
 
+  // Always keep library IDs in the exclude set (watched + watchlist).
   useEffect(() => {
-    startDeck(1, selectedGenreId, 1);
-  }, [selectedGenreId, onMyServices, startDeck]);
+    if (!libraryFetched) return;
+    for (const m of library ?? []) {
+      if (m.tmdbId != null) seenRef.current.add(m.tmdbId);
+    }
+  }, [libraryFetched, library]);
+
+  // Start / restart deck after library is known, or when filters change.
+  useEffect(() => {
+    if (!libraryFetched) return;
+    void startDeck(1, selectedGenreId, 1);
+  }, [libraryFetched, selectedGenreId, onMyServices, startDeck]);
 
   useEffect(() => {
     if (!isOnline) return;
