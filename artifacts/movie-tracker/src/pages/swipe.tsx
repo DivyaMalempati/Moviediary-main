@@ -28,14 +28,21 @@ import {
   Tv,
   Clapperboard,
   Users,
+  Undo2,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { usePreferences } from "@/lib/preferences";
 import { OnboardingPreferences } from "@/components/onboarding-preferences";
+import { RatingPickerDialog } from "@/components/rating-picker-dialog";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const TMDB_IMG = "https://image.tmdb.org/t/p";
+
+// Hybrid batch model — stop the infinite swipe void.
+const DECK_SIZE = 12;
+// Soft cap for "this week" watchlist picks from swipe (choice paralysis guard).
+const WEEKLY_WATCHLIST_SOFT_CAP = 5;
 
 // ── Genre chips ────────────────────────────────────────────────────────────────
 const GENRES = [
@@ -63,16 +70,29 @@ interface SwipeFilm {
   voteAverage?: number | null;
 }
 
+interface Provider {
+  name: string;
+  logoPath: string | null;
+}
+
 interface FilmFlipDetails {
   voteAverage: number | null;
+  runtimeMinutes: number | null;
   director: string | null;
   cast: string[];
   providers: {
-    flatrate: Array<{ name: string; logoPath: string | null }>;
-    rent: Array<{ name: string; logoPath: string | null }>;
-    buy: Array<{ name: string; logoPath: string | null }>;
+    flatrate: Provider[];
+    rent: Provider[];
+    buy: Provider[];
     link: string | null;
   } | null;
+}
+
+type UndoAction = "skip" | "watchlist" | "watched";
+interface UndoItem {
+  film: SwipeFilm;
+  action: UndoAction;
+  movieId?: number | null;
 }
 
 // ── Language → flag ────────────────────────────────────────────────────────────
@@ -83,6 +103,15 @@ const LANG_FLAG: Record<string, string> = {
   fa: "🇮🇷", ar: "🇸🇦", tr: "🇹🇷", he: "🇮🇱",
   ru: "🇷🇺", da: "🇩🇰", ro: "🇷🇴", el: "🇬🇷", th: "🇹🇭", id: "🇮🇩",
 };
+
+function formatRuntime(minutes: number | null | undefined): string | null {
+  if (minutes == null || minutes <= 0) return null;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h <= 0) return `${m}m`;
+  if (m <= 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
 
 // ── LocalStorage seen-today helpers ────────────────────────────────────────────
 const todayKey = () => new Date().toISOString().split("T")[0];
@@ -100,11 +129,16 @@ function markSeenToday(id: number) {
     localStorage.setItem(lsSeenKey(), [...s].join(","));
   } catch {}
 }
+function unmarkSeenToday(id: number) {
+  try {
+    const s = getSeenToday(); s.delete(id);
+    localStorage.setItem(lsSeenKey(), [...s].join(","));
+  } catch {}
+}
 
 // ── Offline save queue helpers ─────────────────────────────────────────────────
-// v2 key — stores {film, status} so both "watchlist" and "watched" survive offline
 const LS_QUEUE_KEY = "cinevault:swipe:offline-queue-v2";
-type QueueItem = { film: SwipeFilm; status: "watchlist" | "watched" };
+type QueueItem = { film: SwipeFilm; status: "watchlist" | "watched"; rating?: string | null };
 
 function getOfflineQueue(): QueueItem[] {
   try {
@@ -120,10 +154,10 @@ function writeOfflineQueue(items: QueueItem[]) {
   } catch {}
 }
 
-function enqueueOffline(film: SwipeFilm, status: "watchlist" | "watched") {
+function enqueueOffline(film: SwipeFilm, status: "watchlist" | "watched", rating?: string | null) {
   const q = getOfflineQueue();
   if (!q.find((i) => i.film.tmdbId === film.tmdbId)) {
-    writeOfflineQueue([...q, { film, status }]);
+    writeOfflineQueue([...q, { film, status, rating }]);
   }
 }
 
@@ -162,10 +196,12 @@ async function fetchSwipeBatch(page: number, genreId?: number | null, excludeIds
   } catch { return []; }
 }
 
-async function saveFilm(film: SwipeFilm, status: "watchlist" | "watched"): Promise<boolean> {
+async function saveFilm(
+  film: SwipeFilm,
+  status: "watchlist" | "watched",
+  rating?: string | null,
+): Promise<{ ok: boolean; id?: number }> {
   try {
-    // Zod schema uses .optional() (not .nullable()), so strip null fields —
-    // sending null for an optional field triggers a 400 validation error.
     const body: Record<string, unknown> = {
       title: film.title,
       status,
@@ -176,6 +212,7 @@ async function saveFilm(film: SwipeFilm, status: "watchlist" | "watched"): Promi
     if (film.originalLanguage != null)  body.originalLanguage = film.originalLanguage;
     if (film.overview != null)          body.overview = film.overview;
     if (film.genres?.length)            body.genres = film.genres;
+    if (rating)                         body.rating = rating;
 
     const res = await fetch(`${BASE}/api/movies`, {
       method: "POST",
@@ -183,7 +220,23 @@ async function saveFilm(film: SwipeFilm, status: "watchlist" | "watched"): Promi
       credentials: "include",
       body: JSON.stringify(body),
     });
-    return res.status === 201 || res.status === 409;
+    if (res.status === 201) {
+      const data = (await res.json()) as { id?: number };
+      return { ok: true, id: data.id };
+    }
+    if (res.status === 409) return { ok: true };
+    return { ok: false };
+  } catch { return { ok: false }; }
+}
+
+async function deleteMovie(id: number): Promise<boolean> {
+  try {
+    const res = await fetch(`${BASE}/api/movies/${id}`, {
+      method: "DELETE",
+      headers: { ...getGuestHeaders() },
+      credentials: "include",
+    });
+    return res.ok;
   } catch { return false; }
 }
 
@@ -197,6 +250,7 @@ async function fetchFilmFlipDetails(tmdbId: number): Promise<FilmFlipDetails> {
   const details = detailsRes.ok
     ? ((await detailsRes.json()) as {
         voteAverage?: number | null;
+        runtimeMinutes?: number | null;
         director?: string | null;
         cast?: string[];
       })
@@ -204,15 +258,16 @@ async function fetchFilmFlipDetails(tmdbId: number): Promise<FilmFlipDetails> {
 
   const providers = providersRes.ok
     ? ((await providersRes.json()) as {
-        flatrate?: Array<{ name: string; logoPath: string | null }> | null;
-        rent?: Array<{ name: string; logoPath: string | null }> | null;
-        buy?: Array<{ name: string; logoPath: string | null }> | null;
+        flatrate?: Provider[] | null;
+        rent?: Provider[] | null;
+        buy?: Provider[] | null;
         link?: string | null;
       })
     : null;
 
   return {
     voteAverage: details?.voteAverage ?? null,
+    runtimeMinutes: details?.runtimeMinutes ?? null,
     director: details?.director ?? null,
     cast: details?.cast ?? [],
     providers: providers
@@ -226,12 +281,37 @@ async function fetchFilmFlipDetails(tmdbId: number): Promise<FilmFlipDetails> {
   };
 }
 
+async function fillDeck(
+  startPage: number,
+  genreId: GenreId,
+  excludeIds: Set<number>,
+  target = DECK_SIZE,
+): Promise<{ films: SwipeFilm[]; nextPage: number }> {
+  const collected: SwipeFilm[] = [];
+  const seen = new Set(excludeIds);
+  let page = startPage;
+
+  for (let attempt = 0; attempt < 4 && collected.length < target; attempt++) {
+    const batch = await fetchSwipeBatch(page, genreId, seen);
+    page += 1;
+    if (batch.length === 0) break;
+    for (const f of batch) {
+      if (seen.has(f.tmdbId)) continue;
+      seen.add(f.tmdbId);
+      collected.push(f);
+      if (collected.length >= target) break;
+    }
+  }
+
+  return { films: collected.slice(0, target), nextPage: page };
+}
+
 function ProviderRow({
   label,
   providers,
 }: {
   label: string;
-  providers: Array<{ name: string; logoPath: string | null }>;
+  providers: Provider[];
 }) {
   if (providers.length === 0) return null;
   return (
@@ -268,7 +348,7 @@ interface SwipeCardProps {
   onWatched: (film: SwipeFilm) => void;
 }
 
-const CARD_W = 320; // px — reference width for aspect calc
+const CARD_W = 320;
 const CARD_H = CARD_W * 1.58;
 
 function SwipeCard({ film, isTop, stackIndex, onSave, onSkip, onWatched }: SwipeCardProps) {
@@ -276,13 +356,10 @@ function SwipeCard({ film, isTop, stackIndex, onSave, onSkip, onWatched }: Swipe
   const y = useMotionValue(0);
   const rotate = useTransform(x, [-200, 0, 200], [-14, 0, 14]);
 
-  // Horizontal tints (green = save, red = skip)
   const saveOverlayOpacity  = useTransform(x, [0, 120],   [0, 0.55]);
   const skipOverlayOpacity  = useTransform(x, [-120, 0],  [0.55, 0]);
-  // Upward tint (blue = watched)
   const watchOverlayOpacity = useTransform(y, [-120, 0],  [0.55, 0]);
 
-  // Label opacities
   const saveLabelOpacity    = useTransform(x, [20, 80],   [0, 1]);
   const skipLabelOpacity    = useTransform(x, [-80, -20], [1, 0]);
   const watchLabelOpacity   = useTransform(y, [-80, -20], [1, 0]);
@@ -295,7 +372,6 @@ function SwipeCard({ film, isTop, stackIndex, onSave, onSkip, onWatched }: Swipe
   const posterUrl = getPosterUrl(film.posterPath, "w500");
   const flag = LANG_FLAG[film.originalLanguage ?? ""] ?? "🎬";
 
-  // Prefetch flip-side data while this card is on top so the turn feels instant.
   useEffect(() => {
     if (!isTop) return;
     let cancelled = false;
@@ -316,7 +392,6 @@ function SwipeCard({ film, isTop, stackIndex, onSave, onSkip, onWatched }: Swipe
     };
   }, [isTop, film.tmdbId]);
 
-  // New top film should always start face-up.
   useEffect(() => {
     setFlipped(false);
   }, [film.tmdbId]);
@@ -326,7 +401,6 @@ function SwipeCard({ film, isTop, stackIndex, onSave, onSkip, onWatched }: Swipe
     const absY = Math.abs(info.offset.y);
 
     if (absY > absX && info.offset.y < -90) {
-      // Dominant upward drag → watched
       await animate(y, -900, { duration: 0.25 });
       onWatched(film);
     } else if (info.offset.x > 90) {
@@ -347,11 +421,13 @@ function SwipeCard({ film, isTop, stackIndex, onSave, onSkip, onWatched }: Swipe
   const rating =
     details?.voteAverage ??
     (typeof film.voteAverage === "number" ? film.voteAverage : null);
+  const runtime = formatRuntime(details?.runtimeMinutes);
   const streamProviders = details?.providers?.flatrate ?? [];
   const rentProviders = details?.providers?.rent ?? [];
   const buyProviders = details?.providers?.buy ?? [];
   const hasAnyProvider =
     streamProviders.length > 0 || rentProviders.length > 0 || buyProviders.length > 0;
+  const vibeTags = (film.genres ?? []).slice(0, 2);
 
   return (
     <motion.div
@@ -387,7 +463,7 @@ function SwipeCard({ film, isTop, stackIndex, onSave, onSkip, onWatched }: Swipe
           position: "relative",
         }}
       >
-        {/* ── Front: poster ─────────────────────────────────────────────────── */}
+        {/* ── Front ─────────────────────────────────────────────────────────── */}
         <div
           className="absolute inset-0 rounded-2xl overflow-hidden bg-zinc-900 border border-white/10"
           style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}
@@ -405,7 +481,6 @@ function SwipeCard({ film, isTop, stackIndex, onSave, onSkip, onWatched }: Swipe
             </div>
           )}
 
-          {/* ── Coloured tint overlays ────────────────────────────────────────── */}
           {isTop && (
             <>
               <motion.div style={{ opacity: saveOverlayOpacity }}  className="absolute inset-0 bg-emerald-500 pointer-events-none" />
@@ -414,7 +489,6 @@ function SwipeCard({ film, isTop, stackIndex, onSave, onSkip, onWatched }: Swipe
             </>
           )}
 
-          {/* ── Action banners ────────────────────────────────────────────────── */}
           {isTop && (
             <>
               <motion.div style={{ opacity: saveLabelOpacity }} className="absolute top-5 right-4 z-20 pointer-events-none">
@@ -422,13 +496,11 @@ function SwipeCard({ film, isTop, stackIndex, onSave, onSkip, onWatched }: Swipe
                   <span className="text-emerald-300 font-black text-xl tracking-widest uppercase">Save</span>
                 </div>
               </motion.div>
-
               <motion.div style={{ opacity: skipLabelOpacity }} className="absolute top-5 left-4 z-20 pointer-events-none">
                 <div className="px-4 py-2 rounded-xl border-[3px] border-rose-400 rotate-[12deg] bg-black/40 backdrop-blur-sm">
                   <span className="text-rose-300 font-black text-xl tracking-widest uppercase">Skip</span>
                 </div>
               </motion.div>
-
               <motion.div style={{ opacity: watchLabelOpacity }} className="absolute top-5 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
                 <div className="px-4 py-2 rounded-xl border-[3px] border-blue-400 bg-black/40 backdrop-blur-sm">
                   <span className="text-blue-300 font-black text-xl tracking-widest uppercase">Watched</span>
@@ -437,21 +509,59 @@ function SwipeCard({ film, isTop, stackIndex, onSave, onSkip, onWatched }: Swipe
             </>
           )}
 
-          {/* ── Film info — gradient overlay at the bottom of the poster ─────── */}
-          <div className="absolute inset-x-0 bottom-0 pt-32 pb-5 px-4 bg-gradient-to-t from-black via-black/90 to-transparent">
-            <div className="flex items-start justify-between gap-2 mb-2">
-              <h2 className="font-bold text-base leading-snug text-white">{film.title}</h2>
-              <span className="text-xs text-white/60 shrink-0 mt-0.5">
-                {flag} {film.releaseYear ?? ""}
-              </span>
+          {/* Streaming badges first — decide in under 2s */}
+          {streamProviders.length > 0 && (
+            <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5">
+              {streamProviders.slice(0, 3).map((p) => (
+                <div
+                  key={p.name}
+                  title={p.name}
+                  className="w-8 h-8 rounded-lg overflow-hidden border border-white/25 bg-black/50 backdrop-blur-sm shadow-lg"
+                >
+                  {p.logoPath ? (
+                    <img
+                      src={`${TMDB_IMG}/original${p.logoPath}`}
+                      alt={p.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-[8px] text-white flex items-center justify-center h-full px-0.5 text-center leading-tight">
+                      {p.name.slice(0, 4)}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="absolute inset-x-0 bottom-0 pt-28 pb-5 px-4 bg-gradient-to-t from-black via-black/90 to-transparent">
+            <h2 className="font-bold text-lg leading-snug text-white mb-1.5">{film.title}</h2>
+
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-white/75 mb-2.5">
+              <span>{flag} {film.releaseYear ?? "—"}</span>
+              {runtime && (
+                <>
+                  <span className="text-white/30">·</span>
+                  <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" />{runtime}</span>
+                </>
+              )}
+              {rating != null && rating > 0 && (
+                <>
+                  <span className="text-white/30">·</span>
+                  <span className="inline-flex items-center gap-1 text-amber-200">
+                    <Star className="w-3 h-3 fill-amber-300 text-amber-300" />
+                    {rating.toFixed(1)}
+                  </span>
+                </>
+              )}
             </div>
 
-            {film.genres && film.genres.length > 0 && (
+            {vibeTags.length > 0 && (
               <div className="flex gap-1.5 flex-wrap mb-2.5">
-                {film.genres.slice(0, 4).map((g) => (
+                {vibeTags.map((g) => (
                   <span
                     key={g}
-                    className="text-[11px] px-2.5 py-0.5 rounded-full bg-white/20 text-white font-medium border border-white/30"
+                    className="text-[11px] px-2.5 py-0.5 rounded-full bg-white/15 text-white font-medium border border-white/25"
                   >
                     {g}
                   </span>
@@ -460,20 +570,20 @@ function SwipeCard({ film, isTop, stackIndex, onSave, onSkip, onWatched }: Swipe
             )}
 
             {film.overview && (
-              <p className="text-xs text-white/80 leading-relaxed line-clamp-4">
+              <p className="text-xs text-white/75 leading-relaxed line-clamp-2">
                 {film.overview}
               </p>
             )}
 
             {isTop && (
               <p className="mt-3 text-[10px] uppercase tracking-widest text-white/40 flex items-center gap-1.5">
-                <RotateCcw className="w-3 h-3" /> Tap for details
+                <RotateCcw className="w-3 h-3" /> Tap for cast & more
               </p>
             )}
           </div>
         </div>
 
-        {/* ── Back: rating / cast / director / streaming ─────────────────────── */}
+        {/* ── Back ──────────────────────────────────────────────────────────── */}
         <div
           className="absolute inset-0 rounded-2xl overflow-hidden border border-white/10 bg-zinc-950"
           style={{
@@ -499,6 +609,7 @@ function SwipeCard({ film, isTop, stackIndex, onSave, onSkip, onWatched }: Swipe
                 <h2 className="font-bold text-base leading-snug text-white line-clamp-2">{film.title}</h2>
                 <p className="text-xs text-white/55 mt-1">
                   {flag} {film.releaseYear ?? ""}
+                  {runtime ? ` · ${runtime}` : ""}
                   {film.genres?.length ? ` · ${film.genres.slice(0, 2).join(", ")}` : ""}
                 </p>
               </div>
@@ -586,7 +697,7 @@ function SwipeCard({ film, isTop, stackIndex, onSave, onSkip, onWatched }: Swipe
   );
 }
 
-// ── Summary screen ─────────────────────────────────────────────────────────────
+// ── Finish-line / summary ──────────────────────────────────────────────────────
 function FilmGrid({ films, label }: { films: SwipeFilm[]; label: string }) {
   if (films.length === 0) return null;
   return (
@@ -615,30 +726,46 @@ function FilmGrid({ films, label }: { films: SwipeFilm[]; label: string }) {
   );
 }
 
-function SummaryScreen({
+function FinishLineScreen({
   saved,
   watched,
   pendingCount,
-  onKeepSwiping,
+  deckNumber,
+  onAnotherDeck,
+  anotherDeckDisabled,
 }: {
   saved: SwipeFilm[];
   watched: SwipeFilm[];
   pendingCount: number;
-  onKeepSwiping: () => void;
+  deckNumber: number;
+  onAnotherDeck: () => void;
+  anotherDeckDisabled?: boolean;
 }) {
   const [, setLocation] = useLocation();
-  const total = saved.length + watched.length;
+  const weekFull = saved.length >= WEEKLY_WATCHLIST_SOFT_CAP;
+
   return (
     <Layout>
       <div className="max-w-lg mx-auto px-4 py-10 space-y-8">
         <div className="text-center space-y-2">
-          <div className="text-4xl mb-3">🎬</div>
-          <h1 className="text-2xl font-bold">Your picks this session</h1>
-          <p className="text-muted-foreground text-sm">
-            {saved.length > 0 && <>{saved.length} saved to watchlist</>}
-            {saved.length > 0 && watched.length > 0 && <> · </>}
-            {watched.length > 0 && <>{watched.length} logged as watched</>}
-            {pendingCount > 0 && <span className="ml-1 text-amber-400">· {pendingCount} pending sync</span>}
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Deck {deckNumber} complete
+          </p>
+          <h1 className="text-2xl font-bold">
+            {saved.length > 0
+              ? `You added ${saved.length} movie${saved.length === 1 ? "" : "s"} to your Watchlist`
+              : watched.length > 0
+                ? "Nice logging streak"
+                : "Deck finished"}
+          </h1>
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            {saved.length > 0
+              ? weekFull
+                ? "Your week is full enough — pick one for tonight instead of adding more."
+                : "Ready to pick one for tonight, or do you want another deck?"
+              : watched.length > 0
+                ? "Take a breath — or deal another short deck if you’re still browsing."
+                : "Nothing stuck this round. Try another short deck, or come back later."}
           </p>
           {pendingCount > 0 && (
             <p className="text-xs text-amber-400/80 flex items-center justify-center gap-1.5 mt-1">
@@ -648,16 +775,32 @@ function SummaryScreen({
           )}
         </div>
 
-        <FilmGrid films={saved}    label="Saved to watchlist" />
-        <FilmGrid films={watched}  label="Logged as watched"  />
+        <FilmGrid films={saved} label="This week’s watchlist picks" />
+        <FilmGrid films={watched} label="Logged as watched" />
 
-        <div className="flex flex-col sm:flex-row gap-3">
-          <Button onClick={() => setLocation("/watchlist")} className="flex-1 bg-white text-black hover:bg-white/90 gap-2">
-            <Bookmark className="w-4 h-4" /> View watchlist
+        <div className="flex flex-col gap-3">
+          {saved.length > 0 && (
+            <Button
+              onClick={() => setLocation("/watchlist")}
+              className="w-full bg-white text-black hover:bg-white/90 gap-2"
+            >
+              <Bookmark className="w-4 h-4" /> Pick one for tonight
+            </Button>
+          )}
+          <Button
+            variant={saved.length > 0 ? "outline" : "default"}
+            onClick={onAnotherDeck}
+            disabled={anotherDeckDisabled}
+            className={cn("w-full gap-2", saved.length === 0 && "bg-white text-black hover:bg-white/90")}
+          >
+            <RefreshCw className="w-4 h-4" />
+            {weekFull ? "Week feels full — another deck anyway" : "Deal another deck"}
           </Button>
-          <Button variant="outline" onClick={onKeepSwiping} className="flex-1 gap-2">
-            <RefreshCw className="w-4 h-4" /> Keep swiping
-          </Button>
+          {watched.length > 0 && saved.length === 0 && (
+            <Button variant="outline" onClick={() => setLocation("/watched")} className="w-full gap-2">
+              View watched <ArrowRight className="w-3.5 h-3.5" />
+            </Button>
+          )}
         </div>
       </div>
     </Layout>
@@ -671,50 +814,44 @@ function SwipeDeck() {
 
   const [selectedGenreId, setSelectedGenreId] = useState<GenreId>(null);
   const [queue, setQueue] = useState<SwipeFilm[]>([]);
-  // Confirmed saves / watches (server-ack'd)
   const [savedFilms, setSavedFilms] = useState<SwipeFilm[]>([]);
   const [watchedFilms, setWatchedFilms] = useState<SwipeFilm[]>([]);
-  // Offline queue count for display (reads from localStorage)
   const [pendingCount, setPendingCount] = useState(() => getOfflineQueue().length);
-  const [apiPage, setApiPage] = useState(2);
+  const [apiPage, setApiPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [fetchingMore, setFetchingMore] = useState(false);
-  const [showSummary, setShowSummary] = useState(false);
+  const [showFinishLine, setShowFinishLine] = useState(false);
   const [exhausted, setExhausted] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [deckNumber, setDeckNumber] = useState(1);
+  const [deckActions, setDeckActions] = useState(0);
+  const [deckSize, setDeckSize] = useState(DECK_SIZE);
+  const [undoStack, setUndoStack] = useState<UndoItem[]>([]);
+  const [ratingFilm, setRatingFilm] = useState<SwipeFilm | null>(null);
   const seenRef = useRef<Set<number>>(getSeenToday());
+  const finishingRef = useRef(false);
 
-  const loadBatch = useCallback(async (p: number, genreId: GenreId) => {
-    const films = await fetchSwipeBatch(p, genreId, seenRef.current);
-    return films.filter((f) => !seenRef.current.has(f.tmdbId));
+  const startDeck = useCallback(async (page: number, genreId: GenreId, nextDeckNumber?: number) => {
+    setLoading(true);
+    setShowFinishLine(false);
+    setExhausted(false);
+    setQueue([]);
+    setDeckActions(0);
+    setUndoStack([]);
+    finishingRef.current = false;
+    if (nextDeckNumber != null) setDeckNumber(nextDeckNumber);
+
+    const { films, nextPage } = await fillDeck(page, genreId, seenRef.current, DECK_SIZE);
+    setQueue(films);
+    setDeckSize(films.length || DECK_SIZE);
+    setApiPage(nextPage);
+    setLoading(false);
+    if (films.length === 0) setExhausted(true);
   }, []);
 
-  // Initial load + reload when genre changes
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      setExhausted(false);
-      setQueue([]);
-      const fresh = await loadBatch(1, selectedGenreId);
-      setQueue(fresh);
-      setApiPage(2);
-      setLoading(false);
-      if (fresh.length === 0) setExhausted(true);
-    })();
-  }, [loadBatch, selectedGenreId]);
+    startDeck(1, selectedGenreId, 1);
+  }, [selectedGenreId, startDeck]);
 
-  useEffect(() => {
-    if (queue.length > 5 || fetchingMore || loading || exhausted || showSummary) return;
-    setFetchingMore(true);
-    loadBatch(apiPage, selectedGenreId).then((more) => {
-      if (more.length === 0) setExhausted(true);
-      else setQueue((q) => [...q, ...more]);
-      setApiPage((p) => p + 1);
-      setFetchingMore(false);
-    });
-  }, [queue.length, fetchingMore, loading, exhausted, showSummary, apiPage, loadBatch, selectedGenreId]);
-
-  // Retry offline queue when back online
   useEffect(() => {
     if (!isOnline) return;
     const queued = getOfflineQueue();
@@ -725,7 +862,7 @@ function SwipeDeck() {
 
     const retryAll = async () => {
       for (const item of queued) {
-        const ok = await saveFilm(item.film, item.status);
+        const { ok } = await saveFilm(item.film, item.status, item.rating);
         if (ok) {
           dequeueOffline(item.film.tmdbId);
           synced++;
@@ -742,13 +879,37 @@ function SwipeDeck() {
     retryAll();
   }, [isOnline, qc]);
 
-  const advance = useCallback(() => setQueue((q) => q.slice(1)), []);
+  const maybeFinishDeck = useCallback((nextActions: number, nextQueueLen: number) => {
+    if (finishingRef.current) return;
+    if (nextActions >= deckSize || nextQueueLen <= 0) {
+      finishingRef.current = true;
+      setShowFinishLine(true);
+    }
+  }, [deckSize]);
+
+  const advance = useCallback(() => {
+    setQueue((q) => {
+      const next = q.slice(1);
+      setDeckActions((a) => {
+        const nextActions = a + 1;
+        // defer finish check until after both updates settle
+        queueMicrotask(() => maybeFinishDeck(nextActions, next.length));
+        return nextActions;
+      });
+      return next;
+    });
+  }, [maybeFinishDeck]);
+
+  const pushUndo = useCallback((item: UndoItem) => {
+    setUndoStack((s) => [...s.slice(-9), item]);
+  }, []);
 
   const handleSkip = useCallback((film: SwipeFilm) => {
     markSeenToday(film.tmdbId);
     seenRef.current.add(film.tmdbId);
+    pushUndo({ film, action: "skip" });
     advance();
-  }, [advance]);
+  }, [advance, pushUndo]);
 
   const handleSave = useCallback(async (film: SwipeFilm) => {
     markSeenToday(film.tmdbId);
@@ -758,90 +919,129 @@ function SwipeDeck() {
     if (!isOnline) {
       enqueueOffline(film, "watchlist");
       setPendingCount(getOfflineQueue().length);
+      pushUndo({ film, action: "watchlist" });
       toast.warning("Saved offline — will sync when you're back online", {
         duration: 3000, icon: <WifiOff className="w-4 h-4" />,
       });
       return;
     }
 
-    const ok = await saveFilm(film, "watchlist");
+    const { ok, id } = await saveFilm(film, "watchlist");
     if (ok) {
       setSavedFilms((s) => [...s, film]);
+      pushUndo({ film, action: "watchlist", movieId: id ?? null });
       qc.invalidateQueries({ queryKey: ["movies"] });
+      if (savedFilms.length + 1 === WEEKLY_WATCHLIST_SOFT_CAP) {
+        toast.message("Week’s watchlist is filling up", {
+          description: "Aim for a few strong picks — not an endless list.",
+          duration: 3500,
+        });
+      }
     } else {
       enqueueOffline(film, "watchlist");
       setPendingCount(getOfflineQueue().length);
+      pushUndo({ film, action: "watchlist" });
       toast.error("Save failed — queued for retry when connection improves", { duration: 4000 });
     }
-  }, [advance, isOnline, qc]);
+  }, [advance, isOnline, pushUndo, qc, savedFilms.length]);
 
-  const handleWatched = useCallback(async (film: SwipeFilm) => {
-    markSeenToday(film.tmdbId);
-    seenRef.current.add(film.tmdbId);
-    advance();
-
+  const commitWatched = useCallback(async (film: SwipeFilm, rating: string | null) => {
     if (!isOnline) {
-      enqueueOffline(film, "watched");
+      enqueueOffline(film, "watched", rating);
       setPendingCount(getOfflineQueue().length);
+      pushUndo({ film, action: "watched" });
       toast.warning("Logged offline — will sync when you're back online", {
         duration: 3000, icon: <WifiOff className="w-4 h-4" />,
       });
       return;
     }
 
-    const ok = await saveFilm(film, "watched");
+    const { ok, id } = await saveFilm(film, "watched", rating);
     if (ok) {
       setWatchedFilms((w) => [...w, film]);
+      pushUndo({ film, action: "watched", movieId: id ?? null });
       qc.invalidateQueries({ queryKey: ["movies"] });
     } else {
-      enqueueOffline(film, "watched");
+      enqueueOffline(film, "watched", rating);
       setPendingCount(getOfflineQueue().length);
+      pushUndo({ film, action: "watched" });
       toast.error("Log failed — queued for retry when connection improves", { duration: 4000 });
     }
-  }, [advance, isOnline, qc]);
+  }, [isOnline, pushUndo, qc]);
 
-  // Show summary every 10 confirmed actions
-  const confirmedCount = savedFilms.length + watchedFilms.length;
-  useEffect(() => {
-    if (confirmedCount > 0 && confirmedCount % 10 === 0) setShowSummary(true);
-  }, [confirmedCount]);
+  const handleWatched = useCallback((film: SwipeFilm) => {
+    markSeenToday(film.tmdbId);
+    seenRef.current.add(film.tmdbId);
+    advance();
+    setRatingFilm(film);
+  }, [advance]);
 
-  // Keyboard shortcuts
+  const handleUndo = useCallback(async () => {
+    const item = undoStack[undoStack.length - 1];
+    if (!item || showFinishLine) return;
+
+    setUndoStack((s) => s.slice(0, -1));
+    unmarkSeenToday(item.film.tmdbId);
+    seenRef.current.delete(item.film.tmdbId);
+    setQueue((q) => [item.film, ...q.filter((f) => f.tmdbId !== item.film.tmdbId)]);
+    setDeckActions((a) => Math.max(0, a - 1));
+
+    if (item.action === "watchlist") {
+      setSavedFilms((s) => s.filter((f) => f.tmdbId !== item.film.tmdbId));
+      dequeueOffline(item.film.tmdbId);
+      if (item.movieId) await deleteMovie(item.movieId);
+      qc.invalidateQueries({ queryKey: ["movies"] });
+    }
+    if (item.action === "watched") {
+      setWatchedFilms((w) => w.filter((f) => f.tmdbId !== item.film.tmdbId));
+      dequeueOffline(item.film.tmdbId);
+      if (item.movieId) await deleteMovie(item.movieId);
+      qc.invalidateQueries({ queryKey: ["movies"] });
+    }
+
+    toast.message("Undone", { duration: 1500 });
+  }, [undoStack, showFinishLine, qc]);
+
   useEffect(() => {
     const current = queue[0];
-    if (!current || showSummary) return;
+    if (!current || showFinishLine || ratingFilm) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === "ArrowRight") handleSave(current);
       if (e.key === "ArrowLeft")  handleSkip(current);
       if (e.key === "ArrowUp")    handleWatched(current);
+      if ((e.key === "z" || e.key === "Z") && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        handleUndo();
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [queue, showSummary, handleSave, handleSkip, handleWatched]);
+  }, [queue, showFinishLine, ratingFilm, handleSave, handleSkip, handleWatched, handleUndo]);
 
-  if (showSummary) {
+  if (showFinishLine) {
     return (
-      <SummaryScreen
+      <FinishLineScreen
         saved={savedFilms}
         watched={watchedFilms}
         pendingCount={pendingCount}
-        onKeepSwiping={() => { setShowSummary(false); setSavedFilms([]); setWatchedFilms([]); }}
+        deckNumber={deckNumber}
+        anotherDeckDisabled={exhausted && queue.length === 0}
+        onAnotherDeck={() => {
+          startDeck(apiPage, selectedGenreId, deckNumber + 1);
+        }}
       />
     );
   }
 
   const current = queue[0];
   const isQueueEmpty = !loading && (queue.length === 0 || exhausted);
-  const sessionCount = confirmedCount + pendingCount;
-
-  // Card stack height — matches poster height at CARD_W
-  const stackH = Math.round(CARD_W * 1.58) + 20; // +20 for stack peek depth
+  const remainingInDeck = Math.max(0, deckSize - deckActions);
+  const stackH = Math.round(CARD_W * 1.58) + 20;
 
   return (
     <Layout>
       <div className="flex flex-col items-center px-4 pt-4 pb-6 min-h-[calc(100dvh-4rem)]">
 
-        {/* Offline banner */}
         {!isOnline && (
           <div className="w-full max-w-sm mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-400 text-xs">
             <WifiOff className="w-3.5 h-3.5 shrink-0" />
@@ -849,7 +1049,6 @@ function SwipeDeck() {
           </div>
         )}
 
-        {/* Retry indicator */}
         {isOnline && isRetrying && (
           <div className="w-full max-w-sm mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs">
             <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
@@ -857,24 +1056,29 @@ function SwipeDeck() {
           </div>
         )}
 
-        {/* Header */}
         <div className="w-full max-w-sm mb-3 flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold">Discover</h1>
+            <h1 className="text-xl font-bold">Today’s deck</h1>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {sessionCount > 0
-                ? `${sessionCount} saved this session${pendingCount > 0 ? ` (${pendingCount} pending)` : ""}`
-                : "Tap for details · drag right to save · left to skip"}
+              {loading
+                ? "Building a short list…"
+                : `${remainingInDeck} left in deck ${deckNumber} · tap for details`}
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            {fetchingMore && <Loader2 className="w-3 h-3 animate-spin" />}
             {!isOnline && <WifiOff className="w-3 h-3 text-amber-400" />}
-            <span>{queue.length} queued</span>
+            <span className="tabular-nums">{deckActions}/{deckSize}</span>
           </div>
         </div>
 
-        {/* Genre filter chips */}
+        {/* Deck progress */}
+        <div className="w-full max-w-sm mb-3 h-1 rounded-full bg-white/10 overflow-hidden">
+          <div
+            className="h-full bg-white/70 transition-all duration-300"
+            style={{ width: `${deckSize ? Math.min(100, (deckActions / deckSize) * 100) : 0}%` }}
+          />
+        </div>
+
         <div className="w-full max-w-sm mb-4 -mx-1">
           <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none px-0.5">
             {GENRES.map((g) => (
@@ -897,7 +1101,7 @@ function SwipeDeck() {
         {loading ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Finding films for you…</p>
+            <p className="text-sm text-muted-foreground">Dealing {DECK_SIZE} films…</p>
           </div>
 
         ) : isQueueEmpty ? (
@@ -906,25 +1110,21 @@ function SwipeDeck() {
             <div>
               <h2 className="text-xl font-bold mb-2">All caught up for today</h2>
               <p className="text-muted-foreground text-sm leading-relaxed">
-                {sessionCount > 0
-                  ? `You saved ${sessionCount} film${sessionCount === 1 ? "" : "s"} — great taste. Come back tomorrow for more.`
+                {savedFilms.length + watchedFilms.length > 0
+                  ? "Come back tomorrow for a fresh deck — or review what you saved."
                   : "No new films match your preferences right now. Check back tomorrow."}
               </p>
             </div>
-            {sessionCount > 0 && (
-              <Button onClick={() => setShowSummary(true)} className="bg-white text-black hover:bg-white/90 gap-2">
-                <Bookmark className="w-4 h-4" /> See what you saved
+            {(savedFilms.length > 0 || watchedFilms.length > 0) && (
+              <Button onClick={() => setShowFinishLine(true)} className="bg-white text-black hover:bg-white/90 gap-2">
+                <Bookmark className="w-4 h-4" /> See your picks
               </Button>
             )}
           </div>
 
         ) : (
           <>
-            {/* Card stack — height matches card content exactly */}
-            <div
-              className="relative w-full max-w-[340px]"
-              style={{ height: stackH }}
-            >
+            <div className="relative w-full max-w-[340px]" style={{ height: stackH }}>
               {queue.slice(0, 3).map((film, i) => (
                 <SwipeCard
                   key={film.tmdbId}
@@ -938,9 +1138,7 @@ function SwipeDeck() {
               ))}
             </div>
 
-            {/* Action buttons — always visible below the stack */}
-            <div className="flex items-center gap-6 mt-5">
-              {/* Skip */}
+            <div className="flex items-center gap-5 mt-5">
               <button
                 onClick={() => current && handleSkip(current)}
                 aria-label="Skip"
@@ -949,7 +1147,6 @@ function SwipeDeck() {
                 <X className="w-6 h-6" />
               </button>
 
-              {/* Watched — blue */}
               <button
                 onClick={() => current && handleWatched(current)}
                 aria-label="Mark as watched"
@@ -958,7 +1155,6 @@ function SwipeDeck() {
                 <CheckCircle2 className="w-6 h-6" />
               </button>
 
-              {/* Save — amber tint when offline */}
               <button
                 onClick={() => current && handleSave(current)}
                 aria-label="Save to watchlist"
@@ -973,36 +1169,43 @@ function SwipeDeck() {
               </button>
             </div>
 
-            {/* Keyboard hint + offline hint + view saved */}
-            <div className="mt-3 flex flex-col items-center gap-2">
+            <div className="mt-4 flex flex-col items-center gap-2">
+              <button
+                onClick={handleUndo}
+                disabled={undoStack.length === 0}
+                className={cn(
+                  "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-all",
+                  undoStack.length === 0
+                    ? "border-white/10 text-muted-foreground/40 cursor-not-allowed"
+                    : "border-white/25 text-muted-foreground hover:text-foreground hover:border-white/40"
+                )}
+              >
+                <Undo2 className="w-3.5 h-3.5" /> Undo last swipe
+              </button>
               <p className="hidden sm:block text-[11px] text-muted-foreground">
-                Tap card for details · ← Skip · ↑ Watched · → Save
+                ← Skip · ↑ Watched · → Watchlist
               </p>
-              {!isOnline && (
-                <p className="text-[11px] text-amber-400/70 text-center">
-                  Saves will queue and sync when back online
-                </p>
-              )}
-              {sessionCount >= 3 && (
-                <button
-                  onClick={() => setShowSummary(true)}
-                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors flex items-center gap-1"
-                >
-                  View {sessionCount} saved{pendingCount > 0 ? ` (${pendingCount} pending)` : ""} <ArrowRight className="w-3 h-3" />
-                </button>
-              )}
             </div>
           </>
         )}
       </div>
+
+      <RatingPickerDialog
+        open={!!ratingFilm}
+        movieTitle={ratingFilm?.title ?? ""}
+        onCancel={() => {
+          if (ratingFilm) void commitWatched(ratingFilm, null);
+          setRatingFilm(null);
+        }}
+        onConfirm={(rating) => {
+          if (ratingFilm) void commitWatched(ratingFilm, rating);
+          setRatingFilm(null);
+        }}
+      />
     </Layout>
   );
 }
 
-// ── Onboarding gate ──────────────────────────────────────────────────────────
-// Swipe is the app's "tell us what you like" surface — asking preferences
-// before the user ever sees it means the very first batch is already
-// weighted toward their stated taste instead of generic popular/iconic.
 export default function SwipePage() {
   const { data: prefs, isLoading } = usePreferences();
 
