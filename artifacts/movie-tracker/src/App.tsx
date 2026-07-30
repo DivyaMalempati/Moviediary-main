@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ClerkProvider, SignIn, SignUp, Show, useClerk } from "@clerk/react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { dark } from "@clerk/themes";
@@ -215,6 +215,8 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 }
 
 function SaveReturnAndRedirect({ path }: { path: string }) {
+  const [bootingDemo, setBootingDemo] = useState(false);
+
   useEffect(() => {
     try {
       if (path && path !== "/" && !path.startsWith("/sign-")) {
@@ -223,7 +225,32 @@ function SaveReturnAndRedirect({ path }: { path: string }) {
     } catch {
       /* ignore */
     }
+
+    // Cloud/dev previews often open the API port (5000) which proxies the SPA.
+    // Without a Clerk session that shows the marketing landing — auto-enter demo
+    // so Together and the rest of the app are reachable immediately.
+    if (import.meta.env.DEV && !isDemoMode()) {
+      setBootingDemo(true);
+      void enableDemoMode()
+        .catch(() => undefined)
+        .finally(() => {
+          const target =
+            path && path !== "/" && !path.startsWith("/sign-") ? path : "/watched";
+          window.location.replace(
+            `${window.location.origin}${basePath}${target}`,
+          );
+        });
+    }
   }, [path]);
+
+  if (bootingDemo || (import.meta.env.DEV && !isDemoMode())) {
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center bg-background text-sm text-muted-foreground">
+        Opening Cinevault…
+      </div>
+    );
+  }
+
   return <Redirect to="/" />;
 }
 
