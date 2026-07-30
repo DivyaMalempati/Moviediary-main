@@ -17,7 +17,11 @@ interface MoviePosterCardProps {
   watchedAt?: string | null;
   className?: string;
   actionNode?: React.ReactNode;
+<<<<<<< HEAD
   /** Centered overlay on the poster (e.g. Rewatch button). */
+=======
+  /** Centered overlay on the poster (e.g. Rate button). */
+>>>>>>> origin/main
   overlayAction?: React.ReactNode;
 }
 

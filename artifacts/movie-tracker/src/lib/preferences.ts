@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getAuthHeaders, isDemoMode, hasClerkTokenGetter } from "./demo-auth";
+import { getAuthHeaders, isDemoMode, hasClerkTokenGetter, refreshGuestSession } from "./demo-auth";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -47,10 +47,20 @@ async function fetchPreferences(): Promise<UserPreferences> {
     throw new PreferencesAuthError();
   }
 
-  const res = await fetch(`${API_BASE}/api/preferences`, {
-    credentials: "include",
-    headers: await getAuthHeaders(),
-  });
+  const doGet = async () =>
+    fetch(`${API_BASE}/api/preferences`, {
+      credentials: "include",
+      headers: await getAuthHeaders(),
+    });
+
+  let res = await doGet();
+
+  // Demo/guest tokens go stale when SESSION_SECRET changes (e.g. local restarts).
+  if (res.status === 401 && isDemoMode()) {
+    await refreshGuestSession();
+    res = await doGet();
+  }
+
   if (res.status === 401) throw new PreferencesAuthError();
   if (!res.ok) throw new Error("Failed to load preferences");
   const data = await res.json();
@@ -67,26 +77,35 @@ async function savePreferences(prefs: PreferencesInput): Promise<UserPreferences
     throw new PreferencesAuthError();
   }
 
-  const headers = await getAuthHeaders({ "Content-Type": "application/json" });
-  if (
-    !isDemoMode() &&
-    !headers.Authorization &&
-    !headers["x-cinevault-token"]
-  ) {
-    throw new PreferencesAuthError();
+  const doPut = async () => {
+    const headers = await getAuthHeaders({ "Content-Type": "application/json" });
+    if (
+      !isDemoMode() &&
+      !headers.Authorization &&
+      !headers["x-cinevault-token"]
+    ) {
+      throw new PreferencesAuthError();
+    }
+    return fetch(`${API_BASE}/api/preferences`, {
+      method: "PUT",
+      credentials: "include",
+      headers,
+      body: JSON.stringify({
+        preferredLanguages: prefs.preferredLanguages,
+        preferredGenres: prefs.preferredGenres,
+        preferredProviders: prefs.preferredProviders ?? [],
+        watchRegion: prefs.watchRegion ?? "IN",
+      }),
+    });
+  };
+
+  let res = await doPut();
+
+  if (res.status === 401 && isDemoMode()) {
+    await refreshGuestSession();
+    res = await doPut();
   }
 
-  const res = await fetch(`${API_BASE}/api/preferences`, {
-    method: "PUT",
-    credentials: "include",
-    headers,
-    body: JSON.stringify({
-      preferredLanguages: prefs.preferredLanguages,
-      preferredGenres: prefs.preferredGenres,
-      preferredProviders: prefs.preferredProviders ?? [],
-      watchRegion: prefs.watchRegion ?? "IN",
-    }),
-  });
   if (res.status === 401) throw new PreferencesAuthError();
   if (!res.ok) throw new Error("Failed to save preferences");
   const data = await res.json();
