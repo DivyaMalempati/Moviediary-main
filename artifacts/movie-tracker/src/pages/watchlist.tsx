@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useListMovies, useUpdateMovie, getListMoviesQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Bookmark, Check, Download, Loader2, Search, X } from "lucide-react";
+import { Bookmark, Download, Loader2, Search, Star, X } from "lucide-react";
 
 // ── CSV export ────────────────────────────────────────────────────────────────
 function exportCSV(movies: any[], filename: string) {
@@ -131,27 +131,29 @@ export default function WatchlistPage() {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
             {filtered?.map((movie) => (
-              <div key={movie.id} className="relative group/wrapper">
-                <MoviePosterCard
-                  id={movie.id}
-                  title={movie.title}
-                  posterPath={movie.posterPath}
-                  language={movie.originalLanguage}
-                  year={movie.releaseYear}
-                />
-                <Button
-                  size="sm"
-                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover/wrapper:opacity-100 transition-opacity z-30 shadow-lg shadow-black/50"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleMarkWatched(movie.id);
-                  }}
-                >
-                  <Check className="w-4 h-4 mr-2" />
-                  Mark Watched
-                </Button>
-              </div>
+              <MoviePosterCard
+                key={movie.id}
+                id={movie.id}
+                title={movie.title}
+                posterPath={movie.posterPath}
+                language={movie.originalLanguage}
+                year={movie.releaseYear}
+                overlayAction={
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="shadow-lg shadow-black/50 bg-white text-black hover:bg-white/90"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleMarkWatched(movie.id);
+                    }}
+                  >
+                    <Star className="w-4 h-4 mr-2" />
+                    Rate
+                  </Button>
+                }
+              />
             ))}
           </div>
         )}
@@ -159,6 +161,7 @@ export default function WatchlistPage() {
         <RatingPickerDialog
           open={!!pendingId}
           movieTitle={pendingMovie?.title ?? ""}
+          confirmOnSelect
           onConfirm={submitWatched}
           onCancel={() => setPendingId(null)}
         />
