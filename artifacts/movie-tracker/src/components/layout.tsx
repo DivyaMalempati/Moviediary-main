@@ -107,7 +107,10 @@ export function Layout({ children }: LayoutProps) {
             <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
               <Clapperboard className="w-5 h-5" />
             </div>
-            <span className="font-sans font-bold text-xl tracking-tight">Cinevault</span>
+            <div className="flex flex-col leading-tight">
+              <span className="font-sans font-bold text-xl tracking-tight">Cinevault</span>
+              <span className="text-[10px] text-emerald-400/90 font-medium">Together enabled</span>
+            </div>
           </Link>
         </div>
 
