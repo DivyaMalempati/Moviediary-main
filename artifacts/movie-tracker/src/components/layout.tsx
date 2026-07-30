@@ -89,12 +89,12 @@ export function Layout({ children }: LayoutProps) {
     { href: "/import",      label: "Import",      icon: Upload },
   ];
 
-  // Bottom nav (mobile) — most-used items + profile; Swipe replaces Collections
+  // Bottom nav (mobile) — Together included so spouse linking isn’t desktop-only
   const bottomItems = [
     { href: "/watched",   label: "Watched",  icon: Eye },
     { href: "/watchlist", label: "Watchlist", icon: Bookmark },
+    { href: "/partner",   label: "Together", icon: Users },
     { href: "/swipe",     label: "Swipe",     icon: Shuffle },
-    { href: "/add",       label: "Add",       icon: PlusCircle },
     { href: "/profile",   label: "Profile",   icon: User },
   ];
 

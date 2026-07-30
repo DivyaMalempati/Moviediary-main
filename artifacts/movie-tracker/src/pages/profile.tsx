@@ -6,7 +6,7 @@ import { PreferencesModal } from "@/components/preferences-modal";
 import { isDemoMode, disableDemoMode, clearAppSession, getAuthHeaders } from "@/lib/demo-auth";
 import { usePreferences } from "@/lib/preferences";
 import { toast } from "sonner";
-import { ChevronRight, Download, LogOut, Settings, Upload, BookOpen, Play } from "lucide-react";
+import { ChevronRight, Download, LogOut, Settings, Upload, BookOpen, Play, Users, PlusCircle } from "lucide-react";
 import { Link } from "wouter";
 import { useReplayFeatureTour } from "@/components/feature-walkthrough";
 
@@ -87,6 +87,32 @@ function ProfileShell({
         </div>
 
         <div className="space-y-1">
+          <Link href="/partner">
+            <button
+              type="button"
+              className="w-full flex items-center gap-3 px-1 py-3 text-left text-sm hover:text-foreground text-foreground/90 transition-colors"
+            >
+              <Users className="w-4 h-4 text-muted-foreground" />
+              <span className="flex-1 text-left">
+                <span className="block">Together</span>
+                <span className="block text-xs text-muted-foreground font-normal">
+                  Link spouse · watch-together decks
+                </span>
+              </span>
+              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+            </button>
+          </Link>
+
+          <Link href="/add">
+            <button
+              type="button"
+              className="w-full flex items-center gap-3 px-1 py-3 text-left text-sm hover:text-foreground text-foreground/90 transition-colors"
+            >
+              <PlusCircle className="w-4 h-4 text-muted-foreground" />
+              Add a film
+            </button>
+          </Link>
+
           <PreferencesModal
             trigger={
               <button
