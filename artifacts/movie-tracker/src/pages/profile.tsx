@@ -84,11 +84,7 @@ function ProfileShell({
               <span className="flex-1 text-left">
                 <span className="block">Together</span>
                 <span className="block text-xs text-muted-foreground font-normal">
-<<<<<<< HEAD
                   Movie-night ritual · share a link & swipe
-=======
-                  Link accounts · shared decks
->>>>>>> origin/main
                 </span>
               </span>
               <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
