@@ -76,6 +76,7 @@ interface SwipeFilm {
   title: string;
   posterPath: string | null;
   releaseYear: number | null;
+  releaseDate?: string | null;
   originalLanguage: string | null;
   overview: string | null;
   genres: string[] | null;
@@ -230,6 +231,7 @@ async function saveFilm(
     if (film.tmdbId != null)           body.tmdbId = film.tmdbId;
     if (film.posterPath != null)        body.posterPath = film.posterPath;
     if (film.releaseYear != null)       body.releaseYear = film.releaseYear;
+    if (film.releaseDate != null)       body.releaseDate = film.releaseDate;
     if (film.originalLanguage != null)  body.originalLanguage = film.originalLanguage;
     if (film.overview != null)          body.overview = film.overview;
     if (film.genres?.length)            body.genres = film.genres;

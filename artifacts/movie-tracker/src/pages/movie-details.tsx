@@ -253,6 +253,7 @@ export default function MovieDetailsPage() {
         ...(tmdbMovie.tmdbId != null && { tmdbId: tmdbMovie.tmdbId }),
         ...(tmdbMovie.posterPath != null && { posterPath: tmdbMovie.posterPath }),
         ...(tmdbMovie.releaseYear != null && { releaseYear: tmdbMovie.releaseYear }),
+        ...(tmdbMovie.releaseDate != null && { releaseDate: tmdbMovie.releaseDate }),
         ...(tmdbMovie.originalLanguage != null && { originalLanguage: tmdbMovie.originalLanguage }),
       }
     }, {
@@ -370,11 +371,15 @@ export default function MovieDetailsPage() {
                   Change
                 </span>
               </button>
-              {movie.releaseYear && (
+              {movie.releaseDate ? (
+                <Badge variant="outline" className="bg-background/50 backdrop-blur font-mono border-white/10">
+                  <Calendar className="w-3 h-3 mr-1" /> {movie.releaseDate}
+                </Badge>
+              ) : movie.releaseYear ? (
                 <Badge variant="outline" className="bg-background/50 backdrop-blur font-mono border-white/10">
                   <Calendar className="w-3 h-3 mr-1" /> {movie.releaseYear}
                 </Badge>
-              )}
+              ) : null}
             </div>
             
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-white drop-shadow-md">

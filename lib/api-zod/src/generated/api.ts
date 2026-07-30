@@ -38,6 +38,7 @@ export const ListMoviesResponseItem = zod.object({
   "tmdbId": zod.number().nullish(),
   "posterPath": zod.string().nullish(),
   "releaseYear": zod.number().nullish(),
+  "releaseDate": zod.string().nullish().describe('Theatrical\/digital release day (YYYY-MM-DD) for upcoming reminders'),
   "originalLanguage": zod.string().nullish(),
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
@@ -63,6 +64,7 @@ export const CreateMovieBody = zod.object({
   "tmdbId": zod.number().optional(),
   "posterPath": zod.string().optional(),
   "releaseYear": zod.number().optional(),
+  "releaseDate": zod.string().optional().describe('Theatrical\/digital release day (YYYY-MM-DD)'),
   "originalLanguage": zod.string().optional(),
   "genres": zod.array(zod.string()).optional(),
   "overview": zod.string().optional(),
@@ -82,6 +84,7 @@ export const CreateMovieResponse = zod.object({
   "tmdbId": zod.number().nullish(),
   "posterPath": zod.string().nullish(),
   "releaseYear": zod.number().nullish(),
+  "releaseDate": zod.string().nullish().describe('Theatrical\/digital release day (YYYY-MM-DD) for upcoming reminders'),
   "originalLanguage": zod.string().nullish(),
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
@@ -102,10 +105,10 @@ export const getMovieStatsResponseRecentlyWatchedItemRewatchCountMin = 0;
 export const GetMovieStatsResponse = zod.object({
   "totalWatched": zod.number(),
   "totalWatchlist": zod.number(),
-  "totalRewatches": zod.number().optional(),
-  "thisMonth": zod.number().optional(),
+  "totalRewatches": zod.number().optional().describe('Sum of rewatch counts across the watched diary'),
+  "thisMonth": zod.number().optional().describe('Films watched in the current calendar month'),
   "lovedCount": zod.number().optional(),
-  "highlyRatedCount": zod.number().optional(),
+  "highlyRatedCount": zod.number().optional().describe('Count of loved + great ratings'),
   "byLanguage": zod.array(zod.object({
   "key": zod.string(),
   "count": zod.number()
@@ -135,6 +138,7 @@ export const GetMovieStatsResponse = zod.object({
   "tmdbId": zod.number().nullish(),
   "posterPath": zod.string().nullish(),
   "releaseYear": zod.number().nullish(),
+  "releaseDate": zod.string().nullish().describe('Theatrical\/digital release day (YYYY-MM-DD) for upcoming reminders'),
   "originalLanguage": zod.string().nullish(),
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
@@ -176,6 +180,7 @@ export const GetMovieResponse = zod.object({
   "tmdbId": zod.number().nullish(),
   "posterPath": zod.string().nullish(),
   "releaseYear": zod.number().nullish(),
+  "releaseDate": zod.string().nullish().describe('Theatrical\/digital release day (YYYY-MM-DD) for upcoming reminders'),
   "originalLanguage": zod.string().nullish(),
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
@@ -204,6 +209,7 @@ export const UpdateMovieBody = zod.object({
   "tmdbId": zod.number().nullish(),
   "posterPath": zod.string().nullish(),
   "releaseYear": zod.number().nullish(),
+  "releaseDate": zod.string().nullish().describe('Theatrical\/digital release day (YYYY-MM-DD)'),
   "originalLanguage": zod.string().nullish(),
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
@@ -223,6 +229,7 @@ export const UpdateMovieResponse = zod.object({
   "tmdbId": zod.number().nullish(),
   "posterPath": zod.string().nullish(),
   "releaseYear": zod.number().nullish(),
+  "releaseDate": zod.string().nullish().describe('Theatrical\/digital release day (YYYY-MM-DD) for upcoming reminders'),
   "originalLanguage": zod.string().nullish(),
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
@@ -263,6 +270,7 @@ export const MatchMovieToTmdbResponse = zod.object({
   "tmdbId": zod.number().nullish(),
   "posterPath": zod.string().nullish(),
   "releaseYear": zod.number().nullish(),
+  "releaseDate": zod.string().nullish().describe('Theatrical\/digital release day (YYYY-MM-DD) for upcoming reminders'),
   "originalLanguage": zod.string().nullish(),
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
@@ -298,6 +306,7 @@ export const RewatchMovieResponse = zod.object({
   "tmdbId": zod.number().nullish(),
   "posterPath": zod.string().nullish(),
   "releaseYear": zod.number().nullish(),
+  "releaseDate": zod.string().nullish().describe('Theatrical\/digital release day (YYYY-MM-DD) for upcoming reminders'),
   "originalLanguage": zod.string().nullish(),
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
@@ -324,6 +333,7 @@ export const SearchTmdbResponseItem = zod.object({
   "originalTitle": zod.string().nullish(),
   "posterPath": zod.string().nullish(),
   "releaseYear": zod.number().nullish(),
+  "releaseDate": zod.string().nullish().describe('Release day YYYY-MM-DD when known'),
   "originalLanguage": zod.string().nullish(),
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
@@ -341,12 +351,44 @@ export const GetTrendingIndiaResponseItem = zod.object({
   "originalTitle": zod.string().nullish(),
   "posterPath": zod.string().nullish(),
   "releaseYear": zod.number().nullish(),
+  "releaseDate": zod.string().nullish().describe('Release day YYYY-MM-DD when known'),
   "originalLanguage": zod.string().nullish(),
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
   "voteAverage": zod.number().nullish()
 })
 export const GetTrendingIndiaResponse = zod.array(GetTrendingIndiaResponseItem)
+
+
+/**
+ * @summary Browse upcoming theatrical releases
+ */
+export const getUpcomingReleasesQueryRegionDefault = `IN`;
+export const getUpcomingReleasesQueryDaysDefault = 90;
+export const getUpcomingReleasesQueryDaysMin = 14;
+export const getUpcomingReleasesQueryDaysMax = 180;
+
+
+
+export const GetUpcomingReleasesQueryParams = zod.object({
+  "region": zod.coerce.string().default(getUpcomingReleasesQueryRegionDefault),
+  "language": zod.coerce.string().optional(),
+  "days": zod.coerce.number().min(getUpcomingReleasesQueryDaysMin).max(getUpcomingReleasesQueryDaysMax).default(getUpcomingReleasesQueryDaysDefault)
+})
+
+export const GetUpcomingReleasesResponseItem = zod.object({
+  "tmdbId": zod.number(),
+  "title": zod.string(),
+  "originalTitle": zod.string().nullish(),
+  "posterPath": zod.string().nullish(),
+  "releaseYear": zod.number().nullish(),
+  "releaseDate": zod.string().nullish().describe('Release day YYYY-MM-DD when known'),
+  "originalLanguage": zod.string().nullish(),
+  "genres": zod.array(zod.string()).nullish(),
+  "overview": zod.string().nullish(),
+  "voteAverage": zod.number().nullish()
+})
+export const GetUpcomingReleasesResponse = zod.array(GetUpcomingReleasesResponseItem)
 
 
 /**
@@ -362,6 +404,7 @@ export const DiscoverIndianResponseItem = zod.object({
   "originalTitle": zod.string().nullish(),
   "posterPath": zod.string().nullish(),
   "releaseYear": zod.number().nullish(),
+  "releaseDate": zod.string().nullish().describe('Release day YYYY-MM-DD when known'),
   "originalLanguage": zod.string().nullish(),
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
@@ -383,6 +426,7 @@ export const GetSimilarMoviesResponseItem = zod.object({
   "originalTitle": zod.string().nullish(),
   "posterPath": zod.string().nullish(),
   "releaseYear": zod.number().nullish(),
+  "releaseDate": zod.string().nullish().describe('Release day YYYY-MM-DD when known'),
   "originalLanguage": zod.string().nullish(),
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
@@ -432,6 +476,7 @@ export const GetTmdbRecommendationsResponseItem = zod.object({
   "originalTitle": zod.string().nullish(),
   "posterPath": zod.string().nullish(),
   "releaseYear": zod.number().nullish(),
+  "releaseDate": zod.string().nullish().describe('Release day YYYY-MM-DD when known'),
   "originalLanguage": zod.string().nullish(),
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
@@ -469,6 +514,7 @@ export const GetBecauseYouLikedResponseItem = zod.object({
   "originalTitle": zod.string().nullish(),
   "posterPath": zod.string().nullish(),
   "releaseYear": zod.number().nullish(),
+  "releaseDate": zod.string().nullish().describe('Release day YYYY-MM-DD when known'),
   "originalLanguage": zod.string().nullish(),
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),

@@ -407,6 +407,7 @@ export default function SuggestionsPage() {
         ...(movie.tmdbId != null && { tmdbId: movie.tmdbId }),
         ...(movie.posterPath != null && { posterPath: movie.posterPath }),
         ...((movie.releaseYear ?? movie.year) != null && { releaseYear: movie.releaseYear ?? movie.year }),
+        ...(movie.releaseDate != null && { releaseDate: movie.releaseDate }),
         ...((movie.originalLanguage ?? movie.language) != null && {
           originalLanguage: movie.originalLanguage ?? movie.language,
         }),

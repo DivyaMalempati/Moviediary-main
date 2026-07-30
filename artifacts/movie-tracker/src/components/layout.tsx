@@ -1,7 +1,7 @@
 import { ReactNode, Component, ErrorInfo } from "react";
 import { Link, useLocation } from "wouter";
 import { useUser } from "@clerk/react";
-import { Clapperboard, Eye, Bookmark, PlusCircle, Sparkles, FolderOpen, BarChart2, Upload, User, Shuffle, Users, BookOpen } from "lucide-react";
+import { Clapperboard, Eye, Bookmark, PlusCircle, Sparkles, FolderOpen, BarChart2, Upload, User, Shuffle, Users, BookOpen, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isDemoMode } from "@/lib/demo-auth";
 import { FeatureWalkthroughHost } from "@/components/feature-walkthrough";
@@ -78,6 +78,7 @@ export function Layout({ children }: LayoutProps) {
   const sidebarItems = [
     { href: "/watched",     label: "Watched",     icon: Eye },
     { href: "/watchlist",   label: "Watchlist",   icon: Bookmark },
+    { href: "/upcoming",    label: "Upcoming",    icon: CalendarClock },
     { href: "/collections", label: "Collections", icon: FolderOpen },
     { href: "/stats",       label: "Stats",       icon: BarChart2 },
     { href: "/add",         label: "Add",         icon: PlusCircle },

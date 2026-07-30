@@ -12,6 +12,8 @@ import {
   RotateCcw,
   Clapperboard,
   Tv,
+  CalendarClock,
+  Bell,
 } from "lucide-react";
 
 /** Bump when the tour content changes so returning users see the new version once. */
@@ -99,6 +101,16 @@ export const FEATURE_GUIDE_SECTIONS: Array<{
         href: "/watchlist",
         cta: "Go to Watchlist",
         icon: Bookmark,
+      },
+      {
+        id: "upcoming",
+        title: "Upcoming",
+        summary: "Releases you’re looking forward to — with reminders.",
+        detail:
+          "Browse what’s coming to India, tap Remind me to save it on your watchlist with a release date, and get nudged when it lands (also on Watched).",
+        href: "/upcoming",
+        cta: "Open Upcoming",
+        icon: CalendarClock,
       },
       {
         id: "add",
@@ -199,6 +211,16 @@ export const FEATURE_GUIDE_SECTIONS: Array<{
         href: "/watched",
         cta: "Open Watched",
         icon: RotateCcw,
+      },
+      {
+        id: "release-reminders",
+        title: "Release reminders",
+        summary: "Don’t miss a film you marked.",
+        detail:
+          "When a Looking forward title is due within a week, Watched shows a dismissible banner so you can open it or mark it watched.",
+        href: "/upcoming",
+        cta: "See Upcoming",
+        icon: Bell,
       },
       {
         id: "vault-brand",

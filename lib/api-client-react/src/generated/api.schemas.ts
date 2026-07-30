@@ -31,6 +31,11 @@ export interface Movie {
   posterPath?: string | null;
   /** @nullable */
   releaseYear?: number | null;
+  /**
+     * Theatrical/digital release day (YYYY-MM-DD) for upcoming reminders
+     * @nullable
+     */
+  releaseDate?: string | null;
   /** @nullable */
   originalLanguage?: string | null;
   /** @nullable */
@@ -66,6 +71,8 @@ export interface MovieInput {
   tmdbId?: number;
   posterPath?: string;
   releaseYear?: number;
+  /** Theatrical/digital release day (YYYY-MM-DD) */
+  releaseDate?: string;
   originalLanguage?: string;
   genres?: string[];
   overview?: string;
@@ -94,6 +101,11 @@ export interface MovieUpdate {
   posterPath?: string | null;
   /** @nullable */
   releaseYear?: number | null;
+  /**
+     * Theatrical/digital release day (YYYY-MM-DD)
+     * @nullable
+     */
+  releaseDate?: string | null;
   /** @nullable */
   originalLanguage?: string | null;
   /** @nullable */
@@ -155,6 +167,11 @@ export interface TmdbMovie {
   posterPath?: string | null;
   /** @nullable */
   releaseYear?: number | null;
+  /**
+     * Release day YYYY-MM-DD when known
+     * @nullable
+     */
+  releaseDate?: string | null;
   /** @nullable */
   originalLanguage?: string | null;
   /** @nullable */
@@ -217,6 +234,19 @@ export const ListMoviesStatus = {
 export type SearchTmdbParams = {
 q: string;
 region?: string;
+};
+
+export type GetUpcomingReleasesParams = {
+region?: string;
+/**
+ * Optional ISO 639-1 language filter (e.g. te, hi). Omit for Indian languages + English.
+ */
+language?: string;
+/**
+ * @minimum 14
+ * @maximum 180
+ */
+days?: number;
 };
 
 export type DiscoverIndianParams = {

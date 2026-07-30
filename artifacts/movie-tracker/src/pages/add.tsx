@@ -140,6 +140,7 @@ export default function AddPage() {
           ...(movie.tmdbId != null && { tmdbId: movie.tmdbId }),
           ...(movie.posterPath != null && { posterPath: movie.posterPath }),
           ...(movie.releaseYear != null && { releaseYear: movie.releaseYear }),
+          ...(movie.releaseDate != null && { releaseDate: movie.releaseDate }),
           ...(movie.originalLanguage != null && { originalLanguage: movie.originalLanguage }),
           ...(movie.genres != null && { genres: movie.genres }),
           ...(movie.overview != null && { overview: movie.overview }),

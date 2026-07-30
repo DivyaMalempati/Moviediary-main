@@ -86,6 +86,9 @@ function mapTmdbMovie(m: TmdbMovieRaw, idToName?: Map<number, string>) {
     originalTitle: m.original_title ?? null,
     posterPath: m.poster_path ?? null,
     releaseYear: releaseYear || null,
+    releaseDate: m.release_date && /^\d{4}-\d{2}-\d{2}/.test(m.release_date)
+      ? m.release_date.slice(0, 10)
+      : null,
     originalLanguage: m.original_language ?? null,
     genres: genres && genres.length > 0 ? genres : null,
     overview: m.overview ?? null,
@@ -151,6 +154,56 @@ export async function getTrendingIndia() {
   ]);
   const data = (await res.json()) as { results: TmdbMovieRaw[] };
   return data.results.map((m) => mapTmdbMovie(m, idToName));
+}
+
+function yyyyMmDd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Upcoming theatrical/digital releases for a region (default India).
+ * Uses discover with a release-date window so we get a full date, not just year.
+ */
+export async function getUpcomingReleases(opts?: {
+  region?: string;
+  language?: string;
+  days?: number;
+}) {
+  const region = opts?.region || "IN";
+  const days = Math.min(180, Math.max(14, opts?.days ?? 90));
+  const today = new Date();
+  const end = new Date(today);
+  end.setDate(end.getDate() + days);
+
+  const params: Record<string, string> = {
+    region,
+    sort_by: "primary_release_date.asc",
+    include_adult: "false",
+    "primary_release_date.gte": yyyyMmDd(today),
+    "primary_release_date.lte": yyyyMmDd(end),
+    "vote_count.gte": "1",
+    page: "1",
+  };
+
+  if (opts?.language) {
+    params.with_original_language = opts.language;
+  } else {
+    // India-first mix: major Indian languages + English releases in the region.
+    params.with_original_language = "te|ta|ml|kn|hi|en";
+  }
+
+  const [res, { idToName }] = await Promise.all([
+    tmdbFetch("/discover/movie", params),
+    getGenreMaps(),
+  ]);
+  const data = (await res.json()) as { results: TmdbMovieRaw[] };
+  return data.results
+    .map((m) => mapTmdbMovie(m, idToName))
+    .filter((m) => !!m.releaseDate)
+    .sort((a, b) => (a.releaseDate ?? "").localeCompare(b.releaseDate ?? ""));
 }
 
 export async function getWatchProviders(tmdbId: number, watchRegion = "IN") {

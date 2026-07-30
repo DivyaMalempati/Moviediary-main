@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { useListMovies, useGetMovieStats, useRewatchMovie, getListMoviesQueryKey, getGetMovieStatsQueryKey } from "@workspace/api-client-react";
 import {
-  Clapperboard, Search, Loader2, Upload, X, Download, ChevronDown, RotateCcw,
+  Clapperboard, Search, Loader2, Upload, X, Download, ChevronDown, RotateCcw, Bell,
 } from "lucide-react";
 import { RewatchLogDialog } from "@/components/rewatch-log-dialog";
 import {
@@ -19,6 +19,15 @@ import {
   anniversaryPosterUrl,
   type AnniversaryFilm,
 } from "@/lib/rewatch-reminders";
+import {
+  findReleaseReminders,
+  formatReleaseCopy,
+  formatReleaseDateLabel,
+  isReleaseDismissed,
+  dismissReleaseReminder,
+  releasePosterUrl,
+  type LookingForwardFilm,
+} from "@/lib/release-reminders";
 import { RATING_LABELS, formatWatchDate } from "@/lib/movie-utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -158,6 +167,7 @@ export default function WatchedPage() {
   const rewatchMovie = useRewatchMovie();
   const [pendingRewatch, setPendingRewatch] = useState<any | null>(null);
   const [reminderDismissed, setReminderDismissed] = useState(false);
+  const [releaseReminderDismissed, setReleaseReminderDismissed] = useState(false);
   const [genreFilter, setGenreFilter]     = useState("all");
   const [languageFilter, setLanguageFilter] = useState("all");
   const [ratingFilter, setRatingFilter]   = useState("all");
@@ -213,6 +223,7 @@ export default function WatchedPage() {
 
   const { data: stats }   = useGetMovieStats();
   const { data: movies, isLoading } = useListMovies({ status: "watched" });
+  const { data: watchlist } = useListMovies({ status: "watchlist" });
   const { data: orphaned } = useOrphanedCount();
   const claim = useClaimOrphaned();
 
@@ -223,6 +234,14 @@ export default function WatchedPage() {
     const candidates = findAnniversaryReminders(movies).filter((f) => !isAnniversaryDismissed(f.id));
     return candidates[0] ?? null;
   }, [movies, reminderDismissed]);
+
+  const releaseReminder: LookingForwardFilm | null = useMemo(() => {
+    if (!watchlist?.length || releaseReminderDismissed) return null;
+    const candidates = findReleaseReminders(watchlist, { withinDays: 7 }).filter(
+      (f) => !isReleaseDismissed(f.id, f.releaseDate),
+    );
+    return candidates[0] ?? null;
+  }, [watchlist, releaseReminderDismissed]);
 
   // Unique genres from user's library
   const allGenres = useMemo(() => {
@@ -338,6 +357,53 @@ export default function WatchedPage() {
               }}
               className="text-muted-foreground hover:text-foreground transition-colors p-1 shrink-0"
               aria-label="Dismiss reminder"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Looking-forward release reminder */}
+        {releaseReminder && (
+          <div className="relative flex items-start gap-4 rounded-xl border border-sky-400/30 bg-sky-400/5 px-5 py-4">
+            {releasePosterUrl(releaseReminder) ? (
+              <img
+                src={releasePosterUrl(releaseReminder)!}
+                alt=""
+                className="w-12 h-[72px] rounded-md object-cover shrink-0 shadow"
+              />
+            ) : (
+              <div className="w-12 h-[72px] rounded-md bg-secondary flex items-center justify-center shrink-0">
+                <Bell className="w-5 h-5 text-muted-foreground" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium leading-snug">
+                {formatReleaseCopy(releaseReminder)}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {formatReleaseDateLabel(releaseReminder.releaseDate)} · from Looking forward
+              </p>
+              <div className="flex items-center gap-2 mt-3">
+                <Link href={`/movie/${releaseReminder.id}`}>
+                  <Button size="sm" className="bg-white text-black hover:bg-white/90 h-7 text-xs">
+                    Open film
+                  </Button>
+                </Link>
+                <Link href="/upcoming">
+                  <Button size="sm" variant="outline" className="h-7 text-xs">
+                    All upcoming
+                  </Button>
+                </Link>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                dismissReleaseReminder(releaseReminder.id, releaseReminder.releaseDate);
+                setReleaseReminderDismissed(true);
+              }}
+              className="text-muted-foreground hover:text-foreground transition-colors p-1 shrink-0"
+              aria-label="Dismiss release reminder"
             >
               <X className="w-4 h-4" />
             </button>

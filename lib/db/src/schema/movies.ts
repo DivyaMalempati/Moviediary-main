@@ -48,6 +48,8 @@ export const moviesTable = pgTable(
     posterPath: text("poster_path"),
     backdropPath: text("backdrop_path"),
     releaseYear: integer("release_year"),
+    // Full theatrical/digital release day (YYYY-MM-DD) for upcoming reminders.
+    releaseDate: text("release_date"),
     originalLanguage: text("original_language"),
     genres: text("genres").array(),
     overview: text("overview"),

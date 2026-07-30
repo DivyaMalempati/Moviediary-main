@@ -12,6 +12,7 @@ import { isDemoMode, initDemoMode, disableDemoMode, enableDemoMode, clearAppSess
 import LandingPage from "@/pages/landing";
 import WatchedPage from "@/pages/watched";
 import WatchlistPage from "@/pages/watchlist";
+import UpcomingPage from "@/pages/upcoming";
 import AddPage from "@/pages/add";
 import SuggestionsPage from "@/pages/suggestions";
 import SwipePage from "@/pages/swipe";
@@ -100,6 +101,7 @@ function AppPages() {
     <Switch>
       <Route path="/watched" component={WatchedPage} />
       <Route path="/watchlist" component={WatchlistPage} />
+      <Route path="/upcoming" component={UpcomingPage} />
       <Route path="/add" component={AddPage} />
       <Route path="/suggestions" component={SuggestionsPage} />
       <Route path="/swipe" component={SwipePage} />
@@ -234,6 +236,7 @@ function ClerkRouter() {
       <Route path="/onboarding" component={() => <Redirect to="/swipe" />} />
       <Route path="/watched" component={() => <ProtectedRoute component={WatchedPage} />} />
       <Route path="/watchlist" component={() => <ProtectedRoute component={WatchlistPage} />} />
+      <Route path="/upcoming" component={() => <ProtectedRoute component={UpcomingPage} />} />
       <Route path="/add" component={() => <ProtectedRoute component={AddPage} />} />
       <Route path="/suggestions" component={() => <ProtectedRoute component={SuggestionsPage} />} />
       <Route path="/swipe" component={() => <ProtectedRoute component={SwipePage} />} />

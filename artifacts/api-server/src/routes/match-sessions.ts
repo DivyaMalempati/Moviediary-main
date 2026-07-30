@@ -398,6 +398,7 @@ router.post("/match-sessions/:id/log-match", requireAuth, async (req: any, res):
       tmdbId: film.tmdbId,
       posterPath: film.posterPath,
       releaseYear: film.releaseYear,
+      releaseDate: (film as { releaseDate?: string | null }).releaseDate ?? null,
       originalLanguage: film.originalLanguage,
       overview: film.overview,
       genres: film.genres,

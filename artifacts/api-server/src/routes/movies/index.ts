@@ -54,6 +54,7 @@ function dbMovieToResponse(m: typeof moviesTable.$inferSelect) {
     tmdbId: m.tmdbId ?? null,
     posterPath: m.posterPath ?? null,
     releaseYear: m.releaseYear ?? null,
+    releaseDate: m.releaseDate ?? null,
     originalLanguage: m.originalLanguage ?? null,
     genres: m.genres ?? null,
     overview: m.overview ?? null,
@@ -124,6 +125,7 @@ router.post("/movies", requireAuth, async (req: any, res): Promise<void> => {
       tmdbId: data.tmdbId ?? null,
       posterPath: data.posterPath ?? null,
       releaseYear: data.releaseYear ?? null,
+      releaseDate: data.releaseDate ?? null,
       originalLanguage: data.originalLanguage ?? null,
       genres: data.genres ?? null,
       overview: data.overview ?? null,
@@ -309,6 +311,7 @@ router.patch("/movies/:id", requireAuth, async (req: any, res): Promise<void> =>
   if ("tmdbId" in data) updateValues.tmdbId = data.tmdbId ?? null;
   if ("posterPath" in data) updateValues.posterPath = data.posterPath ?? null;
   if ("releaseYear" in data) updateValues.releaseYear = data.releaseYear ?? null;
+  if ("releaseDate" in data) updateValues.releaseDate = data.releaseDate ?? null;
   if ("originalLanguage" in data) updateValues.originalLanguage = data.originalLanguage ?? null;
   if ("genres" in data) updateValues.genres = data.genres ?? null;
   if ("overview" in data) updateValues.overview = data.overview ?? null;
@@ -463,6 +466,7 @@ router.post("/movies/:id/match", requireAuth, async (req: any, res): Promise<voi
       tmdbId: details.tmdbId,
       posterPath: details.posterPath,
       releaseYear: details.releaseYear,
+      releaseDate: details.releaseDate ?? null,
       originalLanguage: details.originalLanguage,
       genres: details.genres ?? null,
       overview: details.overview,

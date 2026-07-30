@@ -11,6 +11,7 @@ export * from './aiSuggestionsInput';
 export * from './bulkMatchResult';
 export * from './countByKey';
 export * from './discoverIndianParams';
+export * from './getUpcomingReleasesParams';
 export * from './healthStatus';
 export * from './listMoviesParams';
 export * from './listMoviesStatus';

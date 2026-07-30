@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { Layout } from "@/components/layout";
 import { MoviePosterCard } from "@/components/movie-card";
 import { Button } from "@/components/ui/button";
@@ -79,6 +80,9 @@ export default function WatchlistPage() {
               Watchlist
             </h1>
             <p className="text-muted-foreground">Films you want to explore.</p>
+            <Link href="/upcoming" className="text-xs text-primary hover:underline w-fit">
+              Looking for theatrical dates? Open Upcoming →
+            </Link>
           </div>
           <Button
             variant="outline" size="sm"

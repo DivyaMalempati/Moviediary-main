@@ -17,6 +17,7 @@ import {
   getMovieDetails,
   getAllGenres,
   getOnboardingSeedMovies,
+  getUpcomingReleases,
 } from "../lib/tmdb.js";
 import { TROPE_KEYWORDS } from "../lib/tropes.js";
 
@@ -59,6 +60,24 @@ router.get("/tmdb/search", async (req, res): Promise<void> => {
 router.get("/tmdb/trending-india", async (_req, res): Promise<void> => {
   const results = await getTrendingIndia();
   res.json(results);
+});
+
+// GET /tmdb/upcoming?region=IN&language=te&days=90
+router.get("/tmdb/upcoming", async (req, res): Promise<void> => {
+  const regionRaw = (req.query.region as string | undefined) ?? "IN";
+  const region = /^[A-Z]{2}$/i.test(regionRaw) ? regionRaw.toUpperCase() : "IN";
+  const languageRaw = (req.query.language as string | undefined)?.trim();
+  const language =
+    languageRaw && /^[a-z]{2}$/i.test(languageRaw) ? languageRaw.toLowerCase() : undefined;
+  const daysRaw = parseInt(String(req.query.days ?? "90"), 10);
+  const days = Number.isFinite(daysRaw) ? daysRaw : 90;
+
+  try {
+    const results = await getUpcomingReleases({ region, language, days });
+    res.json(results);
+  } catch {
+    res.status(502).json({ error: "Failed to load upcoming releases" });
+  }
 });
 
 // GET /tmdb/discover-indian
