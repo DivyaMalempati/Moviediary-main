@@ -27,6 +27,8 @@ import { MoviePosterCard } from "@/components/movie-card";
 import { Star, Heart, Bookmark, Check, Trash2, ArrowLeft, Loader2, Calendar, Clapperboard, Tv, Eye, BookmarkPlus, Film, FolderOpen, Plus, X, RotateCcw, Ban } from "lucide-react";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks/use-debounce";
+import { ShareMovieSheet } from "@/components/share-movie-sheet";
+import type { ShareMovieInput } from "@/lib/share-movie";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -131,6 +133,8 @@ export default function MovieDetailsPage() {
     skipLabel?: string;
   } | null>(null);
   const [rewatchDialogOpen, setRewatchDialogOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [sharePayload, setSharePayload] = useState<ShareMovieInput | null>(null);
   const [newColName, setNewColName] = useState("");
 
   // Collections
@@ -180,8 +184,23 @@ export default function MovieDetailsPage() {
           setRatingDialogMovie(null);
           updateMovie.mutate({ id, data: { status: "watched", ...(selectedRating ? { rating: selectedRating } : {}) } }, {
             onSuccess: () => {
-              toast.success("Marked as Watched");
               if (selectedRating) setRating(selectedRating);
+              toast.success("Marked as Watched", {
+                action: {
+                  label: "Share",
+                  onClick: () => {
+                    setSharePayload({
+                      title: movie.title,
+                      rating: selectedRating || rating || null,
+                      notes: notes || movie.notes,
+                      timesSeen: 1,
+                      isRewatch: false,
+                      releaseYear: movie.releaseYear,
+                    });
+                    setShareOpen(true);
+                  },
+                },
+              });
               queryClient.invalidateQueries({ queryKey: getGetMovieQueryKey(id) });
             }
           });
@@ -218,10 +237,27 @@ export default function MovieDetailsPage() {
       {
         onSuccess: (updated) => {
           const times = 1 + (updated.rewatchCount ?? 0);
+          const nextRating = payload.rating || updated.rating || rating || null;
           toast.success(
             payload.watchedAt
               ? `Rewatch logged · ×${times} · ${formatWatchDate(payload.watchedAt)}`
               : `Rewatch logged · ×${times}`,
+            {
+              action: {
+                label: "Share",
+                onClick: () => {
+                  setSharePayload({
+                    title: updated.title,
+                    rating: nextRating,
+                    notes: notes || updated.notes,
+                    timesSeen: times,
+                    isRewatch: true,
+                    releaseYear: updated.releaseYear,
+                  });
+                  setShareOpen(true);
+                },
+              },
+            },
           );
           if (payload.rating) {
             setRating(payload.rating);
@@ -416,6 +452,19 @@ export default function MovieDetailsPage() {
                   <RotateCcw className="w-4 h-4 mr-2" />
                   Rewatch{(movie.rewatchCount ?? 0) > 0 ? ` · ×${1 + movie.rewatchCount}` : ""}
                 </Button>
+              )}
+
+              {movie.status === "watched" && (
+                <ShareMovieSheet
+                  movie={{
+                    title: movie.title,
+                    rating: rating || movie.rating,
+                    notes: notes || movie.notes,
+                    timesSeen: 1 + (movie.rewatchCount ?? 0),
+                    isRewatch: (movie.rewatchCount ?? 0) > 0,
+                    releaseYear: movie.releaseYear,
+                  }}
+                />
               )}
               
               <AlertDialog>
@@ -649,6 +698,24 @@ export default function MovieDetailsPage() {
                 />
               </div>
 
+              {movie.status === "watched" && (
+                <ShareMovieSheet
+                  movie={{
+                    title: movie.title,
+                    rating: rating || movie.rating,
+                    notes: notes || movie.notes,
+                    timesSeen: 1 + (movie.rewatchCount ?? 0),
+                    isRewatch: (movie.rewatchCount ?? 0) > 0,
+                    releaseYear: movie.releaseYear,
+                  }}
+                  trigger={
+                    <Button variant="secondary" className="gap-2 w-full sm:w-auto">
+                      Share rating & review
+                    </Button>
+                  }
+                />
+              )}
+
               {/* Collections */}
               <div className="space-y-3">
                 <label className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
@@ -823,6 +890,17 @@ export default function MovieDetailsPage() {
         onConfirm={submitRewatch}
         onCancel={() => setRewatchDialogOpen(false)}
       />
+      {sharePayload && (
+        <ShareMovieSheet
+          movie={sharePayload}
+          open={shareOpen}
+          onOpenChange={(next) => {
+            setShareOpen(next);
+            if (!next) setSharePayload(null);
+          }}
+          hideTrigger
+        />
+      )}
       <ChangeLanguageDialog
         open={languageOpen}
         onOpenChange={setLanguageOpen}
