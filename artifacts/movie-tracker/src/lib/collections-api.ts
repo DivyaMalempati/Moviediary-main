@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getGuestHeaders } from "./demo-auth";
+import { getAuthHeaders } from "./demo-auth";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -7,7 +7,7 @@ async function apiFetch(path: string, opts?: RequestInit) {
   const res = await fetch(`${BASE}${path}`, {
     ...opts,
     credentials: "include",
-    headers: { ...getGuestHeaders(), ...(opts?.headers ?? {}) },
+    headers: { ...(await getAuthHeaders()), ...(opts?.headers ?? {}) },
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

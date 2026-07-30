@@ -10,36 +10,19 @@ import { useListMovies, useGetMovieStats, useRewatchMovie, getListMoviesQueryKey
 import {
   Clapperboard, Search, Loader2, Upload, X, Download, ChevronDown, RotateCcw,
 } from "lucide-react";
-import { RatingPickerDialog } from "@/components/rating-picker-dialog";
-
-// ── CSV export ────────────────────────────────────────────────────────────────
-function exportCSV(movies: any[], filename: string) {
-  const cols = ["title", "status", "rating", "year", "language", "genres", "notes", "added", "watched", "rewatches"];
-  const rows = movies.map((m) => [
-    m.title,
-    "watched",
-    m.rating ?? "",
-    m.releaseYear ?? "",
-    m.originalLanguage ?? "",
-    (m.genres as string[] | null)?.join("; ") ?? "",
-    m.notes ?? "",
-    m.createdAt ? new Date(m.createdAt).toLocaleDateString() : "",
-    m.watchedAt ? new Date(m.watchedAt).toLocaleDateString() : "",
-    m.rewatchCount ?? 0,
-  ]);
-  const csv = [cols, ...rows]
-    .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
-    .join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
-}
-import { RATING_LABELS } from "@/lib/movie-utils";
+import { RewatchLogDialog } from "@/components/rewatch-log-dialog";
+import {
+  findAnniversaryReminders,
+  formatAnniversaryCopy,
+  isAnniversaryDismissed,
+  dismissAnniversary,
+  anniversaryPosterUrl,
+  type AnniversaryFilm,
+} from "@/lib/rewatch-reminders";
+import { RATING_LABELS, formatWatchDate } from "@/lib/movie-utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { getGuestHeaders } from "@/lib/demo-auth";
+import { getAuthHeaders } from "@/lib/demo-auth";
 import { cn } from "@/lib/utils";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -50,8 +33,7 @@ function useOrphanedCount() {
   return useQuery({
     queryKey: ["orphaned-count"],
     queryFn: async () => {
-      const headers: HeadersInit = {};
-      Object.assign(headers, getGuestHeaders());
+      const headers = await getAuthHeaders();
       const res = await fetch(`${BASE}/api/movies/orphaned-count`, { headers, credentials: "include" });
       if (!res.ok) return { count: 0 };
       return res.json() as Promise<{ count: number }>;
@@ -64,8 +46,7 @@ function useClaimOrphaned() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async () => {
-      const headers: HeadersInit = { "Content-Type": "application/json" };
-      Object.assign(headers, getGuestHeaders());
+      const headers = await getAuthHeaders({ "Content-Type": "application/json" });
       const res = await fetch(`${BASE}/api/movies/claim-orphaned`, { method: "POST", headers, credentials: "include" });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -146,6 +127,8 @@ function Section({ title, movies, badge, defaultOpen = true, onRewatch }: {
               rating={movie.rating}
               year={movie.releaseYear}
               rewatchCount={movie.rewatchCount}
+              rewatchDates={movie.rewatchDates}
+              watchedAt={movie.watchedAt}
               overlayAction={
                 <Button
                   size="sm"
@@ -174,6 +157,7 @@ export default function WatchedPage() {
   const queryClient = useQueryClient();
   const rewatchMovie = useRewatchMovie();
   const [pendingRewatch, setPendingRewatch] = useState<any | null>(null);
+  const [reminderDismissed, setReminderDismissed] = useState(false);
   const [genreFilter, setGenreFilter]     = useState("all");
   const [languageFilter, setLanguageFilter] = useState("all");
   const [ratingFilter, setRatingFilter]   = useState("all");
@@ -188,25 +172,29 @@ export default function WatchedPage() {
     try { localStorage.setItem("cinevault:sort", s); } catch {}
   };
 
-  const submitRewatch = (rating: string | null) => {
+  const submitRewatch = (payload: { rating: string | null; watchedAt?: string | null }) => {
     if (!pendingRewatch) return;
     const id = pendingRewatch.id as number;
     setPendingRewatch(null);
+    const data: { rating?: string | null; watchedAt?: string | null } = {};
+    if (payload.rating != null) data.rating = payload.rating;
+    if (payload.watchedAt) data.watchedAt = payload.watchedAt;
     rewatchMovie.mutate(
-      { id, data: rating != null ? { rating } : {} },
+      { id, data },
       {
         onSuccess: (movie) => {
+          const times = 1 + movie.rewatchCount;
           toast.success(
-            movie.rewatchCount > 1
-              ? `Rewatch logged · ×${1 + movie.rewatchCount}`
-              : "Rewatch logged"
+            payload.watchedAt
+              ? `Rewatch logged · ×${times} · ${formatWatchDate(payload.watchedAt)}`
+              : `Rewatch logged · ×${times}`,
           );
           queryClient.invalidateQueries({ queryKey: getListMoviesQueryKey({ status: "watched" }) });
           queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
           queryClient.invalidateQueries({ queryKey: getGetMovieStatsQueryKey() });
         },
         onError: () => toast.error("Failed to log rewatch"),
-      }
+      },
     );
   };
 
@@ -216,6 +204,12 @@ export default function WatchedPage() {
   const claim = useClaimOrphaned();
 
   const showBanner = !bannerDismissed && (orphaned?.count ?? 0) > 0;
+
+  const anniversaryReminder: AnniversaryFilm | null = useMemo(() => {
+    if (!movies?.length || reminderDismissed) return null;
+    const candidates = findAnniversaryReminders(movies).filter((f) => !isAnniversaryDismissed(f.id));
+    return candidates[0] ?? null;
+  }, [movies, reminderDismissed]);
 
   // Unique genres from user's library
   const allGenres = useMemo(() => {
@@ -287,6 +281,56 @@ export default function WatchedPage() {
           </div>
         )}
 
+        {/* Smart rewatch anniversary reminder */}
+        {anniversaryReminder && (
+          <div className="relative flex items-start gap-4 rounded-xl border border-amber-400/30 bg-amber-400/5 px-5 py-4">
+            {anniversaryPosterUrl(anniversaryReminder) ? (
+              <img
+                src={anniversaryPosterUrl(anniversaryReminder)!}
+                alt=""
+                className="w-12 h-[72px] rounded-md object-cover shrink-0 shadow"
+              />
+            ) : (
+              <div className="w-12 h-[72px] rounded-md bg-secondary flex items-center justify-center shrink-0">
+                <RotateCcw className="w-5 h-5 text-muted-foreground" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium leading-snug">
+                {formatAnniversaryCopy(anniversaryReminder)}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Based on the last time you logged this film as watched.
+              </p>
+              <div className="flex items-center gap-2 mt-3">
+                <Button
+                  size="sm"
+                  className="bg-white text-black hover:bg-white/90 h-7 text-xs gap-1"
+                  onClick={() => setPendingRewatch(anniversaryReminder)}
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  Log rewatch
+                </Button>
+                <Link href={`/movie/${anniversaryReminder.id}`}>
+                  <Button size="sm" variant="outline" className="h-7 text-xs">
+                    Open film
+                  </Button>
+                </Link>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                dismissAnniversary(anniversaryReminder.id);
+                setReminderDismissed(true);
+              }}
+              className="text-muted-foreground hover:text-foreground transition-colors p-1 shrink-0"
+              aria-label="Dismiss reminder"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Stats Header */}
         <section className="relative overflow-hidden rounded-2xl bg-card border border-border p-6 shadow-sm">
           <div className="absolute top-0 right-0 p-8 opacity-5">
@@ -299,21 +343,6 @@ export default function WatchedPage() {
                 <p className="text-muted-foreground flex items-center gap-2">
                   <span className="font-mono text-primary font-bold text-lg">{stats?.totalWatched || 0}</span> films watched
                 </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline" size="sm"
-                  className="gap-1.5 text-xs h-8 shrink-0"
-                  onClick={() => exportCSV(movies ?? [], "cinevault_watched.csv")}
-                  disabled={!movies?.length}
-                >
-                  <Download className="w-3 h-3" /> Export
-                </Button>
-                <Link href="/import">
-                  <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8 shrink-0">
-                    <Upload className="w-3 h-3" /> Import
-                  </Button>
-                </Link>
               </div>
             </div>
             {stats?.byLanguage && stats.byLanguage.length > 0 && (
@@ -421,7 +450,7 @@ export default function WatchedPage() {
             {(movies?.length ?? 0) === 0 && (
               <div className="flex items-center justify-center gap-3">
                 <Link href="/add"><Button size="sm" className="bg-white text-black hover:bg-white/90">Search & add</Button></Link>
-                <Link href="/import"><Button size="sm" variant="outline" className="gap-1.5"><Upload className="w-3.5 h-3.5" /> Bulk import</Button></Link>
+                <Link href="/profile"><Button size="sm" variant="outline" className="gap-1.5"><Upload className="w-3.5 h-3.5" /> Import / Export</Button></Link>
               </div>
             )}
           </div>
@@ -443,6 +472,8 @@ export default function WatchedPage() {
                 rating={movie.rating}
                 year={movie.releaseYear}
                 rewatchCount={movie.rewatchCount}
+                rewatchDates={movie.rewatchDates}
+                watchedAt={movie.watchedAt}
                 overlayAction={
                   <Button
                     size="sm"
@@ -463,12 +494,9 @@ export default function WatchedPage() {
           </div>
         )}
 
-        <RatingPickerDialog
+        <RewatchLogDialog
           open={!!pendingRewatch}
           movieTitle={pendingRewatch?.title ?? ""}
-          confirmOnSelect
-          titleSuffix=" this time"
-          skipLabel="Skip rating · still log rewatch"
           onConfirm={submitRewatch}
           onCancel={() => setPendingRewatch(null)}
         />

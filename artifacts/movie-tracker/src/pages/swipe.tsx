@@ -10,7 +10,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { getPosterUrl, RATING_LABELS } from "@/lib/movie-utils";
-import { getGuestHeaders } from "@/lib/demo-auth";
+import { getAuthHeaders } from "@/lib/demo-auth";
+import { usePreferences, PreferencesAuthError } from "@/lib/preferences";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -32,9 +33,9 @@ import {
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { usePreferences } from "@/lib/preferences";
 import { OnboardingPreferences } from "@/components/onboarding-preferences";
 import { RatingPickerDialog } from "@/components/rating-picker-dialog";
+import { useListMovies, getListMoviesQueryKey } from "@workspace/api-client-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const TMDB_IMG = "https://image.tmdb.org/t/p";
@@ -182,13 +183,19 @@ function useOnlineStatus(): boolean {
 }
 
 // ── API helpers ────────────────────────────────────────────────────────────────
-async function fetchSwipeBatch(page: number, genreId?: number | null, excludeIds?: Set<number>): Promise<SwipeFilm[]> {
+async function fetchSwipeBatch(
+  page: number,
+  genreId?: number | null,
+  excludeIds?: Set<number>,
+  onMyServices = false,
+): Promise<SwipeFilm[]> {
   try {
     const params = new URLSearchParams({ page: String(page) });
     if (genreId != null) params.set("genreId", String(genreId));
     if (excludeIds && excludeIds.size > 0) params.set("excludeIds", [...excludeIds].join(","));
+    if (onMyServices) params.set("onMyServices", "1");
     const res = await fetch(`${BASE}/api/discover/swipe?${params}`, {
-      headers: { ...getGuestHeaders() },
+      headers: await getAuthHeaders(),
       credentials: "include",
     });
     if (!res.ok) return [];
@@ -216,7 +223,7 @@ async function saveFilm(
 
     const res = await fetch(`${BASE}/api/movies`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...getGuestHeaders() },
+      headers: await getAuthHeaders({ "Content-Type": "application/json" }),
       credentials: "include",
       body: JSON.stringify(body),
     });
@@ -233,7 +240,7 @@ async function deleteMovie(id: number): Promise<boolean> {
   try {
     const res = await fetch(`${BASE}/api/movies/${id}`, {
       method: "DELETE",
-      headers: { ...getGuestHeaders() },
+      headers: await getAuthHeaders(),
       credentials: "include",
     });
     return res.ok;
@@ -241,7 +248,7 @@ async function deleteMovie(id: number): Promise<boolean> {
 }
 
 async function fetchFilmFlipDetails(tmdbId: number): Promise<FilmFlipDetails> {
-  const headers = { ...getGuestHeaders() };
+  const headers = await getAuthHeaders();
   const [detailsRes, providersRes] = await Promise.all([
     fetch(`${BASE}/api/tmdb/movie/${tmdbId}`, { headers, credentials: "include" }),
     fetch(`${BASE}/api/tmdb/watch-providers/${tmdbId}`, { headers, credentials: "include" }),
@@ -286,13 +293,14 @@ async function fillDeck(
   genreId: GenreId,
   excludeIds: Set<number>,
   target = DECK_SIZE,
+  onMyServices = false,
 ): Promise<{ films: SwipeFilm[]; nextPage: number }> {
   const collected: SwipeFilm[] = [];
   const seen = new Set(excludeIds);
   let page = startPage;
 
   for (let attempt = 0; attempt < 4 && collected.length < target; attempt++) {
-    const batch = await fetchSwipeBatch(page, genreId, seen);
+    const batch = await fetchSwipeBatch(page, genreId, seen, onMyServices);
     page += 1;
     if (batch.length === 0) break;
     for (const f of batch) {
@@ -837,6 +845,12 @@ function SwipeDeck() {
   const isOnline = useOnlineStatus();
 
   const [selectedGenreId, setSelectedGenreId] = useState<GenreId>(null);
+  const [onMyServices, setOnMyServices] = useState(false);
+  const { data: prefs } = usePreferences();
+  const preferredProviders = prefs?.preferredProviders ?? [];
+  const { data: library, isFetched: libraryFetched } = useListMovies(undefined, {
+    query: { queryKey: getListMoviesQueryKey() },
+  });
   const [queue, setQueue] = useState<SwipeFilm[]>([]);
   const [savedFilms, setSavedFilms] = useState<SwipeFilm[]>([]);
   const [watchedFilms, setWatchedFilms] = useState<SwipeFilm[]>([]);
@@ -867,17 +881,27 @@ function SwipeDeck() {
     setRatingFilm(null);
     if (nextDeckNumber != null) setDeckNumber(nextDeckNumber);
 
-    const { films, nextPage } = await fillDeck(page, genreId, seenRef.current, DECK_SIZE);
+    const { films, nextPage } = await fillDeck(page, genreId, seenRef.current, DECK_SIZE, onMyServices);
     setQueue(films);
     setDeckSize(films.length || DECK_SIZE);
     setApiPage(nextPage);
     setLoading(false);
     if (films.length === 0) setExhausted(true);
-  }, []);
+  }, [onMyServices]);
 
+  // Always keep library IDs in the exclude set (watched + watchlist).
   useEffect(() => {
-    startDeck(1, selectedGenreId, 1);
-  }, [selectedGenreId, startDeck]);
+    if (!libraryFetched) return;
+    for (const m of library ?? []) {
+      if (m.tmdbId != null) seenRef.current.add(m.tmdbId);
+    }
+  }, [libraryFetched, library]);
+
+  // Start / restart deck after library is known, or when filters change.
+  useEffect(() => {
+    if (!libraryFetched) return;
+    void startDeck(1, selectedGenreId, 1);
+  }, [libraryFetched, selectedGenreId, onMyServices, startDeck]);
 
   useEffect(() => {
     if (!isOnline) return;
@@ -1133,7 +1157,7 @@ function SwipeDeck() {
           />
         </div>
 
-        <div className="w-full max-w-sm mb-4 -mx-1">
+        <div className="w-full max-w-sm mb-4 -mx-1 space-y-2">
           <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none px-0.5">
             {GENRES.map((g) => (
               <button
@@ -1150,6 +1174,27 @@ function SwipeDeck() {
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (!onMyServices && preferredProviders.length === 0) {
+                toast.message("Pick your streaming services in Preferences first", {
+                  description: "Profile → Streaming services, then try again.",
+                });
+                return;
+              }
+              setOnMyServices((v) => !v);
+            }}
+            className={cn(
+              "shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-all inline-flex items-center gap-1.5",
+              onMyServices
+                ? "bg-emerald-400 text-black border-emerald-400"
+                : "bg-transparent text-muted-foreground border-white/20 hover:border-white/40 hover:text-foreground"
+            )}
+          >
+            <Tv className="w-3 h-3" />
+            On my streaming services
+          </button>
         </div>
 
         {loading ? (
@@ -1262,7 +1307,7 @@ function SwipeDeck() {
 }
 
 export default function SwipePage() {
-  const { data: prefs, isLoading } = usePreferences();
+  const { data: prefs, isLoading, isError, error, refetch } = usePreferences();
 
   if (isLoading) {
     return (
@@ -1274,8 +1319,36 @@ export default function SwipePage() {
     );
   }
 
+  if (isError) {
+    const authFailed = error instanceof PreferencesAuthError;
+    return (
+      <Layout>
+        <div className="flex flex-col items-center justify-center gap-3 py-24 px-6 text-center">
+          <p className="text-sm text-muted-foreground max-w-sm">
+            {authFailed
+              ? "Session expired — refresh the page to sign in again."
+              : "Couldn't load your preferences. Try again."}
+          </p>
+          <button
+            type="button"
+            className="text-sm underline text-foreground"
+            onClick={() => (authFailed ? window.location.reload() : void refetch())}
+          >
+            {authFailed ? "Refresh" : "Retry"}
+          </button>
+        </div>
+      </Layout>
+    );
+  }
+
   if (!prefs?.onboardingCompletedAt) {
-    return <OnboardingPreferences onComplete={() => {}} />;
+    return (
+      <OnboardingPreferences
+        onComplete={() => {
+          void refetch();
+        }}
+      />
+    );
   }
 
   return <SwipeDeck />;

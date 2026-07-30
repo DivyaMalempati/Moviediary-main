@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { Film, Star, Heart, RotateCcw } from "lucide-react";
 import { LanguageBadge } from "./language-badge";
-import { getPosterUrl, RATING_LABELS } from "@/lib/movie-utils";
+import { getPosterUrl, RATING_LABELS, formatWatchDate } from "@/lib/movie-utils";
 import { cn } from "@/lib/utils";
 
 interface MoviePosterCardProps {
@@ -12,6 +12,9 @@ interface MoviePosterCardProps {
   rating?: string | null;
   year?: number | null;
   rewatchCount?: number | null;
+  /** Optional dated rewatch history for a short subtitle. */
+  rewatchDates?: string[] | null;
+  watchedAt?: string | null;
   className?: string;
   actionNode?: React.ReactNode;
   /** Centered overlay on the poster (e.g. Rate or Rewatch button). */
@@ -26,12 +29,19 @@ export function MoviePosterCard({
   rating,
   year,
   rewatchCount = 0,
+  rewatchDates,
+  watchedAt,
   className,
   actionNode,
   overlayAction,
 }: MoviePosterCardProps) {
   const posterUrl = getPosterUrl(posterPath);
   const timesWatched = 1 + (rewatchCount ?? 0);
+  const latestDate =
+    (rewatchDates && rewatchDates.length > 0
+      ? rewatchDates[rewatchDates.length - 1]
+      : null) ?? watchedAt ?? null;
+  const latestLabel = formatWatchDate(latestDate);
 
   return (
     <div className={cn("group relative flex flex-col gap-2", className)}>
@@ -86,9 +96,15 @@ export function MoviePosterCard({
         <h3 className="font-medium text-sm line-clamp-1 group-hover:text-primary transition-colors" title={title}>
           {title}
         </h3>
-        {year && (
-          <span className="text-xs text-muted-foreground font-mono">{year}</span>
-        )}
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono flex-wrap">
+          {year && <span>{year}</span>}
+          {timesWatched > 1 && latestLabel && (
+            <>
+              {year && <span aria-hidden>·</span>}
+              <span className="font-sans">×{timesWatched} · {latestLabel}</span>
+            </>
+          )}
+        </div>
       </div>
 
       {actionNode && (

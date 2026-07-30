@@ -44,8 +44,7 @@ export default function WatchlistPage() {
 
   const filtered = query.trim()
     ? movies?.filter((m) =>
-        m.title.toLowerCase().includes(query.toLowerCase()) ||
-        m.originalTitle?.toLowerCase().includes(query.toLowerCase())
+        m.title.toLowerCase().includes(query.toLowerCase())
       )
     : movies;
 

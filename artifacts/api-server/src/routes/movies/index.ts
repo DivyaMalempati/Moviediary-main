@@ -34,6 +34,7 @@ function dbMovieToResponse(m: typeof moviesTable.$inferSelect) {
     watchedAt: m.watchedAt ? m.watchedAt.toISOString() : null,
     createdAt: m.createdAt.toISOString(),
     rewatchCount: m.rewatchCount ?? 0,
+    rewatchDates: (m.rewatchDates ?? []).map((d: Date) => d.toISOString()),
   };
 }
 
@@ -297,8 +298,21 @@ router.post("/movies/:id/rewatch", requireAuth, async (req: any, res): Promise<v
 
   const updateValues: Partial<typeof moviesTable.$inferInsert> = {
     rewatchCount: (existing.rewatchCount ?? 0) + 1,
-    watchedAt: new Date(),
   };
+
+  // Optional dated rewatch: append to history and refresh last-watched.
+  // Undated rewatches only bump the count (date logging is optional).
+  const rawWatchedAt = body.data.watchedAt;
+  if (rawWatchedAt != null && String(rawWatchedAt).trim() !== "") {
+    const rewatchDate = new Date(rawWatchedAt);
+    if (Number.isNaN(rewatchDate.getTime())) {
+      res.status(400).json({ error: "Invalid watchedAt date" });
+      return;
+    }
+    updateValues.rewatchDates = [...(existing.rewatchDates ?? []), rewatchDate];
+    updateValues.watchedAt = rewatchDate;
+  }
+
   if ("rating" in body.data) {
     updateValues.rating = body.data.rating ?? null;
   }

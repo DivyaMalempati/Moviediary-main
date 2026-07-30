@@ -6,7 +6,8 @@ import { Switch, Route, useLocation, Router as WouterRouter, Redirect } from "wo
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/sonner";
-import { isDemoMode, initDemoMode, disableDemoMode, enableDemoMode } from "@/lib/demo-auth";
+import { ClerkAuthTokenBridge } from "@/components/clerk-auth-token-bridge";
+import { isDemoMode, initDemoMode, disableDemoMode, enableDemoMode, clearAppSession } from "@/lib/demo-auth";
 
 import LandingPage from "@/pages/landing";
 import WatchedPage from "@/pages/watched";
@@ -141,6 +142,9 @@ function ClerkQueryClientCacheInvalidator() {
   useEffect(() => {
     const unsubscribe = addListener(({ user }) => {
       const userId = user?.id ?? null;
+      // Signed-in Clerk session must never keep sending a demo guest token.
+      if (userId) disableDemoMode();
+      else clearAppSession();
       if (prevUserIdRef.current !== undefined && prevUserIdRef.current !== userId) {
         qc.clear();
       }
@@ -229,7 +233,9 @@ function ClerkProviderWithRoutes() {
     >
       <QueryClientProvider client={queryClient}>
         <ClerkQueryClientCacheInvalidator />
-        <ClerkRouter />
+        <ClerkAuthTokenBridge>
+          <ClerkRouter />
+        </ClerkAuthTokenBridge>
         <Toaster />
       </QueryClientProvider>
     </ClerkProvider>

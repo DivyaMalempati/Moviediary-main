@@ -1,151 +1,154 @@
-import { useState } from "react";
+import type { ReactNode } from "react";
 import { useClerk, useUser } from "@clerk/react";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
-import { LanguagePicker, GenrePicker } from "@/components/taste-picker";
-import { usePreferences, useSavePreferences } from "@/lib/preferences";
-import { isDemoMode, disableDemoMode } from "@/lib/demo-auth";
+import { PreferencesModal } from "@/components/preferences-modal";
+import { isDemoMode, disableDemoMode, clearAppSession, getAuthHeaders } from "@/lib/demo-auth";
+import { usePreferences } from "@/lib/preferences";
 import { toast } from "sonner";
-import { LogOut, Upload, User } from "lucide-react";
+import { ChevronRight, Download, LogOut, Settings, Upload } from "lucide-react";
 import { Link } from "wouter";
 
-function CinemaPreferences() {
-  const { data: prefs, isLoading } = usePreferences();
-  const { mutate: savePrefs, isPending } = useSavePreferences();
-  const [languages, setLanguages] = useState<string[] | null>(null);
-  const [genres, setGenres] = useState<string[] | null>(null);
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-  // Initialise from server once loaded
-  const effectiveLanguages = languages ?? prefs?.preferredLanguages ?? [];
-  const effectiveGenres = genres ?? prefs?.preferredGenres ?? [];
-
-  const toggleLanguage = (code: string) => {
-    const base = languages ?? prefs?.preferredLanguages ?? [];
-    setLanguages(base.includes(code) ? base.filter((c) => c !== code) : [...base, code]);
-  };
-
-  const toggleGenre = (name: string) => {
-    const base = genres ?? prefs?.preferredGenres ?? [];
-    setGenres(base.includes(name) ? base.filter((g) => g !== name) : [...base, name]);
-  };
-
-  const handleSave = () => {
-    savePrefs(
-      { preferredLanguages: effectiveLanguages, preferredGenres: effectiveGenres },
-      {
-        onSuccess: () => toast.success("Preferences saved"),
-        onError: () => toast.error("Failed to save preferences"),
-      }
-    );
-  };
-
-  if (isLoading) {
-    return <p className="text-sm text-muted-foreground py-4">Loading…</p>;
+async function exportLibrary() {
+  try {
+    const res = await fetch(`${BASE}/api/movies/export`, {
+      credentials: "include",
+      headers: await getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "cinevault_library.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Library exported");
+  } catch {
+    toast.error("Failed to export library");
   }
-
-  return (
-    <div className="space-y-8">
-      <p className="text-sm text-muted-foreground">
-        Languages and genres you enjoy. Swipe, Suggestions, and Discover all prioritise these.
-        Leave everything unselected to browse all world cinema.
-      </p>
-
-      <section className="space-y-4">
-        <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-          Languages
-        </h3>
-        <LanguagePicker selected={effectiveLanguages} onToggle={toggleLanguage} />
-      </section>
-
-      <section className="space-y-4">
-        <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-          Genres
-        </h3>
-        <GenrePicker selected={effectiveGenres} onToggle={toggleGenre} />
-      </section>
-
-      <div className="flex items-center gap-3 pt-2">
-        {(effectiveLanguages.length > 0 || effectiveGenres.length > 0) && (
-          <button
-            onClick={() => {
-              setLanguages([]);
-              setGenres([]);
-            }}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Clear all
-          </button>
-        )}
-        <Button
-          size="sm"
-          onClick={handleSave}
-          disabled={isPending}
-          className="ml-auto bg-white text-black hover:bg-white/90"
-        >
-          {isPending ? "Saving…" : "Save preferences"}
-        </Button>
-      </div>
-    </div>
-  );
 }
 
-// ── Demo profile ───────────────────────────────────────────────────────────────
-function DemoProfile() {
-  const handleSignOut = () => {
-    disableDemoMode();
-    window.location.href = import.meta.env.BASE_URL || "/";
-  };
+function preferencesSummary(prefs: {
+  preferredLanguages: string[];
+  preferredGenres: string[];
+  preferredProviders: number[];
+} | undefined): string {
+  if (!prefs) return "Loading…";
+  const parts: string[] = [];
+  if (prefs.preferredLanguages.length) {
+    parts.push(`${prefs.preferredLanguages.length} language${prefs.preferredLanguages.length === 1 ? "" : "s"}`);
+  }
+  if (prefs.preferredGenres.length) {
+    parts.push(`${prefs.preferredGenres.length} genre${prefs.preferredGenres.length === 1 ? "" : "s"}`);
+  }
+  if (prefs.preferredProviders.length) {
+    parts.push(`${prefs.preferredProviders.length} service${prefs.preferredProviders.length === 1 ? "" : "s"}`);
+  }
+  return parts.length ? parts.join(" · ") : "Not set yet";
+}
+
+function ProfileShell({
+  name,
+  subtitle,
+  avatar,
+  onSignOut,
+  signOutLabel,
+}: {
+  name: string;
+  subtitle: string;
+  avatar: ReactNode;
+  onSignOut: () => void;
+  signOutLabel: string;
+}) {
+  const { data: prefs } = usePreferences();
 
   return (
     <Layout>
-      <div className="max-w-2xl mx-auto px-4 py-8 space-y-8">
-        {/* Account */}
-        <section>
-          <h1 className="text-2xl font-bold mb-6">Profile & Settings</h1>
-          <div className="flex items-center gap-4 p-4 rounded-xl bg-card border border-border">
-            <div className="w-14 h-14 rounded-full bg-secondary flex items-center justify-center text-xl font-bold">
-              D
-            </div>
-            <div>
-              <p className="font-semibold">Demo User</p>
-              <p className="text-sm text-muted-foreground">Local session</p>
-            </div>
+      <div className="max-w-md mx-auto px-4 py-10 space-y-8">
+        <div className="flex items-center gap-3">
+          {avatar}
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold truncate">{name}</h1>
+            <p className="text-sm text-muted-foreground truncate">{subtitle}</p>
           </div>
-        </section>
+        </div>
 
-        {/* Import shortcut */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Library</h2>
+        <div className="space-y-1">
+          <PreferencesModal
+            trigger={
+              <button
+                type="button"
+                className="w-full flex items-center gap-3 px-1 py-3 text-left transition-colors hover:text-foreground"
+              >
+                <Settings className="w-4 h-4 text-muted-foreground shrink-0" />
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm text-foreground/90">Preferences</span>
+                  <span className="block text-xs text-muted-foreground truncate">
+                    {preferencesSummary(prefs)}
+                  </span>
+                </span>
+                <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+              </button>
+            }
+          />
+
           <Link href="/import">
-            <div className="flex items-center gap-3 p-4 rounded-xl bg-card border border-border hover:border-foreground/30 transition-colors cursor-pointer">
-              <Upload className="w-5 h-5 text-muted-foreground" />
-              <div>
-                <p className="text-sm font-medium">Import movies</p>
-                <p className="text-xs text-muted-foreground">Bulk-add from a list or CSV</p>
-              </div>
-            </div>
+            <button
+              type="button"
+              className="w-full flex items-center gap-3 px-1 py-3 text-left text-sm hover:text-foreground text-foreground/90 transition-colors"
+            >
+              <Upload className="w-4 h-4 text-muted-foreground" />
+              Import
+            </button>
           </Link>
-        </section>
+          <button
+            type="button"
+            onClick={exportLibrary}
+            className="w-full flex items-center gap-3 px-1 py-3 text-left text-sm hover:text-foreground text-foreground/90 transition-colors"
+          >
+            <Download className="w-4 h-4 text-muted-foreground" />
+            Export library
+          </button>
+        </div>
 
-        {/* Language prefs */}
-        <section className="space-y-4">
-          <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Cinema Preferences</h2>
-          <CinemaPreferences />
-        </section>
-
-        {/* Sign out */}
-        <section className="pt-4 border-t border-border">
-          <Button variant="ghost" className="text-destructive hover:text-destructive gap-2" onClick={handleSignOut}>
+        <div className="pt-2 border-t border-border">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground hover:text-destructive px-1 gap-2"
+            onClick={onSignOut}
+          >
             <LogOut className="w-4 h-4" />
-            Exit demo
+            {signOutLabel}
           </Button>
-        </section>
+        </div>
       </div>
     </Layout>
   );
 }
 
-// ── Clerk profile ──────────────────────────────────────────────────────────────
+function DemoProfile() {
+  return (
+    <ProfileShell
+      name="Demo User"
+      subtitle="Local session"
+      signOutLabel="Exit demo"
+      onSignOut={() => {
+        disableDemoMode();
+        window.location.href = import.meta.env.BASE_URL || "/";
+      }}
+      avatar={
+        <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-sm font-semibold shrink-0">
+          D
+        </div>
+      }
+    />
+  );
+}
+
 function ClerkProfile() {
   const { signOut } = useClerk();
   const { user } = useUser();
@@ -157,67 +160,27 @@ function ClerkProfile() {
     "?";
 
   return (
-    <Layout>
-      <div className="max-w-2xl mx-auto px-4 py-8 space-y-8">
-        {/* Account */}
-        <section>
-          <h1 className="text-2xl font-bold mb-6">Profile & Settings</h1>
-          <div className="flex items-center gap-4 p-4 rounded-xl bg-card border border-border">
-            {user?.imageUrl ? (
-              <img src={user.imageUrl} alt="" className="w-14 h-14 rounded-full object-cover" />
-            ) : (
-              <div className="w-14 h-14 rounded-full bg-secondary flex items-center justify-center text-xl font-bold">
-                {initial}
-              </div>
-            )}
-            <div className="min-w-0">
-              {user?.fullName && (
-                <p className="font-semibold truncate">{user.fullName}</p>
-              )}
-              <p className="text-sm text-muted-foreground truncate">
-                {user?.emailAddresses?.[0]?.emailAddress ?? ""}
-              </p>
-            </div>
+    <ProfileShell
+      name={user?.fullName || user?.emailAddresses?.[0]?.emailAddress || "Account"}
+      subtitle={user?.fullName ? (user?.emailAddresses?.[0]?.emailAddress ?? "") : "Signed in"}
+      signOutLabel="Sign out"
+      onSignOut={() => {
+        clearAppSession();
+        void signOut({ redirectUrl: basePath || "/" });
+      }}
+      avatar={
+        user?.imageUrl ? (
+          <img src={user.imageUrl} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+        ) : (
+          <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-sm font-semibold shrink-0">
+            {initial}
           </div>
-        </section>
-
-        {/* Import shortcut */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Library</h2>
-          <Link href="/import">
-            <div className="flex items-center gap-3 p-4 rounded-xl bg-card border border-border hover:border-foreground/30 transition-colors cursor-pointer">
-              <Upload className="w-5 h-5 text-muted-foreground" />
-              <div>
-                <p className="text-sm font-medium">Import movies</p>
-                <p className="text-xs text-muted-foreground">Bulk-add from a list or CSV</p>
-              </div>
-            </div>
-          </Link>
-        </section>
-
-        {/* Language prefs */}
-        <section className="space-y-4">
-          <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Cinema Preferences</h2>
-          <CinemaPreferences />
-        </section>
-
-        {/* Sign out */}
-        <section className="pt-4 border-t border-border">
-          <Button
-            variant="ghost"
-            className="text-destructive hover:text-destructive gap-2"
-            onClick={() => signOut({ redirectUrl: basePath || "/" })}
-          >
-            <LogOut className="w-4 h-4" />
-            Sign out
-          </Button>
-        </section>
-      </div>
-    </Layout>
+        )
+      }
+    />
   );
 }
 
 export default function ProfilePage() {
-  const demo = isDemoMode();
-  return demo ? <DemoProfile /> : <ClerkProfile />;
+  return isDemoMode() ? <DemoProfile /> : <ClerkProfile />;
 }

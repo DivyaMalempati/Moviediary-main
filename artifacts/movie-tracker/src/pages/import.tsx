@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { getListMoviesQueryKey, getGetMovieStatsQueryKey } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
-import { getGuestHeaders } from "@/lib/demo-auth";
+import { getAuthHeaders } from "@/lib/demo-auth";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -222,8 +222,7 @@ export default function ImportPage() {
     setImporting(true);
     setResult(null);
     try {
-      const headers: HeadersInit = { "Content-Type": "application/json" };
-      Object.assign(headers, getGuestHeaders());
+      const headers = await getAuthHeaders({ "Content-Type": "application/json" });
 
       const res = await fetch(`${BASE}/api/import`, {
         method: "POST",
