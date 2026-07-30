@@ -22,6 +22,7 @@ import CollectionsPage from "@/pages/collections";
 import StatsPage from "@/pages/stats";
 import PartnerPage, { PairInvitePage } from "@/pages/partner";
 import MatchSessionPage from "@/pages/match-session";
+import GuidePage from "@/pages/guide";
 import NotFound from "@/pages/not-found";
 
 // Initialise demo mode header injection before any render
@@ -105,6 +106,7 @@ function AppPages() {
       <Route path="/partner" component={PartnerPage} />
       <Route path="/pair/:code" component={PairInvitePage} />
       <Route path="/match/:id" component={MatchSessionPage} />
+      <Route path="/guide" component={GuidePage} />
       <Route path="/movie/:id" component={MovieDetailsPage} />
       <Route path="/import" component={ImportPage} />
       <Route path="/profile" component={ProfilePage} />
@@ -209,6 +211,7 @@ function ClerkRouter() {
       <Route path="/partner" component={() => <ProtectedRoute component={PartnerPage} />} />
       <Route path="/pair/:code" component={() => <ProtectedRoute component={PairInvitePage} />} />
       <Route path="/match/:id" component={() => <ProtectedRoute component={MatchSessionPage} />} />
+      <Route path="/guide" component={() => <ProtectedRoute component={GuidePage} />} />
       <Route path="/movie/:id" component={() => <ProtectedRoute component={MovieDetailsPage} />} />
       <Route path="/import" component={() => <ProtectedRoute component={ImportPage} />} />
       <Route path="/profile" component={() => <ProtectedRoute component={ProfilePage} />} />

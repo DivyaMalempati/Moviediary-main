@@ -1,5 +1,5 @@
 import { useLocation, Link } from "wouter";
-import { Clapperboard, Film, Sparkles, Star } from "lucide-react";
+import { Clapperboard, Film, Sparkles, Star, Shuffle, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { enableDemoMode } from "@/lib/demo-auth";
 
@@ -92,18 +92,21 @@ export default function LandingPage() {
 
       {/* Features */}
       <section className="border-t border-border/40 px-6 py-12">
-        <div className="max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-8 text-center">
+        <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 text-center">
           {[
-            { icon: Film, title: "Full Library", desc: "Track watched films and your watchlist in one place" },
-            { icon: Star, title: "Rate & Review", desc: "Rate from 'Loved' to 'Meh' and add personal notes" },
-            { icon: Sparkles, title: "Personalised", desc: "Set your preferred languages — suggestions adapt to you" },
+            { icon: Film, title: "Full library", desc: "Watched diary, watchlist, ratings, notes, and rewatch history" },
+            { icon: Shuffle, title: "Swipe decks", desc: "Short personalized decks with genre, trope, and streaming filters" },
+            { icon: Sparkles, title: "Discover", desc: "For You, Because You Liked, and Trending India recommendations" },
+            { icon: Users, title: "Partner match", desc: "Link up, swipe one deck together, and log mutual picks" },
+            { icon: Star, title: "Rate your way", desc: "Loved to Meh — confirm on tap when you mark something watched" },
+            { icon: Clapperboard, title: "Your taste", desc: "Languages, genres, and OTT apps shape every suggestion" },
           ].map(({ icon: Icon, title, desc }) => (
             <div key={title} className="flex flex-col items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
                 <Icon className="w-5 h-5 text-white" />
               </div>
               <h3 className="font-semibold text-sm">{title}</h3>
-              <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
+              <p className="text-xs text-muted-foreground leading-relaxed max-w-[16rem]">{desc}</p>
             </div>
           ))}
         </div>

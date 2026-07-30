@@ -24,7 +24,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { RatingPickerDialog } from "@/components/rating-picker-dialog";
 
 // ---------------------------------------------------------------------------
 // Dismissed-movies hook — persisted to localStorage

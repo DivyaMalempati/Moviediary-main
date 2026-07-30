@@ -6,8 +6,9 @@ import { PreferencesModal } from "@/components/preferences-modal";
 import { isDemoMode, disableDemoMode, clearAppSession, getAuthHeaders } from "@/lib/demo-auth";
 import { usePreferences } from "@/lib/preferences";
 import { toast } from "sonner";
-import { ChevronRight, Download, LogOut, Settings, Upload } from "lucide-react";
+import { ChevronRight, Download, LogOut, Settings, Upload, BookOpen, Play } from "lucide-react";
 import { Link } from "wouter";
+import { useReplayFeatureTour } from "@/components/feature-walkthrough";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -64,6 +65,7 @@ function ProfileShell({
   signOutLabel: string;
 }) {
   const { data: prefs } = usePreferences();
+  const { replay, dialog } = useReplayFeatureTour();
 
   return (
     <Layout>
@@ -94,6 +96,31 @@ function ProfileShell({
               </button>
             }
           />
+
+          <Link href="/guide">
+            <button
+              type="button"
+              className="w-full flex items-center gap-3 px-1 py-3 text-left text-sm hover:text-foreground text-foreground/90 transition-colors"
+            >
+              <BookOpen className="w-4 h-4 text-muted-foreground" />
+              <span className="flex-1 text-left">
+                <span className="block">How Cinevault works</span>
+                <span className="block text-xs text-muted-foreground font-normal">
+                  Feature guide & walkthrough
+                </span>
+              </span>
+              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+            </button>
+          </Link>
+
+          <button
+            type="button"
+            onClick={replay}
+            className="w-full flex items-center gap-3 px-1 py-3 text-left text-sm hover:text-foreground text-foreground/90 transition-colors"
+          >
+            <Play className="w-4 h-4 text-muted-foreground" />
+            Replay walkthrough
+          </button>
 
           <Link href="/import">
             <button
@@ -126,6 +153,7 @@ function ProfileShell({
           </Button>
         </div>
       </div>
+      {dialog}
     </Layout>
   );
 }
