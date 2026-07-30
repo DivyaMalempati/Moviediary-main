@@ -197,10 +197,11 @@ function DemoProfile() {
     <ProfileShell
       name="Demo User"
       subtitle="Local session"
-      signOutLabel="Exit demo"
+      signOutLabel="Exit demo & sign in"
       onSignOut={() => {
         disableDemoMode();
-        window.location.href = import.meta.env.BASE_URL || "/";
+        window.location.href =
+          (import.meta.env.BASE_URL || "/").replace(/\/$/, "") + "/sign-in";
       }}
       avatar={
         <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-sm font-semibold shrink-0">

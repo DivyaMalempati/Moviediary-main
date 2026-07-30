@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { ClerkProvider, SignIn, SignUp, Show, useClerk } from "@clerk/react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { dark } from "@clerk/themes";
@@ -151,8 +151,11 @@ function ClerkQueryClientCacheInvalidator() {
     const unsubscribe = addListener(({ user }) => {
       const userId = user?.id ?? null;
       // Signed-in Clerk session must never keep sending a demo guest token.
-      if (userId) disableDemoMode();
-      else clearAppSession();
+      if (userId) {
+        disableDemoMode();
+      } else {
+        clearAppSession();
+      }
       if (prevUserIdRef.current !== undefined && prevUserIdRef.current !== userId) {
         qc.clear();
       }
@@ -181,6 +184,9 @@ function SignUpPage() {
 }
 
 function HomeRedirect() {
+  if (isDemoMode()) {
+    return <SignedInHomeRedirect />;
+  }
   return (
     <>
       <Show when="signed-in"><SignedInHomeRedirect /></Show>
@@ -204,6 +210,11 @@ function SignedInHomeRedirect() {
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const [loc] = useLocation();
+  // Demo guest sessions can use the app without a Clerk login.
+  // Never force demo here — that trapped Gmail users out of Clerk.
+  if (isDemoMode()) {
+    return <Component />;
+  }
   return (
     <>
       <Show when="signed-in"><Component /></Show>
@@ -215,8 +226,6 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 }
 
 function SaveReturnAndRedirect({ path }: { path: string }) {
-  const [bootingDemo, setBootingDemo] = useState(false);
-
   useEffect(() => {
     try {
       if (path && path !== "/" && !path.startsWith("/sign-")) {
@@ -225,32 +234,7 @@ function SaveReturnAndRedirect({ path }: { path: string }) {
     } catch {
       /* ignore */
     }
-
-    // Cloud/dev previews often open the API port (5000) which proxies the SPA.
-    // Without a Clerk session that shows the marketing landing — auto-enter demo
-    // so Together and the rest of the app are reachable immediately.
-    if (import.meta.env.DEV && !isDemoMode()) {
-      setBootingDemo(true);
-      void enableDemoMode()
-        .catch(() => undefined)
-        .finally(() => {
-          const target =
-            path && path !== "/" && !path.startsWith("/sign-") ? path : "/watched";
-          window.location.replace(
-            `${window.location.origin}${basePath}${target}`,
-          );
-        });
-    }
   }, [path]);
-
-  if (bootingDemo || (import.meta.env.DEV && !isDemoMode())) {
-    return (
-      <div className="flex min-h-[100dvh] items-center justify-center bg-background text-sm text-muted-foreground">
-        Opening Cinevault…
-      </div>
-    );
-  }
-
   return <Redirect to="/" />;
 }
 
@@ -291,7 +275,8 @@ function ClerkProviderWithRoutes() {
       appearance={clerkAppearance}
       signInUrl={`${basePath}/sign-in`}
       signUpUrl={`${basePath}/sign-up`}
-      afterSignUpUrl={`${basePath}/swipe`}
+      afterSignInUrl={`${basePath}/partner`}
+      afterSignUpUrl={`${basePath}/partner`}
       localization={{
         signIn: { start: { title: "Welcome back", subtitle: "Sign in to your Cinevault" } },
         signUp: { start: { title: "Create your vault", subtitle: "Start tracking Indian cinema" } },
@@ -312,17 +297,19 @@ function ClerkProviderWithRoutes() {
 
 // ── Root ─────────────────────────────────────────────────────────────────────
 function App() {
-  const demo = isDemoMode() || !clerkPubKey;
+  // Always mount Clerk when configured so Gmail sign-in works.
+  // Demo mode only affects auth headers / ProtectedRoute — not which router is used.
+  const clerkEnabled = Boolean(clerkPubKey);
 
   return (
     <WouterRouter base={basePath}>
-      {demo ? (
+      {clerkEnabled ? (
+        <ClerkProviderWithRoutes />
+      ) : (
         <QueryClientProvider client={queryClient}>
           <DemoRouter />
           <Toaster />
         </QueryClientProvider>
-      ) : (
-        <ClerkProviderWithRoutes />
       )}
     </WouterRouter>
   );
