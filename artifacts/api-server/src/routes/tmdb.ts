@@ -16,6 +16,7 @@ import {
   getWatchProviderCatalog,
   getMovieDetails,
   getAllGenres,
+  getOnboardingSeedMovies,
 } from "../lib/tmdb.js";
 import { TROPE_KEYWORDS } from "../lib/tropes.js";
 
@@ -24,6 +25,16 @@ const router: IRouter = Router();
 // GET /tmdb/tropes — curated niche keyword / trope catalog
 router.get("/tmdb/tropes", (_req, res): void => {
   res.json(TROPE_KEYWORDS);
+});
+
+// GET /tmdb/onboarding-seed — dense popular posters for taste seeding
+router.get("/tmdb/onboarding-seed", async (_req, res): Promise<void> => {
+  try {
+    const results = await getOnboardingSeedMovies();
+    res.json(results);
+  } catch {
+    res.status(502).json({ error: "Failed to load seed movies" });
+  }
 });
 
 // GET /tmdb/genres — canonical {id, name} list, used by the onboarding genre picker

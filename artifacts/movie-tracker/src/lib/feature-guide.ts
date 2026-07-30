@@ -35,7 +35,7 @@ export const FEATURE_TOUR_STEPS: FeatureGuideItem[] = [
     title: "Your vault",
     summary: "Watched and Watchlist hold everything you’ve logged.",
     detail:
-      "Mark films watched with a rating, save titles for later, and open any poster for notes, streaming, and similar picks.",
+      "On day one you can tap posters you’ve seen to seed Watched. Later, rate films, save titles for later, and open any poster for notes, streaming, and similar picks.",
     href: "/watched",
     cta: "Open Watched",
     icon: Eye,

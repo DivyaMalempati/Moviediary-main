@@ -362,3 +362,27 @@ export async function getTrending(region?: string) {
   return data.results.map((m) => mapTmdbMovie(m, idToName));
 }
 
+/**
+ * Dense popular poster set for onboarding "tell us what you've seen" seeding.
+ * Mixes India trending + popular Indian-language discover pages.
+ */
+export async function getOnboardingSeedMovies() {
+  const [trendingIn, popularHi, popularTe, popularEn, popularTa] = await Promise.all([
+    getTrending("IN").catch(() => []),
+    discoverMovies(["hi"], "IN", 1).catch(() => []),
+    discoverMovies(["te"], "IN", 1).catch(() => []),
+    discoverMovies(["en"], "IN", 1).catch(() => []),
+    discoverMovies(["ta"], "IN", 1).catch(() => []),
+  ]);
+
+  const seen = new Set<number>();
+  const out: ReturnType<typeof mapTmdbMovie>[] = [];
+  for (const m of [...trendingIn, ...popularHi, ...popularTe, ...popularEn, ...popularTa]) {
+    if (!m.tmdbId || !m.posterPath || seen.has(m.tmdbId)) continue;
+    seen.add(m.tmdbId);
+    out.push(m);
+    if (out.length >= 48) break;
+  }
+  return out;
+}
+
