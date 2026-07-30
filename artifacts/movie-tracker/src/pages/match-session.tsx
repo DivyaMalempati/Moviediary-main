@@ -13,6 +13,7 @@ import {
   Check,
   ArrowLeft,
   Popcorn,
+  Copy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
@@ -35,6 +36,7 @@ type DeckFilm = {
 type SessionPayload = {
   id: number;
   partnerUserId: string;
+  meUserId?: string;
   status: string;
   deck: DeckFilm[];
   swipes: Array<{ userId: string; tmdbId: number; direction: string }>;
@@ -54,6 +56,7 @@ export default function MatchSessionPage() {
   const [busy, setBusy] = useState(false);
   const [celebration, setCelebration] = useState<DeckFilm | null>(null);
   const [logFilm, setLogFilm] = useState<DeckFilm | null>(null);
+  const [acted, setActed] = useState<Set<number>>(new Set());
 
   const refresh = useCallback(async () => {
     if (!sessionId) return;
@@ -65,8 +68,15 @@ export default function MatchSessionPage() {
       if (!res.ok) throw new Error("load failed");
       const data = (await res.json()) as SessionPayload;
       setSession(data);
+      if (data.meUserId) {
+        setActed(
+          new Set(
+            data.swipes.filter((s) => s.userId === data.meUserId).map((s) => s.tmdbId),
+          ),
+        );
+      }
     } catch {
-      toast.error("Couldn’t load match session");
+      toast.error("Couldn’t load watch-together session");
       setSession(null);
     } finally {
       setLoading(false);
@@ -78,9 +88,6 @@ export default function MatchSessionPage() {
     const t = setInterval(() => void refresh(), 4000);
     return () => clearInterval(t);
   }, [refresh]);
-
-  // unused helper removed — acted set tracks local progress
-  const [acted, setActed] = useState<Set<number>>(new Set());
 
   const remaining = useMemo(() => {
     if (!session) return [];
@@ -161,7 +168,7 @@ export default function MatchSessionPage() {
         <div className="p-8 text-center space-y-4">
           <p>Match session not found.</p>
           <Button variant="outline" onClick={() => setLocation("/partner")}>
-            Back to partner
+            Back to Together
           </Button>
         </div>
       </Layout>
@@ -176,13 +183,30 @@ export default function MatchSessionPage() {
         <div className="flex items-center justify-between gap-2">
           <Button variant="ghost" size="sm" asChild>
             <Link href="/partner">
-              <ArrowLeft className="w-4 h-4 mr-1" /> Partner
+              <ArrowLeft className="w-4 h-4 mr-1" /> Together
             </Link>
           </Button>
-          <p className="text-xs text-muted-foreground tabular-nums">
-            You {session.mySwipeCount} · Partner {session.partnerSwipeCount} · Matches{" "}
-            {session.matches.length}
-          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1"
+              onClick={() => {
+                const url = `${window.location.origin}${BASE}/match/${sessionId}`;
+                void navigator.clipboard.writeText(url).then(
+                  () => toast.success("Session link copied — send to your spouse"),
+                  () => toast.message(url),
+                );
+              }}
+            >
+              <Copy className="w-3 h-3" />
+              Share
+            </Button>
+            <p className="text-xs text-muted-foreground tabular-nums">
+              You {session.mySwipeCount} · Them {session.partnerSwipeCount} ·{" "}
+              {session.matches.length} match{session.matches.length === 1 ? "" : "es"}
+            </p>
+          </div>
         </div>
 
         {!current ? (

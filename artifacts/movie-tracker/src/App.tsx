@@ -181,19 +181,48 @@ function SignUpPage() {
 function HomeRedirect() {
   return (
     <>
-      <Show when="signed-in"><Redirect to="/watched" /></Show>
+      <Show when="signed-in"><SignedInHomeRedirect /></Show>
       <Show when="signed-out"><LandingPage /></Show>
     </>
   );
 }
 
+function SignedInHomeRedirect() {
+  try {
+    const ret = sessionStorage.getItem("cinevault:return-to");
+    if (ret && ret.startsWith("/")) {
+      sessionStorage.removeItem("cinevault:return-to");
+      return <Redirect to={ret} />;
+    }
+  } catch {
+    /* ignore */
+  }
+  return <Redirect to="/watched" />;
+}
+
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+  const [loc] = useLocation();
   return (
     <>
       <Show when="signed-in"><Component /></Show>
-      <Show when="signed-out"><Redirect to="/" /></Show>
+      <Show when="signed-out">
+        <SaveReturnAndRedirect path={loc} />
+      </Show>
     </>
   );
+}
+
+function SaveReturnAndRedirect({ path }: { path: string }) {
+  useEffect(() => {
+    try {
+      if (path && path !== "/" && !path.startsWith("/sign-")) {
+        sessionStorage.setItem("cinevault:return-to", path);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [path]);
+  return <Redirect to="/" />;
 }
 
 function ClerkRouter() {

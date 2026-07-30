@@ -13,6 +13,8 @@ import {
   Shuffle,
   Unlink,
   ArrowRight,
+  Heart,
+  Play,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -30,33 +32,62 @@ type Invite = {
   path: string;
 };
 
+type ActiveSession = {
+  id: number;
+  status: string;
+  deckSize: number;
+  createdAt: string;
+  path: string;
+};
+
+function inviteUrl(path: string) {
+  return `${window.location.origin}${BASE}${path}`;
+}
+
 export default function PartnerPage() {
   const [, setLocation] = useLocation();
   const [partner, setPartner] = useState<PartnerInfo>(null);
   const [invite, setInvite] = useState<Invite | null>(null);
+  const [sessions, setSessions] = useState<ActiveSession[]>([]);
   const [joinCode, setJoinCode] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [sessionShareUrl, setSessionShareUrl] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (isDemoMode()) {
       setPartner(null);
+      setSessions([]);
       setLoading(false);
       return;
     }
     try {
-      const res = await fetch(`${BASE}/api/partners`, {
-        headers: await getAuthHeaders(),
-        credentials: "include",
-      });
-      if (res.status === 403) {
+      const [partnerRes, sessionsRes] = await Promise.all([
+        fetch(`${BASE}/api/partners`, {
+          headers: await getAuthHeaders(),
+          credentials: "include",
+        }),
+        fetch(`${BASE}/api/match-sessions`, {
+          headers: await getAuthHeaders(),
+          credentials: "include",
+        }),
+      ]);
+      if (partnerRes.status === 403) {
         setPartner(null);
+        setSessions([]);
         setLoading(false);
         return;
       }
-      if (!res.ok) throw new Error("Failed to load partner");
-      const data = (await res.json()) as { partner: PartnerInfo };
+      if (!partnerRes.ok) throw new Error("Failed to load partner");
+      const data = (await partnerRes.json()) as { partner: PartnerInfo };
       setPartner(data.partner);
+
+      if (sessionsRes.ok) {
+        const sData = (await sessionsRes.json()) as { sessions: ActiveSession[] };
+        setSessions(sData.sessions ?? []);
+      } else {
+        setSessions([]);
+      }
     } catch {
       toast.error("Couldn’t load partner link");
     } finally {
@@ -77,13 +108,13 @@ export default function PartnerPage() {
         credentials: "include",
       });
       if (res.status === 403) {
-        toast.error("Sign in to invite a partner");
+        toast.error("Sign in to invite your spouse");
         return;
       }
       if (!res.ok) throw new Error("invite failed");
       const data = (await res.json()) as Invite;
       setInvite(data);
-      toast.success("Invite ready — share the code");
+      toast.success("Share link ready");
     } catch {
       toast.error("Couldn’t create invite");
     } finally {
@@ -107,7 +138,7 @@ export default function PartnerPage() {
         toast.error((err as { error?: string }).error ?? "Couldn’t join");
         return;
       }
-      toast.success("Partner linked!");
+      toast.success("You’re linked — ready to watch together");
       setJoinCode("");
       setInvite(null);
       await refresh();
@@ -127,8 +158,10 @@ export default function PartnerPage() {
         credentials: "include",
       });
       if (!res.ok && res.status !== 204) throw new Error("unlink failed");
-      toast.success("Partner unlinked");
+      toast.success("Unlinked");
       setPartner(null);
+      setSessions([]);
+      setSessionShareUrl(null);
     } catch {
       toast.error("Couldn’t unlink");
     } finally {
@@ -146,13 +179,21 @@ export default function PartnerPage() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        toast.error((err as { error?: string }).error ?? "Couldn’t start match deck");
+        toast.error((err as { error?: string }).error ?? "Couldn’t start watch-together");
         return;
       }
       const data = (await res.json()) as { id: number };
+      const url = inviteUrl(`/match/${data.id}`);
+      setSessionShareUrl(url);
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success("Watch-together link copied — send it to your spouse");
+      } catch {
+        toast.success("Watch-together deck ready — share the link below");
+      }
       setLocation(`/match/${data.id}`);
     } catch {
-      toast.error("Couldn’t start match deck");
+      toast.error("Couldn’t start watch-together");
     } finally {
       setBusy(false);
     }
@@ -160,12 +201,22 @@ export default function PartnerPage() {
 
   const copyInvite = async () => {
     if (!invite) return;
-    const url = `${window.location.origin}${BASE}${invite.path}`;
+    const url = inviteUrl(invite.path);
     try {
-      await navigator.clipboard.writeText(`${invite.code}\n${url}`);
-      toast.success("Invite copied");
+      await navigator.clipboard.writeText(url);
+      toast.success("Share link copied");
     } catch {
-      toast.message(invite.code);
+      toast.message(url);
+    }
+  };
+
+  const copySession = async (path: string) => {
+    const url = inviteUrl(path);
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Watch-together link copied");
+    } catch {
+      toast.message(url);
     }
   };
 
@@ -183,68 +234,143 @@ export default function PartnerPage() {
     <Layout>
       <div className="max-w-lg mx-auto px-4 py-8 space-y-8">
         <div>
+          <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground mb-2">
+            Together
+          </p>
           <h1 className="text-2xl font-semibold flex items-center gap-2">
             <Users className="w-6 h-6 text-primary" />
-            Watch with a partner
+            Watch with your spouse
           </h1>
-          <p className="text-sm text-muted-foreground mt-2">
-            Link profiles, swipe the same deck, and celebrate when you both like a film.
+          <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+            Link another Cinevault account with a share link, then play a shared deck —
+            when you both like a film, it&apos;s a match you can log to both diaries.
           </p>
         </div>
 
+        <ol className="grid gap-2 text-sm text-muted-foreground">
+          <li className="flex gap-2">
+            <span className="font-mono text-foreground/80">1.</span>
+            Share a link so they sign in and link accounts
+          </li>
+          <li className="flex gap-2">
+            <span className="font-mono text-foreground/80">2.</span>
+            Start watch-together and send them the session link
+          </li>
+          <li className="flex gap-2">
+            <span className="font-mono text-foreground/80">3.</span>
+            Swipe the same films — celebrate mutual likes
+          </li>
+        </ol>
+
         {isDemoMode() && (
           <p className="text-sm text-amber-200/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-            Partner matching needs a signed-in account. Exit demo mode and sign in first.
+            Linking a spouse needs a signed-in account. Exit demo mode and sign in first.
           </p>
         )}
 
         {partner ? (
-          <section className="space-y-4">
+          <section className="space-y-5">
             <div className="rounded-xl border border-border bg-secondary/40 p-4 space-y-2">
-              <p className="text-xs uppercase tracking-widest text-muted-foreground">Linked</p>
-              <p className="font-mono text-sm break-all">{partner.partnerUserId}</p>
+              <p className="text-xs uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                <Heart className="w-3.5 h-3.5" /> Linked
+              </p>
+              <p className="text-sm">
+                You&apos;re connected and ready to watch together.
+              </p>
               <p className="text-xs text-muted-foreground">
-                Since {new Date(partner.createdAt).toLocaleDateString("en-IN")}
+                Linked {new Date(partner.createdAt).toLocaleDateString("en-IN")}
               </p>
             </div>
+
             <div className="flex flex-wrap gap-2">
               <Button onClick={startMatch} disabled={busy} className="gap-2">
-                <Shuffle className="w-4 h-4" />
-                Start match deck
+                <Play className="w-4 h-4" />
+                Play watch-together
               </Button>
               <Button variant="outline" onClick={unlink} disabled={busy} className="gap-2">
                 <Unlink className="w-4 h-4" />
                 Unlink
               </Button>
             </div>
+
+            {sessionShareUrl && (
+              <div className="rounded-xl border border-border bg-card p-4 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  Session link for your spouse
+                </p>
+                <p className="text-xs break-all text-muted-foreground">{sessionShareUrl}</p>
+                <Button size="sm" variant="secondary" className="gap-2" onClick={() => {
+                  void navigator.clipboard.writeText(sessionShareUrl).then(
+                    () => toast.success("Copied"),
+                    () => toast.message(sessionShareUrl),
+                  );
+                }}>
+                  <Copy className="w-3.5 h-3.5" />
+                  Copy again
+                </Button>
+              </div>
+            )}
+
+            {sessions.length > 0 && (
+              <div className="space-y-3">
+                <h2 className="text-sm font-semibold">Open sessions</h2>
+                <ul className="space-y-2">
+                  {sessions.map((s) => (
+                    <li
+                      key={s.id}
+                      className="flex items-center gap-2 rounded-lg border border-border bg-secondary/30 px-3 py-2"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">Deck · {s.deckSize} films</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Started {new Date(s.createdAt).toLocaleString("en-IN")}
+                        </p>
+                      </div>
+                      <Button size="sm" variant="secondary" onClick={() => copySession(s.path)} className="gap-1">
+                        <Copy className="w-3 h-3" />
+                        Share
+                      </Button>
+                      <Button size="sm" onClick={() => setLocation(s.path)} className="gap-1">
+                        <Shuffle className="w-3 h-3" />
+                        Open
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </section>
         ) : (
           <section className="space-y-6">
             <div className="space-y-3">
               <h2 className="text-sm font-semibold flex items-center gap-2">
-                <Link2 className="w-4 h-4" /> Create invite
+                <Link2 className="w-4 h-4" /> Invite with a share link
               </h2>
+              <p className="text-xs text-muted-foreground">
+                They open the link, sign in to their own account, and you&apos;re linked.
+              </p>
               <Button onClick={createInvite} disabled={busy || isDemoMode()}>
-                Generate pair code
+                Create share link
               </Button>
               {invite && (
                 <div className="rounded-xl border border-border bg-secondary/40 p-4 space-y-3">
                   <p className="font-mono text-lg tracking-wide">{invite.code}</p>
                   <p className="text-xs text-muted-foreground break-all">
-                    {typeof window !== "undefined"
-                      ? `${window.location.origin}${BASE}${invite.path}`
-                      : invite.path}
+                    {typeof window !== "undefined" ? inviteUrl(invite.path) : invite.path}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Expires {new Date(invite.expiresAt).toLocaleDateString("en-IN")}
                   </p>
                   <Button size="sm" variant="secondary" onClick={copyInvite} className="gap-2">
                     <Copy className="w-3.5 h-3.5" />
-                    Copy invite
+                    Copy share link
                   </Button>
                 </div>
               )}
             </div>
 
             <div className="space-y-3">
-              <h2 className="text-sm font-semibold">Join with a code</h2>
+              <h2 className="text-sm font-semibold">Or enter their invite code</h2>
               <div className="flex gap-2">
                 <Input
                   value={joinCode}
@@ -254,7 +380,7 @@ export default function PartnerPage() {
                   disabled={isDemoMode()}
                 />
                 <Button onClick={() => join()} disabled={busy || !joinCode.trim() || isDemoMode()}>
-                  Join
+                  Link
                 </Button>
               </div>
             </div>
@@ -262,7 +388,7 @@ export default function PartnerPage() {
         )}
 
         <Link href="/swipe" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-          Back to solo swipe <ArrowRight className="w-3.5 h-3.5" />
+          Solo swipe instead <ArrowRight className="w-3.5 h-3.5" />
         </Link>
       </div>
     </Layout>
@@ -275,7 +401,7 @@ export function PairInvitePage() {
   const code = params.code ?? "";
   const [, setLocation] = useLocation();
   const [status, setStatus] = useState<"joining" | "error" | "done">("joining");
-  const [message, setMessage] = useState("Linking partner…");
+  const [message, setMessage] = useState("Linking accounts…");
 
   useEffect(() => {
     if (!code) {
@@ -285,7 +411,7 @@ export function PairInvitePage() {
     }
     if (isDemoMode()) {
       setStatus("error");
-      setMessage("Sign in to redeem a partner invite");
+      setMessage("Sign in to redeem a spouse invite");
       return;
     }
     let cancelled = false;
@@ -305,7 +431,7 @@ export function PairInvitePage() {
           return;
         }
         setStatus("done");
-        toast.success("Partner linked!");
+        toast.success("You’re linked — ready to watch together");
         setLocation("/partner");
       } catch {
         if (!cancelled) {
@@ -326,7 +452,7 @@ export function PairInvitePage() {
         <p className="text-sm text-muted-foreground">{message}</p>
         {status === "error" && (
           <Button variant="outline" onClick={() => setLocation("/partner")}>
-            Open partner page
+            Open Together
           </Button>
         )}
       </div>

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, isNotNull, or } from "drizzle-orm";
+import { and, desc, eq, isNotNull, or } from "drizzle-orm";
 import {
   db,
   moviesTable,
@@ -104,6 +104,42 @@ function matchesFromSwipes(
 }
 
 /**
+ * GET /match-sessions
+ * List active watch-together sessions for the current partner link.
+ */
+router.get("/match-sessions", requireAuth, async (req: any, res): Promise<void> => {
+  if (!requireRegistered(req, res)) return;
+
+  const link = await getActivePartnerLink(req.userId);
+  if (!link) {
+    res.json({ sessions: [] });
+    return;
+  }
+
+  const sessions = await db
+    .select()
+    .from(matchSessionsTable)
+    .where(
+      and(
+        eq(matchSessionsTable.partnerLinkId, link.id),
+        eq(matchSessionsTable.status, "active"),
+      ),
+    )
+    .orderBy(desc(matchSessionsTable.createdAt))
+    .limit(10);
+
+  res.json({
+    sessions: sessions.map((s) => ({
+      id: s.id,
+      status: s.status,
+      deckSize: Array.isArray(s.deck) ? s.deck.length : 0,
+      createdAt: s.createdAt.toISOString(),
+      path: `/match/${s.id}`,
+    })),
+  });
+});
+
+/**
  * POST /match-sessions
  * Create a shared dual-swipe deck from the intersection of both partners' tastes.
  */
@@ -202,6 +238,7 @@ router.get("/match-sessions/:id", requireAuth, async (req: any, res): Promise<vo
     id: session.id,
     partnerLinkId: session.partnerLinkId,
     partnerUserId,
+    meUserId: req.userId,
     status: session.status,
     deck,
     swipes: swipes.map((s) => ({

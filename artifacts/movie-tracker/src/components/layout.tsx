@@ -83,7 +83,7 @@ export function Layout({ children }: LayoutProps) {
     { href: "/add",         label: "Add",         icon: PlusCircle },
     { href: "/suggestions", label: "Discover",    icon: Sparkles },
     { href: "/swipe",       label: "Swipe",       icon: Shuffle },
-    { href: "/partner",     label: "Partner",     icon: Users },
+    { href: "/partner",     label: "Together",    icon: Users },
     { href: "/guide",       label: "Guide",       icon: BookOpen },
     { href: "/import",      label: "Import",      icon: Upload },
   ];

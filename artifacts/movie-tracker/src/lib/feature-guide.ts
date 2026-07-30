@@ -55,7 +55,7 @@ export const FEATURE_TOUR_STEPS: FeatureGuideItem[] = [
     title: "Discover & partner",
     summary: "Recommendations for you — or a shared deck with someone else.",
     detail:
-      "Discover mixes AI For You, Because You Liked, and Trending. Partner links profiles so you can swipe the same deck and celebrate mutual likes.",
+      "Discover mixes AI For You, Because You Liked, and Trending. Together links a spouse account via share link so you can swipe the same deck and celebrate mutual likes.",
     href: "/suggestions",
     cta: "Open Discover",
     icon: Sparkles,
@@ -147,12 +147,12 @@ export const FEATURE_GUIDE_SECTIONS: Array<{
       },
       {
         id: "partner-guide",
-        title: "Partner match",
-        summary: "Solve “what should we watch tonight?”",
+        title: "Watch together",
+        summary: "Link a spouse account and swipe the same deck.",
         detail:
-          "Generate a pair code, link profiles, swipe one shared deck, celebrate mutual likes, and log the match to both diaries.",
+          "Create a share link so they sign in and link accounts. Then play watch-together, send the session link, celebrate mutual likes, and log matches to both diaries.",
         href: "/partner",
-        cta: "Link a partner",
+        cta: "Open Together",
         icon: Users,
       },
       {
