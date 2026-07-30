@@ -5,7 +5,30 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useListMovies, useUpdateMovie, getListMoviesQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Bookmark, Check, Loader2, Search, X } from "lucide-react";
+import { Bookmark, Download, Loader2, Search, Star, X } from "lucide-react";
+
+// ── CSV export ────────────────────────────────────────────────────────────────
+function exportCSV(movies: any[], filename: string) {
+  const cols = ["title", "status", "rating", "year", "language", "genres", "overview", "added"];
+  const rows = movies.map((m) => [
+    m.title,
+    "watchlist",
+    "",
+    m.releaseYear ?? "",
+    m.originalLanguage ?? "",
+    (m.genres as string[] | null)?.join("; ") ?? "",
+    m.overview ?? "",
+    m.createdAt ? new Date(m.createdAt).toLocaleDateString() : "",
+  ]);
+  const csv = [cols, ...rows]
+    .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
 import { RatingPickerDialog } from "@/components/rating-picker-dialog";
 import { toast } from "sonner";
 
@@ -21,8 +44,7 @@ export default function WatchlistPage() {
 
   const filtered = query.trim()
     ? movies?.filter((m) =>
-        m.title.toLowerCase().includes(query.toLowerCase()) ||
-        m.originalTitle?.toLowerCase().includes(query.toLowerCase())
+        m.title.toLowerCase().includes(query.toLowerCase())
       )
     : movies;
 
@@ -58,6 +80,14 @@ export default function WatchlistPage() {
             </h1>
             <p className="text-muted-foreground">Films you want to explore.</p>
           </div>
+          <Button
+            variant="outline" size="sm"
+            className="gap-1.5 text-xs h-8 shrink-0 mt-1"
+            onClick={() => exportCSV(movies ?? [], "cinevault_watchlist.csv")}
+            disabled={!movies?.length}
+          >
+            <Download className="w-3 h-3" /> Export
+          </Button>
         </section>
 
         {/* Search */}
@@ -100,27 +130,29 @@ export default function WatchlistPage() {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
             {filtered?.map((movie) => (
-              <div key={movie.id} className="relative group/wrapper">
-                <MoviePosterCard
-                  id={movie.id}
-                  title={movie.title}
-                  posterPath={movie.posterPath}
-                  language={movie.originalLanguage}
-                  year={movie.releaseYear}
-                />
-                <Button
-                  size="sm"
-                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover/wrapper:opacity-100 transition-opacity z-30 shadow-lg shadow-black/50"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleMarkWatched(movie.id);
-                  }}
-                >
-                  <Check className="w-4 h-4 mr-2" />
-                  Mark Watched
-                </Button>
-              </div>
+              <MoviePosterCard
+                key={movie.id}
+                id={movie.id}
+                title={movie.title}
+                posterPath={movie.posterPath}
+                language={movie.originalLanguage}
+                year={movie.releaseYear}
+                overlayAction={
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="shadow-lg shadow-black/50 bg-white text-black hover:bg-white/90"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleMarkWatched(movie.id);
+                    }}
+                  >
+                    <Star className="w-4 h-4 mr-2" />
+                    Rate
+                  </Button>
+                }
+              />
             ))}
           </div>
         )}
@@ -128,6 +160,7 @@ export default function WatchlistPage() {
         <RatingPickerDialog
           open={!!pendingId}
           movieTitle={pendingMovie?.title ?? ""}
+          confirmOnSelect
           onConfirm={submitWatched}
           onCancel={() => setPendingId(null)}
         />
