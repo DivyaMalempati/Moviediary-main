@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 /** Bump when the tour content changes so returning users see the new version once. */
-export const FEATURE_TOUR_VERSION = 1;
+export const FEATURE_TOUR_VERSION = 2;
 export const FEATURE_TOUR_STORAGE_KEY = `cinevault:feature-tour:v${FEATURE_TOUR_VERSION}`;
 
 export type FeatureGuideItem = {
@@ -54,10 +54,10 @@ export const FEATURE_TOUR_STEPS: FeatureGuideItem[] = [
   },
   {
     id: "discover",
-    title: "Discover & partner",
-    summary: "Recommendations for you — or a shared deck with someone else.",
+    title: "Discover & movie night",
+    summary: "Recommendations for you — or a shared swipe ritual with a friend.",
     detail:
-      "Discover mixes AI For You, Because You Liked, and Trending. Together links a spouse account via share link so you can swipe the same deck and celebrate mutual likes.",
+      "Discover mixes AI For You, Because You Liked, and Trending. Together is a movie-night ritual: each person keeps their own genres and languages, you share a link, swipe the same deck, and mutual likes become tonight’s shortlist.",
     href: "/suggestions",
     cta: "Open Discover",
     icon: Sparkles,
@@ -159,10 +159,10 @@ export const FEATURE_GUIDE_SECTIONS: Array<{
       },
       {
         id: "partner-guide",
-        title: "Watch together",
-        summary: "Link a spouse account and swipe the same deck.",
+        title: "Movie night ritual",
+        summary: "Share a link, swipe together, find what you both want tonight.",
         detail:
-          "Create a share link so they sign in and link accounts. Then play watch-together, send the session link, celebrate mutual likes, and log matches to both diaries.",
+          "Each of you sets your own genres and languages in Preferences — you never fill in for each other. Invite a friend, start a shared deck built from both tastes, swipe the same films, and celebrate mutual likes as tonight’s shortlist.",
         href: "/partner",
         cta: "Open Together",
         icon: Users,

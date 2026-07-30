@@ -547,12 +547,14 @@ export function intersectTasteProfiles(
     },
     explicitPrefs: {
       languages,
-      genres: mergeRanked(
-        prefsA.genres,
-        prefsB.genres,
-        4,
-      ),
-      // Prefer shared OTT; fall back to union so the couple has something to watch.
+      // Prefer genres both people already chose in Preferences (not typed in for each other).
+      // Fall back to a blended union so the ritual deck isn't empty.
+      genres: (() => {
+        const shared = prefsA.genres.filter((g) => prefsB.genres.includes(g));
+        if (shared.length > 0) return shared.slice(0, 4);
+        return mergeRanked(prefsA.genres, prefsB.genres, 4);
+      })(),
+      // Prefer shared OTT; fall back to union so the pair has something to watch.
       providerIds: providerIntersect.length > 0 ? providerIntersect : providerUnion,
       watchRegion: prefsA.watchRegion || prefsB.watchRegion || "IN",
       mutedGenres,

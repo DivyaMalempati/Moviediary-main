@@ -113,7 +113,7 @@ export default function LandingPage() {
             { icon: Film, title: "Full library", desc: "Watched diary, watchlist, ratings, notes, and rewatch history" },
             { icon: Shuffle, title: "Swipe decks", desc: "Short personalized decks with genre, trope, and streaming filters" },
             { icon: Sparkles, title: "Discover", desc: "For You, Because You Liked, and Trending India recommendations" },
-            { icon: Users, title: "Watch together", desc: "Share a link to link accounts, then swipe one deck with your spouse" },
+            { icon: Users, title: "Movie night", desc: "Share a link, swipe the same deck, and find what you both want tonight" },
             { icon: Star, title: "Rate your way", desc: "Loved to Meh — confirm on tap when you mark something watched" },
             { icon: Clapperboard, title: "Your taste", desc: "Languages, genres, and OTT apps shape every suggestion" },
           ].map(({ icon: Icon, title, desc }) => (

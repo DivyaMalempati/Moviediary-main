@@ -21,7 +21,7 @@ export default function GuidePage() {
           </h1>
           <p className="text-muted-foreground text-base max-w-xl leading-relaxed">
             Track what you’ve watched, swipe short personalized decks, discover
-            new titles, and match with a partner when you can’t decide tonight.
+            new titles, and run a movie-night swipe when you can’t decide tonight.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button

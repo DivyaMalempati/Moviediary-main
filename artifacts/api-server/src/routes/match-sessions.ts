@@ -141,14 +141,16 @@ router.get("/match-sessions", requireAuth, async (req: any, res): Promise<void> 
 
 /**
  * POST /match-sessions
- * Create a shared dual-swipe deck from the intersection of both partners' tastes.
+ * Create a shared dual-swipe deck from both people's Preferences + tastes.
+ * Common interest is discovered by mutual likes while swiping — not by typing
+ * what the other person likes.
  */
 router.post("/match-sessions", requireAuth, async (req: any, res): Promise<void> => {
   if (!requireRegistered(req, res)) return;
 
   const link = await getActivePartnerLink(req.userId);
   if (!link) {
-    res.status(400).json({ error: "Link a partner before starting a match deck" });
+    res.status(400).json({ error: "Invite someone before starting a movie night" });
     return;
   }
 
