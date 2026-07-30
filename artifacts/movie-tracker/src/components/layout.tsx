@@ -141,8 +141,32 @@ export function Layout({ children }: LayoutProps) {
 
       {/* Main */}
       <main className="flex-1 flex flex-col min-w-0 pb-20 md:pb-0">
+        {/* Always-visible Together shortcut on all breakpoints */}
+        {location !== "/partner" && (
+          <div className="sticky top-0 z-40 border-b border-border/60 bg-background/90 backdrop-blur-md px-4 py-2 flex items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground truncate">Watch with your spouse</p>
+            <Link
+              href="/partner"
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-2.5 py-1 text-xs font-medium"
+            >
+              <Users className="w-3.5 h-3.5" />
+              Together
+            </Link>
+          </div>
+        )}
         <div className="flex-1 overflow-y-auto">{children}</div>
       </main>
+
+      {/* Fixed Together FAB — visible on every viewport so it can’t be missed */}
+      {location !== "/partner" && (
+        <Link
+          href="/partner"
+          className="fixed z-[60] bottom-24 right-4 md:bottom-6 md:right-6 inline-flex items-center gap-2 rounded-full bg-white text-black shadow-lg px-4 py-2.5 text-sm font-semibold hover:bg-white/90"
+        >
+          <Users className="w-4 h-4" />
+          Together
+        </Link>
+      )}
 
       {/* Bottom Nav — Mobile */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-lg border-t border-border flex items-center justify-around px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
