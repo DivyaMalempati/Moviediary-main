@@ -16,6 +16,8 @@ export interface MovieInput {
   tmdbId?: number;
   posterPath?: string;
   releaseYear?: number;
+  /** Theatrical/digital release day (YYYY-MM-DD) */
+  releaseDate?: string;
   originalLanguage?: string;
   genres?: string[];
   overview?: string;

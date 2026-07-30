@@ -21,6 +21,11 @@ export interface MovieUpdate {
   posterPath?: string | null;
   /** @nullable */
   releaseYear?: number | null;
+  /**
+     * Theatrical/digital release day (YYYY-MM-DD)
+     * @nullable
+     */
+  releaseDate?: string | null;
   /** @nullable */
   originalLanguage?: string | null;
   /** @nullable */

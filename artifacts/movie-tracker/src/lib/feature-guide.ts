@@ -12,6 +12,8 @@ import {
   RotateCcw,
   Clapperboard,
   Tv,
+  CalendarClock,
+  Bell,
 } from "lucide-react";
 
 /** Bump when the tour content changes so returning users see the new version once. */
@@ -35,7 +37,7 @@ export const FEATURE_TOUR_STEPS: FeatureGuideItem[] = [
     title: "Your vault",
     summary: "Watched and Watchlist hold everything you’ve logged.",
     detail:
-      "Mark films watched with a rating, save titles for later, and open any poster for notes, streaming, and similar picks.",
+      "On day one you can tap posters you’ve seen to seed Watched. Later, rate films, save titles for later, and open any poster for notes, streaming, and similar picks.",
     href: "/watched",
     cta: "Open Watched",
     icon: Eye,
@@ -55,7 +57,7 @@ export const FEATURE_TOUR_STEPS: FeatureGuideItem[] = [
     title: "Discover & partner",
     summary: "Recommendations for you — or a shared deck with someone else.",
     detail:
-      "Discover mixes AI For You, Because You Liked, and Trending. Partner links profiles so you can swipe the same deck and celebrate mutual likes.",
+      "Discover mixes AI For You, Because You Liked, and Trending. Together links a spouse account via share link so you can swipe the same deck and celebrate mutual likes.",
     href: "/suggestions",
     cta: "Open Discover",
     icon: Sparkles,
@@ -99,6 +101,16 @@ export const FEATURE_GUIDE_SECTIONS: Array<{
         href: "/watchlist",
         cta: "Go to Watchlist",
         icon: Bookmark,
+      },
+      {
+        id: "upcoming",
+        title: "Upcoming",
+        summary: "Releases you’re looking forward to — with reminders.",
+        detail:
+          "Browse what’s coming to India, tap Remind me to save it on your watchlist with a release date, and get nudged when it lands (also on Watched).",
+        href: "/upcoming",
+        cta: "Open Upcoming",
+        icon: CalendarClock,
       },
       {
         id: "add",
@@ -147,12 +159,12 @@ export const FEATURE_GUIDE_SECTIONS: Array<{
       },
       {
         id: "partner-guide",
-        title: "Partner match",
-        summary: "Solve “what should we watch tonight?”",
+        title: "Watch together",
+        summary: "Link a spouse account and swipe the same deck.",
         detail:
-          "Generate a pair code, link profiles, swipe one shared deck, celebrate mutual likes, and log the match to both diaries.",
+          "Create a share link so they sign in and link accounts. Then play watch-together, send the session link, celebrate mutual likes, and log matches to both diaries.",
         href: "/partner",
-        cta: "Link a partner",
+        cta: "Open Together",
         icon: Users,
       },
       {
@@ -199,6 +211,16 @@ export const FEATURE_GUIDE_SECTIONS: Array<{
         href: "/watched",
         cta: "Open Watched",
         icon: RotateCcw,
+      },
+      {
+        id: "release-reminders",
+        title: "Release reminders",
+        summary: "Don’t miss a film you marked.",
+        detail:
+          "When a Looking forward title is due within a week, Watched shows a dismissible banner so you can open it or mark it watched.",
+        href: "/upcoming",
+        cta: "See Upcoming",
+        icon: Bell,
       },
       {
         id: "vault-brand",

@@ -86,6 +86,9 @@ function mapTmdbMovie(m: TmdbMovieRaw, idToName?: Map<number, string>) {
     originalTitle: m.original_title ?? null,
     posterPath: m.poster_path ?? null,
     releaseYear: releaseYear || null,
+    releaseDate: m.release_date && /^\d{4}-\d{2}-\d{2}/.test(m.release_date)
+      ? m.release_date.slice(0, 10)
+      : null,
     originalLanguage: m.original_language ?? null,
     genres: genres && genres.length > 0 ? genres : null,
     overview: m.overview ?? null,
@@ -153,6 +156,56 @@ export async function getTrendingIndia() {
   return data.results.map((m) => mapTmdbMovie(m, idToName));
 }
 
+function yyyyMmDd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Upcoming theatrical/digital releases for a region (default India).
+ * Uses discover with a release-date window so we get a full date, not just year.
+ */
+export async function getUpcomingReleases(opts?: {
+  region?: string;
+  language?: string;
+  days?: number;
+}) {
+  const region = opts?.region || "IN";
+  const days = Math.min(180, Math.max(14, opts?.days ?? 90));
+  const today = new Date();
+  const end = new Date(today);
+  end.setDate(end.getDate() + days);
+
+  const params: Record<string, string> = {
+    region,
+    sort_by: "primary_release_date.asc",
+    include_adult: "false",
+    "primary_release_date.gte": yyyyMmDd(today),
+    "primary_release_date.lte": yyyyMmDd(end),
+    "vote_count.gte": "1",
+    page: "1",
+  };
+
+  if (opts?.language) {
+    params.with_original_language = opts.language;
+  } else {
+    // India-first mix: major Indian languages + English releases in the region.
+    params.with_original_language = "te|ta|ml|kn|hi|en";
+  }
+
+  const [res, { idToName }] = await Promise.all([
+    tmdbFetch("/discover/movie", params),
+    getGenreMaps(),
+  ]);
+  const data = (await res.json()) as { results: TmdbMovieRaw[] };
+  return data.results
+    .map((m) => mapTmdbMovie(m, idToName))
+    .filter((m) => !!m.releaseDate)
+    .sort((a, b) => (a.releaseDate ?? "").localeCompare(b.releaseDate ?? ""));
+}
+
 export async function getWatchProviders(tmdbId: number, watchRegion = "IN") {
   const res = await tmdbFetch(`/movie/${tmdbId}/watch/providers`);
   const data = (await res.json()) as {
@@ -211,11 +264,26 @@ export type WatchFilter = {
   watchRegion?: string;
 };
 
+/** India CBFC max certification for discover (U ⊂ UA ⊂ A). */
+export type CertificationFilter = {
+  country?: string;
+  /** Max allowed: U, UA, or A. A / unset = no certification filter. */
+  max?: string | null;
+};
+
 function applyWatchFilter(params: Record<string, string>, watch?: WatchFilter) {
   if (!watch?.providerIds?.length) return;
   params.with_watch_providers = watch.providerIds.join("|");
   params.watch_region = watch.watchRegion || "IN";
   params.with_watch_monetization_types = "flatrate";
+}
+
+function applyCertificationFilter(params: Record<string, string>, cert?: CertificationFilter) {
+  const max = cert?.max?.toUpperCase();
+  if (!max || max === "A") return;
+  if (max !== "U" && max !== "UA") return;
+  params.certification_country = cert?.country || "IN";
+  params["certification.lte"] = max;
 }
 
 export async function discoverIndian(language?: string) {
@@ -268,6 +336,7 @@ export async function discoverMovies(
     params.with_genres = String(genreId);
   }
   applyWatchFilter(params, watch);
+  applyCertificationFilter(params, extras?.certification);
   const [res, { idToName }] = await Promise.all([tmdbFetch("/discover/movie", params), getGenreMaps()]);
   const data = (await res.json()) as { results: TmdbMovieRaw[] };
   return data.results.map((m) => mapTmdbMovie(m, idToName));
@@ -279,6 +348,7 @@ export type DiscoverExtras = {
   voteCountLte?: number;
   voteAverageGte?: number;
   keywordId?: number;
+  certification?: CertificationFilter;
 };
 
 /** High-rated titles available on the user's OTT apps (streaming bucket). */
@@ -287,11 +357,13 @@ export async function discoverStreamingHighlights(
   page: number,
   genreId: number | undefined,
   watch: WatchFilter,
+  certification?: CertificationFilter,
 ) {
   return discoverMovies(languages, watch.watchRegion || "IN", page, genreId, watch, {
     sortBy: "vote_average.desc",
     voteCountGte: 100,
     voteAverageGte: 6.5,
+    certification,
   });
 }
 
@@ -304,12 +376,14 @@ export async function discoverHiddenGems(
   page = 1,
   genreId?: number,
   watch?: WatchFilter,
+  certification?: CertificationFilter,
 ) {
   return discoverMovies(languages, undefined, page, genreId, watch, {
     sortBy: "vote_average.desc",
     voteCountGte: 50,
     voteCountLte: 3000,
     voteAverageGte: 7.2,
+    certification,
   });
 }
 
@@ -320,11 +394,13 @@ export async function discoverByKeyword(
   page = 1,
   genreId?: number,
   watch?: WatchFilter,
+  certification?: CertificationFilter,
 ) {
   return discoverMovies(languages, undefined, page, genreId, watch, {
     sortBy: "popularity.desc",
     voteCountGte: 30,
     keywordId,
+    certification,
   });
 }
 
@@ -334,6 +410,7 @@ export async function discoverIconicMovies(
   page = 1,
   genreId?: number,
   watch?: WatchFilter,
+  certification?: CertificationFilter,
 ) {
   const params: Record<string, string> = {
     sort_by: "vote_average.desc",
@@ -348,6 +425,7 @@ export async function discoverIconicMovies(
     params.with_genres = String(genreId);
   }
   applyWatchFilter(params, watch);
+  applyCertificationFilter(params, certification);
   const [res, { idToName }] = await Promise.all([tmdbFetch("/discover/movie", params), getGenreMaps()]);
   const data = (await res.json()) as { results: TmdbMovieRaw[] };
   return data.results.map((m) => mapTmdbMovie(m, idToName));
@@ -360,5 +438,29 @@ export async function getTrending(region?: string) {
   const [res, { idToName }] = await Promise.all([tmdbFetch("/trending/movie/week", params), getGenreMaps()]);
   const data = (await res.json()) as { results: TmdbMovieRaw[] };
   return data.results.map((m) => mapTmdbMovie(m, idToName));
+}
+
+/**
+ * Dense popular poster set for onboarding "tell us what you've seen" seeding.
+ * Mixes India trending + popular Indian-language discover pages.
+ */
+export async function getOnboardingSeedMovies() {
+  const [trendingIn, popularHi, popularTe, popularEn, popularTa] = await Promise.all([
+    getTrending("IN").catch(() => []),
+    discoverMovies(["hi"], "IN", 1).catch(() => []),
+    discoverMovies(["te"], "IN", 1).catch(() => []),
+    discoverMovies(["en"], "IN", 1).catch(() => []),
+    discoverMovies(["ta"], "IN", 1).catch(() => []),
+  ]);
+
+  const seen = new Set<number>();
+  const out: ReturnType<typeof mapTmdbMovie>[] = [];
+  for (const m of [...trendingIn, ...popularHi, ...popularTe, ...popularEn, ...popularTa]) {
+    if (!m.tmdbId || !m.posterPath || seen.has(m.tmdbId)) continue;
+    seen.add(m.tmdbId);
+    out.push(m);
+    if (out.length >= 48) break;
+  }
+  return out;
 }
 

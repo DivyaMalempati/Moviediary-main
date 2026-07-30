@@ -5,16 +5,27 @@ import { requireAuth } from "../middlewares/requireAuth.js";
 
 const router: IRouter = Router();
 
+const VALID_CERTIFICATIONS = new Set(["U", "UA", "A"]);
+
 type PrefsBody = {
   preferredLanguages: string[];
   preferredGenres: string[];
   preferredProviders: number[];
   watchRegion: string;
+  maxCertification: string | null;
+  mutedGenres: string[];
 };
 
 function validateBody(body: unknown): PrefsBody | null {
   if (!body || typeof body !== "object") return null;
-  const { preferredLanguages, preferredGenres, preferredProviders, watchRegion } = body as Record<string, unknown>;
+  const {
+    preferredLanguages,
+    preferredGenres,
+    preferredProviders,
+    watchRegion,
+    maxCertification,
+    mutedGenres,
+  } = body as Record<string, unknown>;
 
   if (!Array.isArray(preferredLanguages)) return null;
   if (preferredLanguages.length > 30) return null;
@@ -35,11 +46,27 @@ function validateBody(body: unknown): PrefsBody | null {
       ? watchRegion
       : "IN";
 
+  let cert: string | null = null;
+  if (maxCertification === null || maxCertification === undefined || maxCertification === "") {
+    cert = null;
+  } else if (typeof maxCertification === "string" && VALID_CERTIFICATIONS.has(maxCertification)) {
+    cert = maxCertification;
+  } else {
+    return null;
+  }
+
+  const muted = mutedGenres ?? [];
+  if (!Array.isArray(muted)) return null;
+  if (muted.length > 30) return null;
+  if (muted.some((g) => typeof g !== "string" || g.length < 1 || g.length > 40)) return null;
+
   return {
     preferredLanguages: preferredLanguages as string[],
     preferredGenres: genres as string[],
     preferredProviders: providers as number[],
     watchRegion: region,
+    maxCertification: cert,
+    mutedGenres: muted as string[],
   };
 }
 
@@ -49,6 +76,8 @@ function toResponse(prefs: typeof userPreferencesTable.$inferSelect | undefined)
     preferredGenres: prefs?.preferredGenres ?? [],
     preferredProviders: prefs?.preferredProviders ?? [],
     watchRegion: prefs?.watchRegion ?? "IN",
+    maxCertification: prefs?.maxCertification ?? null,
+    mutedGenres: prefs?.mutedGenres ?? [],
     onboardingCompletedAt: prefs?.onboardingCompletedAt ?? null,
   };
 }
@@ -69,7 +98,7 @@ router.put("/preferences", requireAuth, async (req: any, res): Promise<void> => 
   if (!data) {
     res.status(400).json({
       error:
-        "Invalid body: preferredLanguages (2–3 char strings, max 30), preferredGenres (max 20), preferredProviders (positive ints, max 40), watchRegion (optional ISO country)",
+        "Invalid body: preferredLanguages (2–3 char strings, max 30), preferredGenres (max 20), preferredProviders (positive ints, max 40), watchRegion (optional ISO country), maxCertification (U|UA|A|null), mutedGenres (max 30)",
     });
     return;
   }
@@ -89,6 +118,8 @@ router.put("/preferences", requireAuth, async (req: any, res): Promise<void> => 
       preferredGenres: data.preferredGenres,
       preferredProviders: data.preferredProviders,
       watchRegion: data.watchRegion,
+      maxCertification: data.maxCertification,
+      mutedGenres: data.mutedGenres,
       onboardingCompletedAt: stampedAt,
     })
     .onConflictDoUpdate({
@@ -98,6 +129,8 @@ router.put("/preferences", requireAuth, async (req: any, res): Promise<void> => 
         preferredGenres: data.preferredGenres,
         preferredProviders: data.preferredProviders,
         watchRegion: data.watchRegion,
+        maxCertification: data.maxCertification,
+        mutedGenres: data.mutedGenres,
         onboardingCompletedAt: stampedAt,
         updatedAt: new Date(),
       },

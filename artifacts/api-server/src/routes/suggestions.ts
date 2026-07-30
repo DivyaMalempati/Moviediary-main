@@ -8,12 +8,37 @@ import { requireAuth } from "../middlewares/requireAuth.js";
 
 const router: IRouter = Router();
 
-async function getUserPreferredLanguages(userId: string): Promise<string[]> {
+async function getUserPrefs(userId: string): Promise<{
+  preferredLanguages: string[];
+  mutedGenres: string[];
+  maxCertification: string | null;
+}> {
   const [prefs] = await db
     .select()
     .from(userPreferencesTable)
     .where(eq(userPreferencesTable.userId, userId));
-  return prefs?.preferredLanguages ?? [];
+  return {
+    preferredLanguages: prefs?.preferredLanguages ?? [],
+    mutedGenres: prefs?.mutedGenres ?? [],
+    maxCertification: prefs?.maxCertification ?? null,
+  };
+}
+
+async function getUserPreferredLanguages(userId: string): Promise<string[]> {
+  return (await getUserPrefs(userId)).preferredLanguages;
+}
+
+function withoutMutedGenres<T extends { genres?: string[] | null }>(
+  items: T[],
+  muted: string[],
+): T[] {
+  if (!muted.length) return items;
+  const set = new Set(muted.map((g) => g.toLowerCase()));
+  return items.filter((m) => {
+    const genres = m.genres ?? [];
+    if (genres.length === 0) return true;
+    return !genres.some((g) => set.has(g.toLowerCase()));
+  });
 }
 
 /** All TMDB IDs already in the user's library (watched + watchlist). */
@@ -35,10 +60,11 @@ function notInLibrary<T extends { tmdbId?: number | null }>(
 // GET /suggestions/because-you-liked
 router.get("/suggestions/because-you-liked", requireAuth, async (req: any, res): Promise<void> => {
   const RATING_ORDER = ["loved", "great", "very_good", "good", "ok", "avg", "meh"];
-  const [preferredLangs, libraryIds] = await Promise.all([
-    getUserPreferredLanguages(req.userId),
+  const [prefs, libraryIds] = await Promise.all([
+    getUserPrefs(req.userId),
     getLibraryTmdbIds(req.userId),
   ]);
+  const preferredLangs = prefs.preferredLanguages;
 
   const watched = await db
     .select()
@@ -69,7 +95,7 @@ router.get("/suggestions/because-you-liked", requireAuth, async (req: any, res):
         getSimilarMovies(movie.tmdbId),
         getRecommendations(movie.tmdbId),
       ]);
-      const combined = [...similar, ...recs];
+      const combined = withoutMutedGenres([...similar, ...recs], prefs.mutedGenres);
 
       // Sort: user's preferred languages first, then by vote average
       combined.sort((a, b) => {
@@ -98,7 +124,7 @@ router.get("/suggestions/because-you-liked", requireAuth, async (req: any, res):
 // ---------------------------------------------------------------------------
 // TMDB-based fallback used when Gemini is unavailable or library is empty
 // ---------------------------------------------------------------------------
-async function getTmdbFallback(userId: string, preferredLangs: string[]): Promise<any[]> {
+async function getTmdbFallback(userId: string, preferredLangs: string[], mutedGenres: string[] = []): Promise<any[]> {
   const [watched, libraryIds] = await Promise.all([
     db
       .select()
@@ -114,7 +140,7 @@ async function getTmdbFallback(userId: string, preferredLangs: string[]): Promis
     const discovered = preferredLangs.length > 0
       ? await discoverMovies(preferredLangs)
       : await getTrending();
-    return notInLibrary(discovered, libraryIds)
+    return withoutMutedGenres(notInLibrary(discovered, libraryIds), mutedGenres)
       .slice(0, 10)
       .map((m) => ({ ...m, source: "tmdb" }));
   }
@@ -130,7 +156,7 @@ async function getTmdbFallback(userId: string, preferredLangs: string[]): Promis
         getSimilarMovies(seed.tmdbId),
         getRecommendations(seed.tmdbId),
       ]);
-      const combined = [...similar, ...recs]
+      const combined = withoutMutedGenres([...similar, ...recs], mutedGenres)
         .filter((m) => m.tmdbId && !libraryIds.has(m.tmdbId))
         .filter((m) => preferredLangs.length === 0 || preferredLangs.includes(m.originalLanguage ?? ""))
         .sort((a, b) => (b.voteAverage ?? 0) - (a.voteAverage ?? 0));
@@ -153,7 +179,7 @@ async function getTmdbFallback(userId: string, preferredLangs: string[]): Promis
     const discovered = preferredLangs.length > 0
       ? await discoverMovies(preferredLangs)
       : await getTrending();
-    for (const m of discovered) {
+    for (const m of withoutMutedGenres(discovered, mutedGenres)) {
       if (!m.tmdbId || seen.has(m.tmdbId) || libraryIds.has(m.tmdbId)) continue;
       seen.add(m.tmdbId);
       results.push({ ...m, source: "tmdb" });
@@ -173,8 +199,8 @@ router.post("/suggestions/ai", requireAuth, async (req: any, res): Promise<void>
   }
 
   const count = parsed.data.count ?? 8;
-  const [preferredLangs, libraryIds, libraryRows, watchedMovies] = await Promise.all([
-    getUserPreferredLanguages(req.userId),
+  const [prefs, libraryIds, libraryRows, watchedMovies] = await Promise.all([
+    getUserPrefs(req.userId),
     getLibraryTmdbIds(req.userId),
     db
       .select({ title: moviesTable.title, status: moviesTable.status })
@@ -189,9 +215,10 @@ router.post("/suggestions/ai", requireAuth, async (req: any, res): Promise<void>
       .orderBy(desc(moviesTable.createdAt))
       .limit(20),
   ]);
+  const preferredLangs = prefs.preferredLanguages;
 
   if (watchedMovies.length === 0) {
-    const fallback = await getTmdbFallback(req.userId, preferredLangs);
+    const fallback = await getTmdbFallback(req.userId, preferredLangs, prefs.mutedGenres);
     res.json(fallback.slice(0, count));
     return;
   }
@@ -210,6 +237,10 @@ router.post("/suggestions/ai", requireAuth, async (req: any, res): Promise<void>
     ? `The user prefers films in these languages (ISO codes): ${preferredLangs.join(", ")}. Weight your suggestions heavily toward these languages.`
     : "The user has no language preference — suggest across all world cinema.";
 
+  const muteNote = prefs.mutedGenres.length > 0
+    ? `Never suggest films in these muted genres: ${prefs.mutedGenres.join(", ")}.`
+    : "";
+
   const prompt = `You are the user's close friend who lives and breathes cinema — warm, enthusiastic, specific, never pretentious. You know their taste intimately from their watch history.
 
 The user has watched: ${libraryContext}
@@ -217,6 +248,7 @@ The user has watched: ${libraryContext}
 Films already in their library (watched OR watchlist) — DO NOT recommend any of these: ${alreadyHave || "(none)"}
 
 ${langNote}
+${muteNote}
 
 Recommend exactly ${count} films they would genuinely love and that are NOT already in their library. Mix classics and recent releases (1970 onwards). Think of yourself as sending a personal voice note about each pick — NOT writing a review.
 
@@ -279,14 +311,14 @@ Respond ONLY with a JSON array, no markdown fences, no explanation:
     });
 
     if (filtered.length === 0) {
-      const fallback = await getTmdbFallback(req.userId, preferredLangs);
+      const fallback = await getTmdbFallback(req.userId, preferredLangs, prefs.mutedGenres);
       res.json(fallback.slice(0, count));
       return;
     }
 
     res.json(filtered.map((s: any) => ({ ...s, source: "ai" })));
   } catch {
-    const fallback = await getTmdbFallback(req.userId, preferredLangs);
+    const fallback = await getTmdbFallback(req.userId, preferredLangs, prefs.mutedGenres);
     res.json(fallback.slice(0, count));
   }
 });

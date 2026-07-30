@@ -18,6 +18,32 @@ import { requireAuth } from "../../middlewares/requireAuth.js";
 
 const router: IRouter = Router();
 
+const VALID_RATINGS = new Set([
+  "loved",
+  "great",
+  "very_good",
+  "good",
+  "ok",
+  "avg",
+  "meh",
+]);
+
+function toIsoTimestamp(value: Date | string | null | undefined): string | null {
+  if (value == null) return null;
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
+function normalizeRewatchDates(
+  value: unknown,
+): Date[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((d) => (d instanceof Date ? d : new Date(d as string)))
+    .filter((d) => !Number.isNaN(d.getTime()));
+}
+
 function dbMovieToResponse(m: typeof moviesTable.$inferSelect) {
   return {
     id: m.id,
@@ -28,13 +54,15 @@ function dbMovieToResponse(m: typeof moviesTable.$inferSelect) {
     tmdbId: m.tmdbId ?? null,
     posterPath: m.posterPath ?? null,
     releaseYear: m.releaseYear ?? null,
+    releaseDate: m.releaseDate ?? null,
     originalLanguage: m.originalLanguage ?? null,
     genres: m.genres ?? null,
     overview: m.overview ?? null,
-    watchedAt: m.watchedAt ? m.watchedAt.toISOString() : null,
-    createdAt: m.createdAt.toISOString(),
+    watchedAt: toIsoTimestamp(m.watchedAt),
+    createdAt: toIsoTimestamp(m.createdAt) ?? new Date(0).toISOString(),
     rewatchCount: m.rewatchCount ?? 0,
-    rewatchDates: (m.rewatchDates ?? []).map((d: Date) => d.toISOString()),
+    rewatchDates: normalizeRewatchDates(m.rewatchDates)
+      .map((d) => d.toISOString()),
   };
 }
 
@@ -97,6 +125,7 @@ router.post("/movies", requireAuth, async (req: any, res): Promise<void> => {
       tmdbId: data.tmdbId ?? null,
       posterPath: data.posterPath ?? null,
       releaseYear: data.releaseYear ?? null,
+      releaseDate: data.releaseDate ?? null,
       originalLanguage: data.originalLanguage ?? null,
       genres: data.genres ?? null,
       overview: data.overview ?? null,
@@ -125,7 +154,14 @@ router.get("/movies/stats", requireAuth, async (req: any, res): Promise<void> =>
       .groupBy(moviesTable.rating)
       .orderBy(desc(count())),
     db.select().from(moviesTable).where(and(userCond, eq(moviesTable.status, "watched"))).orderBy(desc(moviesTable.createdAt)).limit(6),
-    db.select({ genres: moviesTable.genres, createdAt: moviesTable.createdAt, watchedAt: moviesTable.watchedAt })
+    db.select({
+      genres: moviesTable.genres,
+      createdAt: moviesTable.createdAt,
+      watchedAt: moviesTable.watchedAt,
+      releaseYear: moviesTable.releaseYear,
+      rewatchCount: moviesTable.rewatchCount,
+      rating: moviesTable.rating,
+    })
       .from(moviesTable)
       .where(and(userCond, eq(moviesTable.status, "watched"))),
   ]);
@@ -143,22 +179,50 @@ router.get("/movies/stats", requireAuth, async (req: any, res): Promise<void> =>
 
   // Compute monthly counts from watchedAt (fall back to createdAt when null)
   const monthCounts: Record<string, number> = {};
+  const now = new Date();
+  const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  let thisMonth = 0;
+  let totalRewatches = 0;
+  let lovedCount = 0;
+  let highlyRatedCount = 0;
+  const decadeCounts: Record<string, number> = {};
+
   for (const row of allWatched) {
     const d = row.watchedAt ?? row.createdAt;
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     monthCounts[key] = (monthCounts[key] ?? 0) + 1;
+    if (key === thisMonthKey) thisMonth += 1;
+
+    totalRewatches += row.rewatchCount ?? 0;
+    if (row.rating === "loved") lovedCount += 1;
+    if (row.rating === "loved" || row.rating === "great") highlyRatedCount += 1;
+
+    if (row.releaseYear && row.releaseYear >= 1900 && row.releaseYear <= 2100) {
+      const decadeStart = Math.floor(row.releaseYear / 10) * 10;
+      const decadeKey = `${decadeStart}s`;
+      decadeCounts[decadeKey] = (decadeCounts[decadeKey] ?? 0) + 1;
+    }
   }
   const byMonth = Object.entries(monthCounts)
+    .map(([key, count]) => ({ key, count }))
+    .sort((a, b) => a.key.localeCompare(b.key));
+
+  const byDecade = Object.entries(decadeCounts)
     .map(([key, count]) => ({ key, count }))
     .sort((a, b) => a.key.localeCompare(b.key));
 
   res.json({
     totalWatched: Number(watchedCount.count),
     totalWatchlist: Number(watchlistCount.count),
+    totalRewatches,
+    thisMonth,
+    lovedCount,
+    highlyRatedCount,
     byLanguage: byLanguage.map((r) => ({ key: r.key ?? "unknown", count: Number(r.count) })),
     byRating: byRating.filter((r) => r.key).map((r) => ({ key: r.key!, count: Number(r.count) })),
     byGenre,
     byMonth,
+    byDecade,
     recentlyWatched: recentlyWatched.map(dbMovieToResponse),
   });
 });
@@ -247,6 +311,7 @@ router.patch("/movies/:id", requireAuth, async (req: any, res): Promise<void> =>
   if ("tmdbId" in data) updateValues.tmdbId = data.tmdbId ?? null;
   if ("posterPath" in data) updateValues.posterPath = data.posterPath ?? null;
   if ("releaseYear" in data) updateValues.releaseYear = data.releaseYear ?? null;
+  if ("releaseDate" in data) updateValues.releaseDate = data.releaseDate ?? null;
   if ("originalLanguage" in data) updateValues.originalLanguage = data.originalLanguage ?? null;
   if ("genres" in data) updateValues.genres = data.genres ?? null;
   if ("overview" in data) updateValues.overview = data.overview ?? null;
@@ -281,54 +346,70 @@ router.post("/movies/:id/rewatch", requireAuth, async (req: any, res): Promise<v
     return;
   }
 
-  const [existing] = await db
-    .select()
-    .from(moviesTable)
-    .where(and(eq(moviesTable.userId, req.userId), eq(moviesTable.id, params.data.id)));
+  try {
+    const [existing] = await db
+      .select()
+      .from(moviesTable)
+      .where(and(eq(moviesTable.userId, req.userId), eq(moviesTable.id, params.data.id)));
 
-  if (!existing) {
-    res.status(404).json({ error: "Movie not found" });
-    return;
-  }
-
-  if (existing.status !== "watched") {
-    res.status(400).json({ error: "Only watched movies can be rewatched" });
-    return;
-  }
-
-  const updateValues: Partial<typeof moviesTable.$inferInsert> = {
-    rewatchCount: (existing.rewatchCount ?? 0) + 1,
-  };
-
-  // Optional dated rewatch: append to history and refresh last-watched.
-  // Undated rewatches only bump the count (date logging is optional).
-  const rawWatchedAt = body.data.watchedAt;
-  if (rawWatchedAt != null && String(rawWatchedAt).trim() !== "") {
-    const rewatchDate = new Date(rawWatchedAt);
-    if (Number.isNaN(rewatchDate.getTime())) {
-      res.status(400).json({ error: "Invalid watchedAt date" });
+    if (!existing) {
+      res.status(404).json({ error: "Movie not found" });
       return;
     }
-    updateValues.rewatchDates = [...(existing.rewatchDates ?? []), rewatchDate];
-    updateValues.watchedAt = rewatchDate;
+
+    if (existing.status !== "watched") {
+      res.status(400).json({ error: "Only watched movies can be rewatched" });
+      return;
+    }
+
+    const now = new Date();
+    const updateValues: Partial<typeof moviesTable.$inferInsert> = {
+      rewatchCount: (existing.rewatchCount ?? 0) + 1,
+      // Always refresh last-watched so the diary stays current even for undated rewatches.
+      watchedAt: now,
+    };
+
+    // Optional dated rewatch: append to history (and use that date as last-watched).
+    const rawWatchedAt = body.data.watchedAt;
+    if (rawWatchedAt != null && String(rawWatchedAt).trim() !== "") {
+      // Date-only (YYYY-MM-DD) → local noon to avoid timezone day-shift.
+      const raw = String(rawWatchedAt).trim();
+      const rewatchDate = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+        ? new Date(`${raw}T12:00:00`)
+        : new Date(raw);
+      if (Number.isNaN(rewatchDate.getTime())) {
+        res.status(400).json({ error: "Invalid watchedAt date" });
+        return;
+      }
+      const prevDates = normalizeRewatchDates(existing.rewatchDates);
+      updateValues.rewatchDates = [...prevDates, rewatchDate];
+      updateValues.watchedAt = rewatchDate;
+    }
+
+    if ("rating" in body.data && body.data.rating != null) {
+      if (!VALID_RATINGS.has(body.data.rating)) {
+        res.status(400).json({ error: "Invalid rating" });
+        return;
+      }
+      updateValues.rating = body.data.rating as typeof moviesTable.$inferInsert.rating;
+    }
+
+    const [movie] = await db
+      .update(moviesTable)
+      .set(updateValues)
+      .where(and(eq(moviesTable.userId, req.userId), eq(moviesTable.id, params.data.id)))
+      .returning();
+
+    if (!movie) {
+      res.status(404).json({ error: "Movie not found" });
+      return;
+    }
+
+    res.json(dbMovieToResponse(movie));
+  } catch (err) {
+    logger.error({ err, movieId: params.data.id, userId: req.userId }, "Failed to log rewatch");
+    res.status(500).json({ error: "Failed to log rewatch" });
   }
-
-  if ("rating" in body.data) {
-    updateValues.rating = body.data.rating ?? null;
-  }
-
-  const [movie] = await db
-    .update(moviesTable)
-    .set(updateValues)
-    .where(and(eq(moviesTable.userId, req.userId), eq(moviesTable.id, params.data.id)))
-    .returning();
-
-  if (!movie) {
-    res.status(404).json({ error: "Movie not found" });
-    return;
-  }
-
-  res.json(dbMovieToResponse(movie));
 });
 
 // DELETE /movies/:id
@@ -385,6 +466,7 @@ router.post("/movies/:id/match", requireAuth, async (req: any, res): Promise<voi
       tmdbId: details.tmdbId,
       posterPath: details.posterPath,
       releaseYear: details.releaseYear,
+      releaseDate: details.releaseDate ?? null,
       originalLanguage: details.originalLanguage,
       genres: details.genres ?? null,
       overview: details.overview,

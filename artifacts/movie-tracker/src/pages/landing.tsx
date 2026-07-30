@@ -1,18 +1,25 @@
-import { useLocation, Link } from "wouter";
+import { Link } from "wouter";
 import { Clapperboard, Film, Sparkles, Star, Shuffle, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { enableDemoMode } from "@/lib/demo-auth";
 
 export default function LandingPage() {
-  const [, setLocation] = useLocation();
-
-  const handleDemo = async () => {
+  const enterApp = async (path = "/watched") => {
     try {
       await enableDemoMode();
     } catch {
       // If session creation fails, fall back gracefully
     }
-    window.location.href = (import.meta.env.BASE_URL || "/").replace(/\/$/, "") + "/watched";
+    window.location.href =
+      (import.meta.env.BASE_URL || "/").replace(/\/$/, "") + path;
+  };
+
+  const handleDemo = async () => {
+    await enterApp("/watched");
+  };
+
+  const handleTogether = async () => {
+    await enterApp("/partner");
   };
 
   return (
@@ -82,6 +89,15 @@ export default function LandingPage() {
               >
                 Continue without signing in
               </Button>
+              <Button
+                size="lg"
+                variant="ghost"
+                className="w-full text-base h-11 text-foreground border border-white/20 hover:bg-white/5"
+                onClick={handleTogether}
+              >
+                <Users className="w-4 h-4 mr-2" />
+                Open Together
+              </Button>
               <p className="text-[11px] text-muted-foreground/60 -mt-1">
                 Data is saved on this device
               </p>
@@ -97,7 +113,7 @@ export default function LandingPage() {
             { icon: Film, title: "Full library", desc: "Watched diary, watchlist, ratings, notes, and rewatch history" },
             { icon: Shuffle, title: "Swipe decks", desc: "Short personalized decks with genre, trope, and streaming filters" },
             { icon: Sparkles, title: "Discover", desc: "For You, Because You Liked, and Trending India recommendations" },
-            { icon: Users, title: "Partner match", desc: "Link up, swipe one deck together, and log mutual picks" },
+            { icon: Users, title: "Watch together", desc: "Share a link to link accounts, then swipe one deck with your spouse" },
             { icon: Star, title: "Rate your way", desc: "Loved to Meh — confirm on tap when you mark something watched" },
             { icon: Clapperboard, title: "Your taste", desc: "Languages, genres, and OTT apps shape every suggestion" },
           ].map(({ icon: Icon, title, desc }) => (

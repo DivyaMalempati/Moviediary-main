@@ -15,6 +15,11 @@ export interface TmdbMovie {
   posterPath?: string | null;
   /** @nullable */
   releaseYear?: number | null;
+  /**
+     * Release day YYYY-MM-DD when known
+     * @nullable
+     */
+  releaseDate?: string | null;
   /** @nullable */
   originalLanguage?: string | null;
   /** @nullable */

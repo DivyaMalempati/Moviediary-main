@@ -12,6 +12,7 @@ import { isDemoMode, initDemoMode, disableDemoMode, enableDemoMode, clearAppSess
 import LandingPage from "@/pages/landing";
 import WatchedPage from "@/pages/watched";
 import WatchlistPage from "@/pages/watchlist";
+import UpcomingPage from "@/pages/upcoming";
 import AddPage from "@/pages/add";
 import SuggestionsPage from "@/pages/suggestions";
 import SwipePage from "@/pages/swipe";
@@ -100,6 +101,7 @@ function AppPages() {
     <Switch>
       <Route path="/watched" component={WatchedPage} />
       <Route path="/watchlist" component={WatchlistPage} />
+      <Route path="/upcoming" component={UpcomingPage} />
       <Route path="/add" component={AddPage} />
       <Route path="/suggestions" component={SuggestionsPage} />
       <Route path="/swipe" component={SwipePage} />
@@ -149,8 +151,11 @@ function ClerkQueryClientCacheInvalidator() {
     const unsubscribe = addListener(({ user }) => {
       const userId = user?.id ?? null;
       // Signed-in Clerk session must never keep sending a demo guest token.
-      if (userId) disableDemoMode();
-      else clearAppSession();
+      if (userId) {
+        disableDemoMode();
+      } else {
+        clearAppSession();
+      }
       if (prevUserIdRef.current !== undefined && prevUserIdRef.current !== userId) {
         qc.clear();
       }
@@ -179,21 +184,58 @@ function SignUpPage() {
 }
 
 function HomeRedirect() {
+  if (isDemoMode()) {
+    return <SignedInHomeRedirect />;
+  }
   return (
     <>
-      <Show when="signed-in"><Redirect to="/watched" /></Show>
+      <Show when="signed-in"><SignedInHomeRedirect /></Show>
       <Show when="signed-out"><LandingPage /></Show>
     </>
   );
 }
 
+function SignedInHomeRedirect() {
+  try {
+    const ret = sessionStorage.getItem("cinevault:return-to");
+    if (ret && ret.startsWith("/")) {
+      sessionStorage.removeItem("cinevault:return-to");
+      return <Redirect to={ret} />;
+    }
+  } catch {
+    /* ignore */
+  }
+  return <Redirect to="/watched" />;
+}
+
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+  const [loc] = useLocation();
+  // Demo guest sessions can use the app without a Clerk login.
+  // Never force demo here — that trapped Gmail users out of Clerk.
+  if (isDemoMode()) {
+    return <Component />;
+  }
   return (
     <>
       <Show when="signed-in"><Component /></Show>
-      <Show when="signed-out"><Redirect to="/" /></Show>
+      <Show when="signed-out">
+        <SaveReturnAndRedirect path={loc} />
+      </Show>
     </>
   );
+}
+
+function SaveReturnAndRedirect({ path }: { path: string }) {
+  useEffect(() => {
+    try {
+      if (path && path !== "/" && !path.startsWith("/sign-")) {
+        sessionStorage.setItem("cinevault:return-to", path);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [path]);
+  return <Redirect to="/" />;
 }
 
 function ClerkRouter() {
@@ -205,6 +247,7 @@ function ClerkRouter() {
       <Route path="/onboarding" component={() => <Redirect to="/swipe" />} />
       <Route path="/watched" component={() => <ProtectedRoute component={WatchedPage} />} />
       <Route path="/watchlist" component={() => <ProtectedRoute component={WatchlistPage} />} />
+      <Route path="/upcoming" component={() => <ProtectedRoute component={UpcomingPage} />} />
       <Route path="/add" component={() => <ProtectedRoute component={AddPage} />} />
       <Route path="/suggestions" component={() => <ProtectedRoute component={SuggestionsPage} />} />
       <Route path="/swipe" component={() => <ProtectedRoute component={SwipePage} />} />
@@ -232,7 +275,8 @@ function ClerkProviderWithRoutes() {
       appearance={clerkAppearance}
       signInUrl={`${basePath}/sign-in`}
       signUpUrl={`${basePath}/sign-up`}
-      afterSignUpUrl={`${basePath}/swipe`}
+      afterSignInUrl={`${basePath}/partner`}
+      afterSignUpUrl={`${basePath}/partner`}
       localization={{
         signIn: { start: { title: "Welcome back", subtitle: "Sign in to your Cinevault" } },
         signUp: { start: { title: "Create your vault", subtitle: "Start tracking Indian cinema" } },
@@ -253,17 +297,19 @@ function ClerkProviderWithRoutes() {
 
 // ── Root ─────────────────────────────────────────────────────────────────────
 function App() {
-  const demo = isDemoMode() || !clerkPubKey;
+  // Always mount Clerk when configured so Gmail sign-in works.
+  // Demo mode only affects auth headers / ProtectedRoute — not which router is used.
+  const clerkEnabled = Boolean(clerkPubKey);
 
   return (
     <WouterRouter base={basePath}>
-      {demo ? (
+      {clerkEnabled ? (
+        <ClerkProviderWithRoutes />
+      ) : (
         <QueryClientProvider client={queryClient}>
           <DemoRouter />
           <Toaster />
         </QueryClientProvider>
-      ) : (
-        <ClerkProviderWithRoutes />
       )}
     </WouterRouter>
   );

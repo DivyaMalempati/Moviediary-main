@@ -1,7 +1,7 @@
 import { ReactNode, Component, ErrorInfo } from "react";
 import { Link, useLocation } from "wouter";
 import { useUser } from "@clerk/react";
-import { Clapperboard, Eye, Bookmark, PlusCircle, Sparkles, FolderOpen, BarChart2, Upload, User, Shuffle, Users, BookOpen } from "lucide-react";
+import { Clapperboard, Eye, Bookmark, PlusCircle, Sparkles, FolderOpen, BarChart2, Upload, User, Shuffle, Users, BookOpen, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isDemoMode } from "@/lib/demo-auth";
 import { FeatureWalkthroughHost } from "@/components/feature-walkthrough";
@@ -74,26 +74,27 @@ export function Layout({ children }: LayoutProps) {
   const [location] = useLocation();
   const demo = isDemoMode();
 
-  // Sidebar shows all items including Import
+  // Sidebar — Together near the top so it isn’t lost under the fold
   const sidebarItems = [
     { href: "/watched",     label: "Watched",     icon: Eye },
     { href: "/watchlist",   label: "Watchlist",   icon: Bookmark },
+    { href: "/partner",     label: "Together",    icon: Users },
+    { href: "/upcoming",    label: "Upcoming",    icon: CalendarClock },
+    { href: "/swipe",       label: "Swipe",       icon: Shuffle },
+    { href: "/suggestions", label: "Discover",    icon: Sparkles },
+    { href: "/add",         label: "Add",         icon: PlusCircle },
     { href: "/collections", label: "Collections", icon: FolderOpen },
     { href: "/stats",       label: "Stats",       icon: BarChart2 },
-    { href: "/add",         label: "Add",         icon: PlusCircle },
-    { href: "/suggestions", label: "Discover",    icon: Sparkles },
-    { href: "/swipe",       label: "Swipe",       icon: Shuffle },
-    { href: "/partner",     label: "Partner",     icon: Users },
     { href: "/guide",       label: "Guide",       icon: BookOpen },
     { href: "/import",      label: "Import",      icon: Upload },
   ];
 
-  // Bottom nav (mobile) — most-used items + profile; Swipe replaces Collections
+  // Bottom nav (mobile)
   const bottomItems = [
     { href: "/watched",   label: "Watched",  icon: Eye },
     { href: "/watchlist", label: "Watchlist", icon: Bookmark },
+    { href: "/partner",   label: "Together", icon: Users },
     { href: "/swipe",     label: "Swipe",     icon: Shuffle },
-    { href: "/add",       label: "Add",       icon: PlusCircle },
     { href: "/profile",   label: "Profile",   icon: User },
   ];
 
@@ -106,11 +107,14 @@ export function Layout({ children }: LayoutProps) {
             <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
               <Clapperboard className="w-5 h-5" />
             </div>
-            <span className="font-sans font-bold text-xl tracking-tight">Cinevault</span>
+            <div className="flex flex-col leading-tight">
+              <span className="font-sans font-bold text-xl tracking-tight">Cinevault</span>
+              <span className="text-[10px] text-emerald-400/90 font-medium">Together enabled</span>
+            </div>
           </Link>
         </div>
 
-        <nav className="flex-1 px-4 py-6 space-y-2">
+        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto min-h-0">
           {sidebarItems.map(({ href, label, icon: Icon }) => {
             const isActive = location === href;
             return (
@@ -140,8 +144,32 @@ export function Layout({ children }: LayoutProps) {
 
       {/* Main */}
       <main className="flex-1 flex flex-col min-w-0 pb-20 md:pb-0">
+        {/* Always-visible Together shortcut on all breakpoints */}
+        {location !== "/partner" && (
+          <div className="sticky top-0 z-40 border-b border-border/60 bg-background/90 backdrop-blur-md px-4 py-2 flex items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground truncate">Watch with your spouse</p>
+            <Link
+              href="/partner"
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-2.5 py-1 text-xs font-medium"
+            >
+              <Users className="w-3.5 h-3.5" />
+              Together
+            </Link>
+          </div>
+        )}
         <div className="flex-1 overflow-y-auto">{children}</div>
       </main>
+
+      {/* Fixed Together FAB — visible on every viewport so it can’t be missed */}
+      {location !== "/partner" && (
+        <Link
+          href="/partner"
+          className="fixed z-[60] bottom-24 right-4 md:bottom-6 md:right-6 inline-flex items-center gap-2 rounded-full bg-white text-black shadow-lg px-4 py-2.5 text-sm font-semibold hover:bg-white/90"
+        >
+          <Users className="w-4 h-4" />
+          Together
+        </Link>
+      )}
 
       {/* Bottom Nav — Mobile */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-lg border-t border-border flex items-center justify-around px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">

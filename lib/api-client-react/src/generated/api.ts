@@ -24,6 +24,7 @@ import type {
   AiSuggestionsInput,
   BulkMatchResult,
   DiscoverIndianParams,
+  GetUpcomingReleasesParams,
   HealthStatus,
   ListMoviesParams,
   Movie,
@@ -955,6 +956,90 @@ export function useGetTrendingIndia<TData = Awaited<ReturnType<typeof getTrendin
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetTrendingIndiaQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetUpcomingReleasesUrl = (params?: GetUpcomingReleasesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/tmdb/upcoming?${stringifiedParams}` : `/api/tmdb/upcoming`
+}
+
+/**
+ * @summary Browse upcoming theatrical releases
+ */
+export const getUpcomingReleases = async (params?: GetUpcomingReleasesParams, options?: RequestInit): Promise<TmdbMovie[]> => {
+
+  return customFetch<TmdbMovie[]>(getGetUpcomingReleasesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUpcomingReleasesQueryKey = (params?: GetUpcomingReleasesParams,) => {
+    return [
+    `/api/tmdb/upcoming`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetUpcomingReleasesQueryOptions = <TData = Awaited<ReturnType<typeof getUpcomingReleases>>, TError = ErrorType<unknown>>(params?: GetUpcomingReleasesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUpcomingReleases>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUpcomingReleasesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUpcomingReleases>>> = ({ signal }) => getUpcomingReleases(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUpcomingReleases>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUpcomingReleasesQueryResult = NonNullable<Awaited<ReturnType<typeof getUpcomingReleases>>>
+export type GetUpcomingReleasesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Browse upcoming theatrical releases
+ */
+
+export function useGetUpcomingReleases<TData = Awaited<ReturnType<typeof getUpcomingReleases>>, TError = ErrorType<unknown>>(
+ params?: GetUpcomingReleasesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUpcomingReleases>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUpcomingReleasesQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

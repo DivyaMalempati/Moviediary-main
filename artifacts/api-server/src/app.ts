@@ -8,6 +8,7 @@ import {
   clerkProxyMiddleware,
   getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware";
+import { mountSpaFallback } from "./middlewares/spaFallback";
 import router from "./routes";
 import { logger } from "./lib/logger";
 
@@ -54,5 +55,9 @@ if (process.env.CLERK_SECRET_KEY) {
 }
 
 app.use("/api", router);
+
+// Deep links (/partner, /upcoming, …) must resolve on this PORT too —
+// preview/public URLs usually hit the API, not Vite's 5173.
+mountSpaFallback(app);
 
 export default app;

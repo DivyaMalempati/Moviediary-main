@@ -30,6 +30,10 @@ export interface ExplicitPreferences {
   genres: string[]; // genre names, from onboarding/settings
   providerIds?: number[]; // TMDB watch provider IDs
   watchRegion?: string; // ISO country for watch availability
+  /** India CBFC max certification (U | UA | A). */
+  maxCertification?: string | null;
+  /** Genres to never recommend. */
+  mutedGenres?: string[];
 }
 
 export interface TasteProfile {
@@ -140,6 +144,19 @@ function filterByLanguages(
   if (!allowed || allowed.length === 0) return films;
   const set = new Set(allowed);
   return films.filter((f) => !f.originalLanguage || set.has(f.originalLanguage));
+}
+
+function filterMutedGenres(
+  films: SwipeCandidate[],
+  muted: string[] | undefined,
+): SwipeCandidate[] {
+  if (!muted?.length) return films;
+  const set = new Set(muted.map((g) => g.toLowerCase()));
+  return films.filter((f) => {
+    const genres = f.genres ?? [];
+    if (genres.length === 0) return true;
+    return !genres.some((g) => set.has(g.toLowerCase()));
+  });
 }
 
 // ── Pool assembly ────────────────────────────────────────────────────────────
@@ -285,8 +302,9 @@ async function fetchSafeMatches(opts: {
   genreIds: number[];
   genreIdFilter?: number;
   watch?: WatchFilter;
+  certification?: { country?: string; max?: string | null };
 }): Promise<SwipeCandidate[]> {
-  const { profile, effectiveLanguages, page, genreIds, genreIdFilter, watch } = opts;
+  const { profile, effectiveLanguages, page, genreIds, genreIdFilter, watch, certification } = opts;
   const safe: SwipeCandidate[] = [];
 
   if (!watch && profile.seedMovies.length > 0 && !genreIdFilter) {
@@ -310,15 +328,15 @@ async function fetchSafeMatches(opts: {
     : genreIds.slice(0, 3);
   if (gids.length > 0) {
     const genreCalls = gids.map((gid) =>
-      discoverMovies(effectiveLanguages, undefined, page, gid, watch).catch(() => []),
+      discoverMovies(effectiveLanguages, undefined, page, gid, watch, { certification }).catch(() => []),
     );
     safe.push(...(await Promise.all(genreCalls)).flat());
   } else {
     safe.push(
-      ...(await discoverMovies(effectiveLanguages, undefined, page, undefined, watch).catch(() => [])),
+      ...(await discoverMovies(effectiveLanguages, undefined, page, undefined, watch, { certification }).catch(() => [])),
     );
     safe.push(
-      ...(await discoverIconicMovies(effectiveLanguages, page, undefined, watch).catch(() => [])),
+      ...(await discoverIconicMovies(effectiveLanguages, page, undefined, watch, certification).catch(() => [])),
     );
   }
 
@@ -365,14 +383,24 @@ export async function getPersonalizedSwipePool(opts: {
 
   // Streaming bucket always uses OTT filter when available.
   const streamingWatch = watch;
+  const certification =
+    explicitPrefs.maxCertification && explicitPrefs.maxCertification !== "A"
+      ? { country: watchRegion || "IN", max: explicitPrefs.maxCertification }
+      : undefined;
+  const mutedGenres = explicitPrefs.mutedGenres ?? [];
 
   const nameToId = await getGenreNameToIdMap().catch(() => new Map<string, number>());
   const idToName = new Map([...nameToId.entries()].map(([name, id]) => [id, name]));
-  const genreNames = mergeRanked(profile.topGenres, explicitPrefs.genres, 4);
+  const mutedSet = new Set(mutedGenres.map((g) => g.toLowerCase()));
+  const genreNames = mergeRanked(profile.topGenres, explicitPrefs.genres, 4)
+    .filter((g) => !mutedSet.has(g.toLowerCase()));
   const genreIds = genreNames.map((g) => nameToId.get(g)).filter((id): id is number => !!id);
 
   const clean = (list: SwipeCandidate[]) =>
-    filterByLanguages(dedupeAndFilter(list, excludeIds, genreIdFilter, idToName), languageAllowlist);
+    filterMutedGenres(
+      filterByLanguages(dedupeAndFilter(list, excludeIds, genreIdFilter, idToName), languageAllowlist),
+      mutedGenres,
+    );
   const prep = (list: SwipeCandidate[], source: DeckSource) =>
     tagSource(genreIdFilter ? clean(list) : shuffle(clean(list)), source);
 
@@ -382,13 +410,13 @@ export async function getPersonalizedSwipePool(opts: {
   // Trope / keyword override — still apply 80/20 familiarity around the trope.
   if (keywordId != null) {
     const [tropePage, streaming, gems] = await Promise.all([
-      discoverByKeyword(keywordId, effectiveLanguages, page, genreIdFilter, undefined).catch(() => []),
+      discoverByKeyword(keywordId, effectiveLanguages, page, genreIdFilter, undefined, certification).catch(() => []),
       streamingWatch
-        ? discoverByKeyword(keywordId, effectiveLanguages, page, genreIdFilter, streamingWatch).catch(() => [])
+        ? discoverByKeyword(keywordId, effectiveLanguages, page, genreIdFilter, streamingWatch, certification).catch(() => [])
         : Promise.resolve([]),
-      discoverByKeyword(keywordId, effectiveLanguages, page + 1, genreIdFilter, undefined)
+      discoverByKeyword(keywordId, effectiveLanguages, page + 1, genreIdFilter, undefined, certification)
         .then(async (base) => {
-          const gems = await discoverHiddenGems(effectiveLanguages, page, genreIdFilter).catch(() => []);
+          const gems = await discoverHiddenGems(effectiveLanguages, page, genreIdFilter, undefined, certification).catch(() => []);
           return [...base, ...gems];
         })
         .catch(() => []),
@@ -410,6 +438,7 @@ export async function getPersonalizedSwipePool(opts: {
       genreIdFilter,
       // Safe matches are NOT locked to OTT — familiarity from taste.
       watch: undefined,
+      certification,
     }),
     streamingWatch
       ? discoverStreamingHighlights(
@@ -417,9 +446,10 @@ export async function getPersonalizedSwipePool(opts: {
           page,
           mixGenreId,
           streamingWatch,
+          certification,
         ).catch(() => [])
       : Promise.resolve([] as SwipeCandidate[]),
-    discoverHiddenGems(effectiveLanguages, page, mixGenreId).catch(() => []),
+    discoverHiddenGems(effectiveLanguages, page, mixGenreId, undefined, certification).catch(() => []),
   ]);
 
   // If user has no OTT prefs, fold streaming quota into safe (still 80% familiarity).
@@ -497,6 +527,16 @@ export function intersectTasteProfiles(
     .filter((s, i, arr) => arr.findIndex((t) => t.tmdbId === s.tmdbId) === i)
     .slice(0, 5);
 
+  const mutedGenres = [
+    ...new Set([...(prefsA.mutedGenres ?? []), ...(prefsB.mutedGenres ?? [])]),
+  ];
+  const certRank = (c: string | null | undefined) =>
+    c === "U" ? 0 : c === "UA" ? 1 : c === "A" ? 2 : 3;
+  const maxCertification =
+    certRank(prefsA.maxCertification) <= certRank(prefsB.maxCertification)
+      ? prefsA.maxCertification ?? prefsB.maxCertification ?? null
+      : prefsB.maxCertification ?? prefsA.maxCertification ?? null;
+
   return {
     profile: {
       hasImplicitData: a.hasImplicitData || b.hasImplicitData,
@@ -515,6 +555,8 @@ export function intersectTasteProfiles(
       // Prefer shared OTT; fall back to union so the couple has something to watch.
       providerIds: providerIntersect.length > 0 ? providerIntersect : providerUnion,
       watchRegion: prefsA.watchRegion || prefsB.watchRegion || "IN",
+      mutedGenres,
+      maxCertification,
     },
   };
 }

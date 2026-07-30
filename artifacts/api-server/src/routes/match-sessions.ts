@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, isNotNull, or } from "drizzle-orm";
+import { and, desc, eq, isNotNull, or } from "drizzle-orm";
 import {
   db,
   moviesTable,
@@ -26,8 +26,8 @@ const WORLD_CINEMA_DEFAULT = [
 
 function requireRegistered(req: any, res: any): boolean {
   const userId = req.userId as string;
-  if (!userId || userId.startsWith("guest_")) {
-    res.status(403).json({ error: "Sign in to use match sessions" });
+  if (!userId) {
+    res.status(401).json({ error: "Sign in to use match sessions" });
     return false;
   }
   return true;
@@ -65,6 +65,8 @@ async function loadPrefs(userId: string): Promise<ExplicitPreferences> {
     genres: row?.preferredGenres ?? [],
     providerIds: row?.preferredProviders ?? [],
     watchRegion: row?.watchRegion ?? "IN",
+    maxCertification: row?.maxCertification ?? null,
+    mutedGenres: row?.mutedGenres ?? [],
   };
 }
 
@@ -100,6 +102,42 @@ function matchesFromSwipes(
   );
   return [...likesA].filter((id) => likesB.has(id));
 }
+
+/**
+ * GET /match-sessions
+ * List active watch-together sessions for the current partner link.
+ */
+router.get("/match-sessions", requireAuth, async (req: any, res): Promise<void> => {
+  if (!requireRegistered(req, res)) return;
+
+  const link = await getActivePartnerLink(req.userId);
+  if (!link) {
+    res.json({ sessions: [] });
+    return;
+  }
+
+  const sessions = await db
+    .select()
+    .from(matchSessionsTable)
+    .where(
+      and(
+        eq(matchSessionsTable.partnerLinkId, link.id),
+        eq(matchSessionsTable.status, "active"),
+      ),
+    )
+    .orderBy(desc(matchSessionsTable.createdAt))
+    .limit(10);
+
+  res.json({
+    sessions: sessions.map((s) => ({
+      id: s.id,
+      status: s.status,
+      deckSize: Array.isArray(s.deck) ? s.deck.length : 0,
+      createdAt: s.createdAt.toISOString(),
+      path: `/match/${s.id}`,
+    })),
+  });
+});
 
 /**
  * POST /match-sessions
@@ -200,6 +238,7 @@ router.get("/match-sessions/:id", requireAuth, async (req: any, res): Promise<vo
     id: session.id,
     partnerLinkId: session.partnerLinkId,
     partnerUserId,
+    meUserId: req.userId,
     status: session.status,
     deck,
     swipes: swipes.map((s) => ({
@@ -359,6 +398,7 @@ router.post("/match-sessions/:id/log-match", requireAuth, async (req: any, res):
       tmdbId: film.tmdbId,
       posterPath: film.posterPath,
       releaseYear: film.releaseYear,
+      releaseDate: (film as { releaseDate?: string | null }).releaseDate ?? null,
       originalLanguage: film.originalLanguage,
       overview: film.overview,
       genres: film.genres,

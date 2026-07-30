@@ -76,6 +76,7 @@ interface SwipeFilm {
   title: string;
   posterPath: string | null;
   releaseYear: number | null;
+  releaseDate?: string | null;
   originalLanguage: string | null;
   overview: string | null;
   genres: string[] | null;
@@ -230,6 +231,7 @@ async function saveFilm(
     if (film.tmdbId != null)           body.tmdbId = film.tmdbId;
     if (film.posterPath != null)        body.posterPath = film.posterPath;
     if (film.releaseYear != null)       body.releaseYear = film.releaseYear;
+    if (film.releaseDate != null)       body.releaseDate = film.releaseDate;
     if (film.originalLanguage != null)  body.originalLanguage = film.originalLanguage;
     if (film.overview != null)          body.overview = film.overview;
     if (film.genres?.length)            body.genres = film.genres;
@@ -1242,7 +1244,7 @@ function SwipeDeck() {
               className="shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-all inline-flex items-center gap-1.5 bg-transparent text-muted-foreground border-white/20 hover:border-white/40 hover:text-foreground"
             >
               <Users className="w-3 h-3" />
-              Partner match
+              Watch together
             </button>
           </div>
         </div>

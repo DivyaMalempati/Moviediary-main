@@ -252,6 +252,39 @@ paths:
                 items:
                   $ref: "#/components/schemas/TmdbMovie"
 
+  /tmdb/upcoming:
+    get:
+      operationId: getUpcomingReleases
+      tags: [tmdb]
+      summary: Browse upcoming theatrical releases
+      parameters:
+        - name: region
+          in: query
+          schema:
+            type: string
+            default: "IN"
+        - name: language
+          in: query
+          schema:
+            type: string
+            description: "Optional ISO 639-1 language filter (e.g. te, hi). Omit for Indian languages + English."
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 90
+            minimum: 14
+            maximum: 180
+      responses:
+        "200":
+          description: Upcoming releases sorted by release date
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TmdbMovie"
+
   /tmdb/discover-indian:
     get:
       operationId: discoverIndian
@@ -400,6 +433,9 @@ components:
           type: ["string", "null"]
         releaseYear:
           type: ["integer", "null"]
+        releaseDate:
+          type: ["string", "null"]
+          description: Theatrical/digital release day (YYYY-MM-DD) for upcoming reminders
         originalLanguage:
           type: ["string", "null"]
         genres:
@@ -444,6 +480,9 @@ components:
           type: string
         releaseYear:
           type: integer
+        releaseDate:
+          type: string
+          description: Theatrical/digital release day (YYYY-MM-DD)
         originalLanguage:
           type: string
         genres:
@@ -474,6 +513,9 @@ components:
           type: ["string", "null"]
         releaseYear:
           type: ["integer", "null"]
+        releaseDate:
+          type: ["string", "null"]
+          description: Theatrical/digital release day (YYYY-MM-DD)
         originalLanguage:
           type: ["string", "null"]
         genres:
@@ -505,6 +547,17 @@ components:
           type: integer
         totalWatchlist:
           type: integer
+        totalRewatches:
+          type: integer
+          description: Sum of rewatch counts across the watched diary
+        thisMonth:
+          type: integer
+          description: Films watched in the current calendar month
+        lovedCount:
+          type: integer
+        highlyRatedCount:
+          type: integer
+          description: Count of loved + great ratings
         byLanguage:
           type: array
           items:
@@ -518,6 +571,10 @@ components:
           items:
             $ref: "#/components/schemas/CountByKey"
         byMonth:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountByKey"
+        byDecade:
           type: array
           items:
             $ref: "#/components/schemas/CountByKey"
@@ -560,6 +617,9 @@ components:
           type: ["string", "null"]
         releaseYear:
           type: ["integer", "null"]
+        releaseDate:
+          type: ["string", "null"]
+          description: Release day YYYY-MM-DD when known
         originalLanguage:
           type: ["string", "null"]
         genres:

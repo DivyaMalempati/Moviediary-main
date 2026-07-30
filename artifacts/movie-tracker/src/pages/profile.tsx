@@ -6,7 +6,7 @@ import { PreferencesModal } from "@/components/preferences-modal";
 import { isDemoMode, disableDemoMode, clearAppSession, getAuthHeaders } from "@/lib/demo-auth";
 import { usePreferences } from "@/lib/preferences";
 import { toast } from "sonner";
-import { ChevronRight, Download, LogOut, Settings, Upload, BookOpen, Play } from "lucide-react";
+import { ChevronRight, Download, LogOut, Settings, Upload, BookOpen, Play, Users, PlusCircle } from "lucide-react";
 import { Link } from "wouter";
 import { useReplayFeatureTour } from "@/components/feature-walkthrough";
 
@@ -36,6 +36,8 @@ function preferencesSummary(prefs: {
   preferredLanguages: string[];
   preferredGenres: string[];
   preferredProviders: number[];
+  maxCertification?: string | null;
+  mutedGenres?: string[];
 } | undefined): string {
   if (!prefs) return "Loading…";
   const parts: string[] = [];
@@ -44,6 +46,12 @@ function preferencesSummary(prefs: {
   }
   if (prefs.preferredGenres.length) {
     parts.push(`${prefs.preferredGenres.length} genre${prefs.preferredGenres.length === 1 ? "" : "s"}`);
+  }
+  if (prefs.maxCertification) {
+    parts.push(`max ${prefs.maxCertification}`);
+  }
+  if (prefs.mutedGenres?.length) {
+    parts.push(`${prefs.mutedGenres.length} muted`);
   }
   if (prefs.preferredProviders.length) {
     parts.push(`${prefs.preferredProviders.length} service${prefs.preferredProviders.length === 1 ? "" : "s"}`);
@@ -79,6 +87,32 @@ function ProfileShell({
         </div>
 
         <div className="space-y-1">
+          <Link href="/partner">
+            <button
+              type="button"
+              className="w-full flex items-center gap-3 px-1 py-3 text-left text-sm hover:text-foreground text-foreground/90 transition-colors"
+            >
+              <Users className="w-4 h-4 text-muted-foreground" />
+              <span className="flex-1 text-left">
+                <span className="block">Together</span>
+                <span className="block text-xs text-muted-foreground font-normal">
+                  Link spouse · watch-together decks
+                </span>
+              </span>
+              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+            </button>
+          </Link>
+
+          <Link href="/add">
+            <button
+              type="button"
+              className="w-full flex items-center gap-3 px-1 py-3 text-left text-sm hover:text-foreground text-foreground/90 transition-colors"
+            >
+              <PlusCircle className="w-4 h-4 text-muted-foreground" />
+              Add a film
+            </button>
+          </Link>
+
           <PreferencesModal
             trigger={
               <button
@@ -163,10 +197,11 @@ function DemoProfile() {
     <ProfileShell
       name="Demo User"
       subtitle="Local session"
-      signOutLabel="Exit demo"
+      signOutLabel="Exit demo & sign in"
       onSignOut={() => {
         disableDemoMode();
-        window.location.href = import.meta.env.BASE_URL || "/";
+        window.location.href =
+          (import.meta.env.BASE_URL || "/").replace(/\/$/, "") + "/sign-in";
       }}
       avatar={
         <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-sm font-semibold shrink-0">

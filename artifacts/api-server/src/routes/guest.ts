@@ -57,11 +57,14 @@ export function verifyAppSessionToken(token: string): string | null {
 // POST /guest-session
 // Creates a new isolated guest session. No auth required.
 // Returns { token } — client stores this and sends it as x-guest-token on every request.
-router.post("/guest-session", (_req, res) => {
+function createGuestSession(_req: unknown, res: import("express").Response) {
   const id = randomUUID();
   const token = signId(id);
   res.json({ token, userId: GUEST_PREFIX + id });
-});
+}
+router.post("/guest-session", createGuestSession);
+// Alias — some clients historically called /api/guest/session
+router.post("/guest/session", createGuestSession);
 
 /**
  * POST /clerk-session

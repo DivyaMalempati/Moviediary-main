@@ -250,6 +250,7 @@ router.post("/import", requireAuth, async (req: any, res): Promise<void> => {
         tmdbId: details.tmdbId,
         posterPath: details.posterPath ?? null,
         releaseYear: details.releaseYear ?? null,
+        releaseDate: details.releaseDate ?? null,
         originalLanguage: details.originalLanguage ?? null,
         genres: details.genres ?? null,
         overview: details.overview ?? null,
