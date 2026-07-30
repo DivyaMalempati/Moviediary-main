@@ -20,6 +20,8 @@ import ImportPage from "@/pages/import";
 import ProfilePage from "@/pages/profile";
 import CollectionsPage from "@/pages/collections";
 import StatsPage from "@/pages/stats";
+import PartnerPage, { PairInvitePage } from "@/pages/partner";
+import MatchSessionPage from "@/pages/match-session";
 import NotFound from "@/pages/not-found";
 
 // Initialise demo mode header injection before any render
@@ -100,10 +102,12 @@ function AppPages() {
       <Route path="/add" component={AddPage} />
       <Route path="/suggestions" component={SuggestionsPage} />
       <Route path="/swipe" component={SwipePage} />
+      <Route path="/partner" component={PartnerPage} />
+      <Route path="/pair/:code" component={PairInvitePage} />
+      <Route path="/match/:id" component={MatchSessionPage} />
       <Route path="/movie/:id" component={MovieDetailsPage} />
       <Route path="/import" component={ImportPage} />
       <Route path="/profile" component={ProfilePage} />
-      <Route path="/swipe" component={SwipePage} />
       <Route path="/collections" component={CollectionsPage} />
       <Route path="/collections/:id" component={CollectionsPage} />
       <Route path="/stats" component={StatsPage} />
@@ -202,10 +206,12 @@ function ClerkRouter() {
       <Route path="/add" component={() => <ProtectedRoute component={AddPage} />} />
       <Route path="/suggestions" component={() => <ProtectedRoute component={SuggestionsPage} />} />
       <Route path="/swipe" component={() => <ProtectedRoute component={SwipePage} />} />
+      <Route path="/partner" component={() => <ProtectedRoute component={PartnerPage} />} />
+      <Route path="/pair/:code" component={() => <ProtectedRoute component={PairInvitePage} />} />
+      <Route path="/match/:id" component={() => <ProtectedRoute component={MatchSessionPage} />} />
       <Route path="/movie/:id" component={() => <ProtectedRoute component={MovieDetailsPage} />} />
       <Route path="/import" component={() => <ProtectedRoute component={ImportPage} />} />
       <Route path="/profile" component={() => <ProtectedRoute component={ProfilePage} />} />
-      <Route path="/swipe" component={() => <ProtectedRoute component={SwipePage} />} />
       <Route path="/collections" component={() => <ProtectedRoute component={CollectionsPage} />} />
       <Route path="/collections/:id" component={() => <ProtectedRoute component={CollectionsPage} />} />
       <Route path="/stats" component={() => <ProtectedRoute component={StatsPage} />} />

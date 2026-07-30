@@ -8,6 +8,8 @@ import importRouter from "./import";
 import collectionsRouter from "./collections";
 import guestRouter from "./guest";
 import discoverRouter from "./discover";
+import partnersRouter from "./partners";
+import matchSessionsRouter from "./match-sessions";
 
 const router: IRouter = Router();
 
@@ -20,5 +22,7 @@ router.use(preferencesRouter);
 router.use(importRouter);
 router.use(collectionsRouter);
 router.use(discoverRouter);
+router.use(partnersRouter);
+router.use(matchSessionsRouter);
 
 export default router;

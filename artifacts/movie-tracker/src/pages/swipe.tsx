@@ -59,6 +59,17 @@ const GENRES = [
 
 type GenreId = (typeof GENRES)[number]["id"];
 
+/** Curated TMDB keyword tropes (Step 3.3). */
+const TROPES = [
+  { label: "Any trope", slug: null },
+  { label: "Treasure Hunt", slug: "treasure-hunt" },
+  { label: "Serial Killer", slug: "serial-killer" },
+  { label: "Heist", slug: "heist" },
+  { label: "Twist Ending", slug: "twist-ending" },
+] as const;
+
+type TropeSlug = (typeof TROPES)[number]["slug"];
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface SwipeFilm {
   tmdbId: number;
@@ -69,6 +80,7 @@ interface SwipeFilm {
   overview: string | null;
   genres: string[] | null;
   voteAverage?: number | null;
+  source?: "safe" | "streaming" | "wildcard" | "trope" | string;
 }
 
 interface Provider {
@@ -188,12 +200,14 @@ async function fetchSwipeBatch(
   genreId?: number | null,
   excludeIds?: Set<number>,
   onMyServices = false,
+  tropeSlug?: string | null,
 ): Promise<SwipeFilm[]> {
   try {
     const params = new URLSearchParams({ page: String(page) });
     if (genreId != null) params.set("genreId", String(genreId));
     if (excludeIds && excludeIds.size > 0) params.set("excludeIds", [...excludeIds].join(","));
     if (onMyServices) params.set("onMyServices", "1");
+    if (tropeSlug) params.set("trope", tropeSlug);
     const res = await fetch(`${BASE}/api/discover/swipe?${params}`, {
       headers: await getAuthHeaders(),
       credentials: "include",
@@ -294,13 +308,14 @@ async function fillDeck(
   excludeIds: Set<number>,
   target = DECK_SIZE,
   onMyServices = false,
+  tropeSlug: TropeSlug = null,
 ): Promise<{ films: SwipeFilm[]; nextPage: number }> {
   const collected: SwipeFilm[] = [];
   const seen = new Set(excludeIds);
   let page = startPage;
 
   for (let attempt = 0; attempt < 4 && collected.length < target; attempt++) {
-    const batch = await fetchSwipeBatch(page, genreId, seen, onMyServices);
+    const batch = await fetchSwipeBatch(page, genreId, seen, onMyServices, tropeSlug);
     page += 1;
     if (batch.length === 0) break;
     for (const f of batch) {
@@ -843,8 +858,10 @@ function FinishLineScreen({
 function SwipeDeck() {
   const qc = useQueryClient();
   const isOnline = useOnlineStatus();
+  const [, setLocation] = useLocation();
 
   const [selectedGenreId, setSelectedGenreId] = useState<GenreId>(null);
+  const [selectedTrope, setSelectedTrope] = useState<TropeSlug>(null);
   const [onMyServices, setOnMyServices] = useState(false);
   const { data: prefs } = usePreferences();
   const preferredProviders = prefs?.preferredProviders ?? [];
@@ -881,13 +898,20 @@ function SwipeDeck() {
     setRatingFilm(null);
     if (nextDeckNumber != null) setDeckNumber(nextDeckNumber);
 
-    const { films, nextPage } = await fillDeck(page, genreId, seenRef.current, DECK_SIZE, onMyServices);
+    const { films, nextPage } = await fillDeck(
+      page,
+      genreId,
+      seenRef.current,
+      DECK_SIZE,
+      onMyServices,
+      selectedTrope,
+    );
     setQueue(films);
     setDeckSize(films.length || DECK_SIZE);
     setApiPage(nextPage);
     setLoading(false);
     if (films.length === 0) setExhausted(true);
-  }, [onMyServices]);
+  }, [onMyServices, selectedTrope]);
 
   // Always keep library IDs in the exclude set (watched + watchlist).
   useEffect(() => {
@@ -901,7 +925,7 @@ function SwipeDeck() {
   useEffect(() => {
     if (!libraryFetched) return;
     void startDeck(1, selectedGenreId, 1);
-  }, [libraryFetched, selectedGenreId, onMyServices, startDeck]);
+  }, [libraryFetched, selectedGenreId, selectedTrope, onMyServices, startDeck]);
 
   useEffect(() => {
     if (!isOnline) return;
@@ -1174,27 +1198,53 @@ function SwipeDeck() {
               </button>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              if (!onMyServices && preferredProviders.length === 0) {
-                toast.message("Pick your streaming services in Preferences first", {
-                  description: "Profile → Streaming services, then try again.",
-                });
-                return;
-              }
-              setOnMyServices((v) => !v);
-            }}
-            className={cn(
-              "shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-all inline-flex items-center gap-1.5",
-              onMyServices
-                ? "bg-emerald-400 text-black border-emerald-400"
-                : "bg-transparent text-muted-foreground border-white/20 hover:border-white/40 hover:text-foreground"
-            )}
-          >
-            <Tv className="w-3 h-3" />
-            On my streaming services
-          </button>
+          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none px-0.5">
+            {TROPES.map((t) => (
+              <button
+                key={String(t.slug)}
+                onClick={() => setSelectedTrope(t.slug as TropeSlug)}
+                className={cn(
+                  "shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-all",
+                  selectedTrope === t.slug
+                    ? "bg-amber-300 text-black border-amber-300"
+                    : "bg-transparent text-muted-foreground border-white/20 hover:border-white/40 hover:text-foreground"
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-1.5 px-0.5">
+            <button
+              type="button"
+              onClick={() => {
+                if (!onMyServices && preferredProviders.length === 0) {
+                  toast.message("Pick your streaming services in Preferences first", {
+                    description: "Profile → Streaming services, then try again.",
+                  });
+                  return;
+                }
+                setOnMyServices((v) => !v);
+              }}
+              className={cn(
+                "shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-all inline-flex items-center gap-1.5",
+                onMyServices
+                  ? "bg-emerald-400 text-black border-emerald-400"
+                  : "bg-transparent text-muted-foreground border-white/20 hover:border-white/40 hover:text-foreground"
+              )}
+            >
+              <Tv className="w-3 h-3" />
+              On my streaming services
+            </button>
+            <button
+              type="button"
+              onClick={() => setLocation("/partner")}
+              className="shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-all inline-flex items-center gap-1.5 bg-transparent text-muted-foreground border-white/20 hover:border-white/40 hover:text-foreground"
+            >
+              <Users className="w-3 h-3" />
+              Partner match
+            </button>
+          </div>
         </div>
 
         {loading ? (

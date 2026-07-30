@@ -19,6 +19,9 @@ vi.mock("@workspace/db", () => ({
 vi.mock("./tmdb.js", () => ({
   discoverMovies: vi.fn(),
   discoverIconicMovies: vi.fn(),
+  discoverHiddenGems: vi.fn(),
+  discoverStreamingHighlights: vi.fn(),
+  discoverByKeyword: vi.fn(),
   getTrending: vi.fn(),
   getSimilarMovies: vi.fn(),
   getRecommendations: vi.fn(),
@@ -50,12 +53,15 @@ const EMPTY_PROFILE: TasteProfile = {
   hasImplicitData: false,
   topGenres: [],
   topLanguages: [],
+  genreWeights: {},
   seedMovies: [],
 };
 
 describe("getPersonalizedSwipePool – UI genre chip", () => {
   const discoverMoviesMock = tmdb.discoverMovies as Mock;
   const discoverIconicMoviesMock = tmdb.discoverIconicMovies as Mock;
+  const discoverHiddenGemsMock = tmdb.discoverHiddenGems as Mock;
+  const discoverStreamingHighlightsMock = tmdb.discoverStreamingHighlights as Mock;
   const getGenreNameToIdMapMock = tmdb.getGenreNameToIdMap as Mock;
   const getSimilarMoviesMock = tmdb.getSimilarMovies as Mock;
   const getRecommendationsMock = tmdb.getRecommendations as Mock;
@@ -70,6 +76,8 @@ describe("getPersonalizedSwipePool – UI genre chip", () => {
         ["Comedy", 35],
       ]),
     );
+    discoverHiddenGemsMock.mockResolvedValue([]);
+    discoverStreamingHighlightsMock.mockResolvedValue([]);
   });
 
   it("discovers only the chip genre, not taste Drama/Crime", async () => {

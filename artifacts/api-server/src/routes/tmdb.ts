@@ -17,8 +17,14 @@ import {
   getMovieDetails,
   getAllGenres,
 } from "../lib/tmdb.js";
+import { TROPE_KEYWORDS } from "../lib/tropes.js";
 
 const router: IRouter = Router();
+
+// GET /tmdb/tropes — curated niche keyword / trope catalog
+router.get("/tmdb/tropes", (_req, res): void => {
+  res.json(TROPE_KEYWORDS);
+});
 
 // GET /tmdb/genres — canonical {id, name} list, used by the onboarding genre picker
 router.get("/tmdb/genres", async (_req, res): Promise<void> => {
