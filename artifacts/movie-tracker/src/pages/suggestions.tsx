@@ -302,17 +302,13 @@ export default function SuggestionsPage() {
   };
 
   const doAdd = (movie: any, status: "watched" | "watchlist", rating?: string | null) => {
-<<<<<<< HEAD
     const safeRating =
       rating && rating in RATING_LABELS ? rating : null;
 
-=======
->>>>>>> origin/cursor/add-rewatch-ed81
     createMovie.mutate({
       data: {
         title: movie.title,
         status,
-        ...(rating ? { rating } : {}),
         ...(movie.tmdbId != null && { tmdbId: movie.tmdbId }),
         ...(movie.posterPath != null && { posterPath: movie.posterPath }),
         ...((movie.releaseYear ?? movie.year) != null && { releaseYear: movie.releaseYear ?? movie.year }),
@@ -337,15 +333,9 @@ export default function SuggestionsPage() {
   const handleAdd = (movie: any, status: "watched" | "watchlist") => {
     if (status === "watched") {
       setPendingWatched(movie);
-<<<<<<< HEAD
       return;
     }
     doAdd(movie, "watchlist");
-=======
-    } else {
-      doAdd(movie, "watchlist");
-    }
->>>>>>> origin/cursor/add-rewatch-ed81
   };
 
   const trendingData = trendingLang === "all" ? trending : discover;
@@ -534,20 +524,13 @@ export default function SuggestionsPage() {
       <RatingPickerDialog
         open={!!pendingWatched}
         movieTitle={pendingWatched?.title ?? ""}
-<<<<<<< HEAD
         confirmOnSelect
         onCancel={() => setPendingWatched(null)}
-=======
->>>>>>> origin/cursor/add-rewatch-ed81
         onConfirm={(rating) => {
           const movie = pendingWatched;
           setPendingWatched(null);
           if (movie) doAdd(movie, "watched", rating);
         }}
-<<<<<<< HEAD
-=======
-        onCancel={() => setPendingWatched(null)}
->>>>>>> origin/cursor/add-rewatch-ed81
       />
     </Layout>
   );
