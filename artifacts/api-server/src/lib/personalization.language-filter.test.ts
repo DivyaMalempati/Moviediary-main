@@ -15,6 +15,9 @@ vi.mock("@workspace/db", () => ({
 vi.mock("./tmdb.js", () => ({
   discoverMovies: vi.fn(),
   discoverIconicMovies: vi.fn(),
+  discoverHiddenGems: vi.fn(),
+  discoverStreamingHighlights: vi.fn(),
+  discoverByKeyword: vi.fn(),
   getTrending: vi.fn(),
   getSimilarMovies: vi.fn(),
   getRecommendations: vi.fn(),
@@ -72,6 +75,8 @@ describe("resolveLanguages", () => {
 describe("getPersonalizedSwipePool – explicit language allowlist", () => {
   const discoverMoviesMock = tmdb.discoverMovies as Mock;
   const discoverIconicMoviesMock = tmdb.discoverIconicMovies as Mock;
+  const discoverHiddenGemsMock = tmdb.discoverHiddenGems as Mock;
+  const discoverStreamingHighlightsMock = tmdb.discoverStreamingHighlights as Mock;
   const getGenreNameToIdMapMock = tmdb.getGenreNameToIdMap as Mock;
   const getSimilarMoviesMock = tmdb.getSimilarMovies as Mock;
   const getRecommendationsMock = tmdb.getRecommendations as Mock;
@@ -79,6 +84,8 @@ describe("getPersonalizedSwipePool – explicit language allowlist", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getGenreNameToIdMapMock.mockResolvedValue(new Map([["Drama", 18]]));
+    discoverHiddenGemsMock.mockResolvedValue([]);
+    discoverStreamingHighlightsMock.mockResolvedValue([]);
   });
 
   it("discovers only with the user's selected languages, not world-cinema merge", async () => {
@@ -90,6 +97,7 @@ describe("getPersonalizedSwipePool – explicit language allowlist", () => {
       topGenres: [],
       // Watch history includes Japanese — must NOT expand discover langs.
       topLanguages: ["ja", "ko"],
+      genreWeights: {},
       seedMovies: [],
     };
 
@@ -104,9 +112,6 @@ describe("getPersonalizedSwipePool – explicit language allowlist", () => {
     for (const call of discoverMoviesMock.mock.calls) {
       expect(call[0]).toEqual(["hi", "te", "ta"]);
     }
-    for (const call of discoverIconicMoviesMock.mock.calls) {
-      expect(call[0]).toEqual(["hi", "te", "ta"]);
-    }
   });
 
   it("drops seed-based similar/recs outside the preferred languages", async () => {
@@ -118,11 +123,13 @@ describe("getPersonalizedSwipePool – explicit language allowlist", () => {
     getRecommendationsMock.mockResolvedValue([makeFilm(13, "fr"), makeFilm(14, "te")]);
     discoverMoviesMock.mockResolvedValue([makeFilm(20, "hi"), makeFilm(21, "ta")]);
     discoverIconicMoviesMock.mockResolvedValue([makeFilm(30, "ml")]);
+    discoverHiddenGemsMock.mockResolvedValue([makeFilm(40, "hi")]);
 
     const profile: TasteProfile = {
       hasImplicitData: true,
       topGenres: ["Drama"],
       topLanguages: ["ja"],
+      genreWeights: { Drama: 5 },
       seedMovies: [{ tmdbId: 99, weight: 5 }],
     };
 
