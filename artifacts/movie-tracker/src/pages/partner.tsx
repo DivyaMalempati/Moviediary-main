@@ -263,9 +263,16 @@ export default function PartnerPage() {
         </ol>
 
         {isDemoMode() && (
-          <p className="text-sm text-amber-200/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-            Linking a spouse needs a signed-in account. Exit demo mode and sign in first.
-          </p>
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 space-y-3">
+            <p className="text-sm text-amber-100">
+              You&apos;re in demo mode. Together needs two signed-in accounts (you + spouse).
+            </p>
+            <Link href="/sign-in">
+              <Button size="sm" className="bg-white text-black hover:bg-white/90">
+                Sign in to use Together
+              </Button>
+            </Link>
+          </div>
         )}
 
         {partner ? (

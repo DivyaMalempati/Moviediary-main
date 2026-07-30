@@ -74,22 +74,22 @@ export function Layout({ children }: LayoutProps) {
   const [location] = useLocation();
   const demo = isDemoMode();
 
-  // Sidebar shows all items including Import
+  // Sidebar — Together near the top so it isn’t lost under the fold
   const sidebarItems = [
     { href: "/watched",     label: "Watched",     icon: Eye },
     { href: "/watchlist",   label: "Watchlist",   icon: Bookmark },
+    { href: "/partner",     label: "Together",    icon: Users },
     { href: "/upcoming",    label: "Upcoming",    icon: CalendarClock },
+    { href: "/swipe",       label: "Swipe",       icon: Shuffle },
+    { href: "/suggestions", label: "Discover",    icon: Sparkles },
+    { href: "/add",         label: "Add",         icon: PlusCircle },
     { href: "/collections", label: "Collections", icon: FolderOpen },
     { href: "/stats",       label: "Stats",       icon: BarChart2 },
-    { href: "/add",         label: "Add",         icon: PlusCircle },
-    { href: "/suggestions", label: "Discover",    icon: Sparkles },
-    { href: "/swipe",       label: "Swipe",       icon: Shuffle },
-    { href: "/partner",     label: "Together",    icon: Users },
     { href: "/guide",       label: "Guide",       icon: BookOpen },
     { href: "/import",      label: "Import",      icon: Upload },
   ];
 
-  // Bottom nav (mobile) — Together included so spouse linking isn’t desktop-only
+  // Bottom nav (mobile)
   const bottomItems = [
     { href: "/watched",   label: "Watched",  icon: Eye },
     { href: "/watchlist", label: "Watchlist", icon: Bookmark },
@@ -111,7 +111,7 @@ export function Layout({ children }: LayoutProps) {
           </Link>
         </div>
 
-        <nav className="flex-1 px-4 py-6 space-y-2">
+        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto min-h-0">
           {sidebarItems.map(({ href, label, icon: Icon }) => {
             const isActive = location === href;
             return (

@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { useListMovies, useGetMovieStats, useRewatchMovie, getListMoviesQueryKey, getGetMovieStatsQueryKey } from "@workspace/api-client-react";
 import {
-  Clapperboard, Search, Loader2, Upload, X, Download, ChevronDown, RotateCcw, Bell,
+  Clapperboard, Search, Loader2, Upload, X, Download, ChevronDown, RotateCcw, Bell, Users,
 } from "lucide-react";
 import { RewatchLogDialog } from "@/components/rewatch-log-dialog";
 import {
@@ -423,6 +423,13 @@ export default function WatchedPage() {
                   <span className="font-mono text-primary font-bold text-lg">{stats?.totalWatched || 0}</span> films watched
                 </p>
               </div>
+              <Link
+                href="/partner"
+                className="inline-flex items-center gap-2 rounded-lg border border-border bg-secondary/60 hover:bg-secondary px-3 py-2 text-sm font-medium transition-colors shrink-0"
+              >
+                <Users className="w-4 h-4" />
+                Together
+              </Link>
             </div>
             {stats?.byLanguage && stats.byLanguage.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-4">
