@@ -125,10 +125,18 @@ export interface CountByKey {
 export interface MovieStats {
   totalWatched: number;
   totalWatchlist: number;
+  /** Sum of rewatch counts across the watched diary */
+  totalRewatches?: number;
+  /** Films watched in the current calendar month */
+  thisMonth?: number;
+  lovedCount?: number;
+  /** Count of loved + great ratings */
+  highlyRatedCount?: number;
   byLanguage: CountByKey[];
   byRating: CountByKey[];
   byGenre: CountByKey[];
   byMonth: CountByKey[];
+  byDecade?: CountByKey[];
   recentlyWatched?: Movie[];
 }
 

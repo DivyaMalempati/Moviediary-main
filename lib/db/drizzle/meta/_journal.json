@@ -15,6 +15,13 @@
       "when": 1785102386190,
       "tag": "0001_worthless_famine",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785369600000,
+      "tag": "0002_stats_age_mute",
+      "breakpoints": true
     }
   ]
 }

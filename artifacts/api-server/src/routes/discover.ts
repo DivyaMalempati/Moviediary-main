@@ -61,6 +61,8 @@ router.get("/discover/swipe", requireAuth, async (req: any, res): Promise<void> 
   const explicitPrefs = {
     languages: prefsRow[0]?.preferredLanguages ?? [],
     genres: prefsRow[0]?.preferredGenres ?? [],
+    maxCertification: prefsRow[0]?.maxCertification ?? null,
+    mutedGenres: prefsRow[0]?.mutedGenres ?? [],
     ...(preferredProviders.length > 0
       ? {
           providerIds: preferredProviders,

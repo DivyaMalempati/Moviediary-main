@@ -3,10 +3,15 @@ import { Layout } from "@/components/layout";
 import { useGetMovieStats } from "@workspace/api-client-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Area, AreaChart,
+  Cell, CartesianGrid, Area, AreaChart,
 } from "recharts";
-import { Loader2, TrendingUp, Star, Globe, Film, Award, CalendarDays } from "lucide-react";
+import {
+  Loader2, Film, Award, Globe, CalendarDays, Heart, RotateCcw,
+  Clapperboard, Sparkles,
+} from "lucide-react";
 import { RATING_LABELS } from "@/lib/movie-utils";
+import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -48,7 +53,7 @@ function StatCard({
   sub?: string;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-5 flex gap-4 items-start">
+    <div className="rounded-xl border border-border bg-card/80 p-5 flex gap-4 items-start">
       <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
         <Icon className="w-5 h-5 text-muted-foreground" />
       </div>
@@ -69,8 +74,6 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ── Custom Tooltip ────────────────────────────────────────────────────────────
-
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
@@ -85,16 +88,35 @@ function ChartTooltip({ active, payload, label }: any) {
   );
 }
 
-// ── Empty state ───────────────────────────────────────────────────────────────
-
 function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
       <Film className="w-12 h-12 text-muted-foreground opacity-30 mb-4" />
       <p className="text-lg font-medium">No data yet</p>
-      <p className="text-sm text-muted-foreground mt-1">Add some watched films to see your stats.</p>
+      <p className="text-sm text-muted-foreground mt-1 mb-5">
+        Add some watched films to see your stats.
+      </p>
+      <Button asChild size="sm">
+        <Link href="/add">Add a film</Link>
+      </Button>
     </div>
   );
+}
+
+function buildTasteLine(opts: {
+  total: number;
+  topGenre?: string | null;
+  topLang?: string | null;
+  lovedPct?: number;
+  thisMonth?: number;
+}): string {
+  const bits: string[] = [];
+  if (opts.topGenre) bits.push(`${opts.topGenre} leads your diary`);
+  if (opts.topLang) bits.push(`mostly ${opts.topLang}`);
+  if ((opts.lovedPct ?? 0) >= 20) bits.push(`${opts.lovedPct}% marked Loved`);
+  if ((opts.thisMonth ?? 0) > 0) bits.push(`${opts.thisMonth} this month`);
+  if (bits.length === 0) return `${opts.total} films logged — keep going.`;
+  return bits.join(" · ");
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -102,19 +124,17 @@ function EmptyState() {
 export default function StatsPage() {
   const { data: stats, isLoading } = useGetMovieStats();
 
-  // Sort ratings in defined order
   const ratingData = useMemo(() => {
     if (!stats?.byRating) return [];
     return RATING_ORDER
       .map((key) => {
         const found = stats.byRating.find((r) => r.key === key);
-        return found ? { key: RATING_LABELS[key] ?? key, count: found.count } : null;
+        return found ? { key: RATING_LABELS[key] ?? key, count: found.count, raw: key } : null;
       })
-      .filter(Boolean) as { key: string; count: number }[];
+      .filter(Boolean) as { key: string; count: number; raw: string }[];
   }, [stats?.byRating]);
 
   const topGenres = useMemo(() => (stats?.byGenre ?? []).slice(0, 10), [stats?.byGenre]);
-
   const topLanguages = useMemo(() => (stats?.byLanguage ?? []).slice(0, 8), [stats?.byLanguage]);
 
   const monthlyData = useMemo(() => {
@@ -125,7 +145,7 @@ export default function StatsPage() {
     }));
   }, [stats?.byMonth]);
 
-  // ── Milestones ────────────────────────────────────────────────────────────
+  const decadeData = useMemo(() => stats?.byDecade ?? [], [stats?.byDecade]);
 
   const mostWatchedGenre = stats?.byGenre?.[0]?.key ?? null;
   const topLanguage = stats?.byLanguage?.[0];
@@ -136,12 +156,20 @@ export default function StatsPage() {
     return { label: formatMonth(best.key), count: best.count };
   }, [stats?.byMonth]);
 
-  const topRating = useMemo(() => {
-    if (!stats?.byRating || stats.byRating.length === 0) return null;
-    // Most common rating
-    const sorted = [...stats.byRating].sort((a, b) => b.count - a.count);
-    return sorted[0];
-  }, [stats?.byRating]);
+  const lovedPct = useMemo(() => {
+    const total = stats?.totalWatched ?? 0;
+    if (!total || !stats?.lovedCount) return 0;
+    return Math.round((stats.lovedCount / total) * 100);
+  }, [stats?.lovedCount, stats?.totalWatched]);
+
+  const avgPerMonth = useMemo(() => {
+    if (!stats?.byMonth?.length || !stats.totalWatched) return null;
+    return Math.round((stats.totalWatched / stats.byMonth.length) * 10) / 10;
+  }, [stats?.byMonth, stats?.totalWatched]);
+
+  const dominantDecade = decadeData.length
+    ? [...decadeData].sort((a, b) => b.count - a.count)[0]
+    : null;
 
   if (isLoading) {
     return (
@@ -154,30 +182,74 @@ export default function StatsPage() {
   }
 
   const hasData = (stats?.totalWatched ?? 0) > 0;
+  const tasteLine = hasData
+    ? buildTasteLine({
+        total: stats!.totalWatched,
+        topGenre: mostWatchedGenre,
+        topLang: topLanguageName,
+        lovedPct,
+        thisMonth: stats?.thisMonth,
+      })
+    : "";
 
   return (
     <Layout>
       <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-10">
-
-        {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold">Your Taste in Numbers</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            A look at how your cinema journey has unfolded
-          </p>
+        <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-white/[0.06] via-transparent to-transparent p-6 md:p-8">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.08),transparent_55%)] pointer-events-none" />
+          <div className="relative">
+            <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground mb-2">Stats</p>
+            <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Your Taste in Numbers</h1>
+            <p className="text-muted-foreground mt-2 text-sm max-w-xl">
+              {hasData ? tasteLine : "A look at how your cinema journey has unfolded"}
+            </p>
+            {hasData && (
+              <div className="mt-5">
+                <Button asChild size="sm" variant="outline" className="bg-transparent gap-2">
+                  <Link href="/suggestions">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Find something new
+                  </Link>
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
 
         {!hasData ? <EmptyState /> : (
           <>
-            {/* Milestone cards */}
             <section>
               <SectionTitle>Highlights</SectionTitle>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 <StatCard
                   icon={Film}
                   label="Films watched"
                   value={stats!.totalWatched}
-                  sub={stats!.totalWatchlist > 0 ? `${stats!.totalWatchlist} on watchlist` : undefined}
+                  sub={
+                    avgPerMonth
+                      ? `${avgPerMonth}/mo average`
+                      : stats!.totalWatchlist > 0
+                        ? `${stats!.totalWatchlist} on watchlist`
+                        : undefined
+                  }
+                />
+                <StatCard
+                  icon={CalendarDays}
+                  label="This month"
+                  value={stats!.thisMonth ?? 0}
+                  sub={bestMonth ? `Peak ${bestMonth.label} (${bestMonth.count})` : undefined}
+                />
+                <StatCard
+                  icon={Heart}
+                  label="Loved"
+                  value={stats!.lovedCount ?? 0}
+                  sub={lovedPct > 0 ? `${lovedPct}% of diary` : "Rate films to track this"}
+                />
+                <StatCard
+                  icon={RotateCcw}
+                  label="Rewatches"
+                  value={stats!.totalRewatches ?? 0}
+                  sub={(stats!.highlyRatedCount ?? 0) > 0 ? `${stats!.highlyRatedCount} loved or great` : undefined}
                 />
                 {mostWatchedGenre && (
                   <StatCard
@@ -195,18 +267,25 @@ export default function StatsPage() {
                     sub={`${topLanguage!.count} films`}
                   />
                 )}
-                {bestMonth && (
+                {dominantDecade && (
                   <StatCard
-                    icon={CalendarDays}
-                    label="Most active month"
-                    value={bestMonth.label}
-                    sub={`${bestMonth.count} films`}
+                    icon={Clapperboard}
+                    label="Era you watch"
+                    value={dominantDecade.key}
+                    sub={`${dominantDecade.count} films`}
+                  />
+                )}
+                {stats!.totalWatchlist > 0 && (
+                  <StatCard
+                    icon={Sparkles}
+                    label="Watchlist"
+                    value={stats!.totalWatchlist}
+                    sub="Saved for later"
                   />
                 )}
               </div>
             </section>
 
-            {/* Films per month */}
             {monthlyData.length > 0 && (
               <section>
                 <SectionTitle>Films watched over time</SectionTitle>
@@ -255,10 +334,7 @@ export default function StatsPage() {
               </section>
             )}
 
-            {/* Ratings + Languages side by side */}
             <div className="grid md:grid-cols-2 gap-6">
-
-              {/* Ratings distribution */}
               {ratingData.length > 0 && (
                 <section>
                   <SectionTitle>Ratings breakdown</SectionTitle>
@@ -286,7 +362,6 @@ export default function StatsPage() {
                 </section>
               )}
 
-              {/* Languages */}
               {topLanguages.length > 0 && (
                 <section>
                   <SectionTitle>Languages</SectionTitle>
@@ -322,7 +397,6 @@ export default function StatsPage() {
               )}
             </div>
 
-            {/* Genres */}
             {topGenres.length > 0 && (
               <section>
                 <SectionTitle>Top genres</SectionTitle>
@@ -351,6 +425,33 @@ export default function StatsPage() {
                           <Cell key={i} fill={GENRE_PALETTE[i % GENRE_PALETTE.length]} />
                         ))}
                       </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </section>
+            )}
+
+            {decadeData.length > 0 && (
+              <section>
+                <SectionTitle>By decade</SectionTitle>
+                <div className="rounded-xl border border-border bg-card p-5">
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={decadeData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                      <XAxis
+                        dataKey="key"
+                        tick={{ fontSize: 11, fill: "#888" }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: "#888" }}
+                        axisLine={false}
+                        tickLine={false}
+                        allowDecimals={false}
+                      />
+                      <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
+                      <Bar dataKey="count" radius={[4, 4, 0, 0]} fill="#c8c8c8" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

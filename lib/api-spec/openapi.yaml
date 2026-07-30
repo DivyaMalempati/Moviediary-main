@@ -505,6 +505,17 @@ components:
           type: integer
         totalWatchlist:
           type: integer
+        totalRewatches:
+          type: integer
+          description: Sum of rewatch counts across the watched diary
+        thisMonth:
+          type: integer
+          description: Films watched in the current calendar month
+        lovedCount:
+          type: integer
+        highlyRatedCount:
+          type: integer
+          description: Count of loved + great ratings
         byLanguage:
           type: array
           items:
@@ -518,6 +529,10 @@ components:
           items:
             $ref: "#/components/schemas/CountByKey"
         byMonth:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountByKey"
+        byDecade:
           type: array
           items:
             $ref: "#/components/schemas/CountByKey"

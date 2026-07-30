@@ -36,6 +36,8 @@ function preferencesSummary(prefs: {
   preferredLanguages: string[];
   preferredGenres: string[];
   preferredProviders: number[];
+  maxCertification?: string | null;
+  mutedGenres?: string[];
 } | undefined): string {
   if (!prefs) return "Loading…";
   const parts: string[] = [];
@@ -44,6 +46,12 @@ function preferencesSummary(prefs: {
   }
   if (prefs.preferredGenres.length) {
     parts.push(`${prefs.preferredGenres.length} genre${prefs.preferredGenres.length === 1 ? "" : "s"}`);
+  }
+  if (prefs.maxCertification) {
+    parts.push(`max ${prefs.maxCertification}`);
+  }
+  if (prefs.mutedGenres?.length) {
+    parts.push(`${prefs.mutedGenres.length} muted`);
   }
   if (prefs.preferredProviders.length) {
     parts.push(`${prefs.preferredProviders.length} service${prefs.preferredProviders.length === 1 ? "" : "s"}`);

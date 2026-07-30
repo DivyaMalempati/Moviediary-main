@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -20,10 +20,11 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Sparkles, TrendingUp, ThumbsUp, Loader2, Bot,
-  Check, Eye, BookmarkPlus, Film, X, MessageCircleHeart,
+  Check, Eye, BookmarkPlus, Film, X, MessageCircleHeart, Ban,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { useMuteGenres } from "@/lib/preferences";
 
 // ---------------------------------------------------------------------------
 // Dismissed-movies hook — persisted to localStorage
@@ -65,6 +66,56 @@ function useDismissed() {
   return { dismissed, dismiss, clearAll };
 }
 
+function DismissMenu({
+  open,
+  onClose,
+  onHide,
+  onMuteLikeThis,
+  hasGenres,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onHide: () => void;
+  onMuteLikeThis: () => void;
+  hasGenres: boolean;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open, onClose]);
+
+  if (!open) return null;
+  return (
+    <div
+      ref={ref}
+      className="absolute top-8 right-1.5 z-20 w-52 rounded-xl border border-border bg-card shadow-xl overflow-hidden"
+    >
+      <button
+        type="button"
+        onClick={() => { onHide(); onClose(); }}
+        className="w-full text-left px-3 py-2.5 text-xs hover:bg-secondary flex items-center gap-2"
+      >
+        <X className="w-3.5 h-3.5 shrink-0" />
+        Not interested
+      </button>
+      <button
+        type="button"
+        disabled={!hasGenres}
+        onClick={() => { onMuteLikeThis(); onClose(); }}
+        className="w-full text-left px-3 py-2.5 text-xs hover:bg-secondary flex items-center gap-2 border-t border-border disabled:opacity-40"
+      >
+        <Ban className="w-3.5 h-3.5 shrink-0" />
+        Don&apos;t recommend movies like this
+      </button>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Poster card — always-visible buttons + dismiss ×
 // ---------------------------------------------------------------------------
@@ -73,13 +124,17 @@ function SuggestionPosterCard({
   inLibrary,
   onAdd,
   onDismiss,
+  onMuteLikeThis,
 }: {
   movie: any;
   inLibrary: boolean;
   onAdd: (movie: any, status: "watched" | "watchlist") => void;
   onDismiss: (tmdbId: number | null) => void;
+  onMuteLikeThis: (movie: any) => void;
 }) {
   const posterUrl = getPosterUrl(movie.posterPath ?? movie.poster_path);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const genres: string[] = Array.isArray(movie.genres) ? movie.genres : [];
 
   return (
     <div className="flex flex-col gap-2">
@@ -101,13 +156,20 @@ function SuggestionPosterCard({
 
         {/* Dismiss × — always visible on mobile, hover-reveal on desktop */}
         <button
-          onClick={() => onDismiss(movie.tmdbId)}
-          className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/70 text-white flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-black"
+          onClick={() => setMenuOpen((v) => !v)}
+          className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/70 text-white flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-black z-10"
           title="Not interested"
           aria-label="Not interested"
         >
           <X className="w-3 h-3" />
         </button>
+        <DismissMenu
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          onHide={() => onDismiss(movie.tmdbId)}
+          onMuteLikeThis={() => onMuteLikeThis(movie)}
+          hasGenres={genres.length > 0}
+        />
 
         {/* In Library overlay */}
         {inLibrary && (
@@ -158,28 +220,39 @@ function AiFriendCard({
   inLibrary,
   onAdd,
   onDismiss,
+  onMuteLikeThis,
 }: {
   movie: any;
   inLibrary: boolean;
   onAdd: (movie: any, status: "watched" | "watchlist") => void;
   onDismiss: (tmdbId: number | null) => void;
+  onMuteLikeThis: (movie: any) => void;
 }) {
   const posterUrl = movie.posterPath
     ? `https://image.tmdb.org/t/p/w342${movie.posterPath}`
     : null;
   const flag = LANG_FLAG[movie.language ?? ""] ?? "🎬";
+  const [menuOpen, setMenuOpen] = useState(false);
+  const genres: string[] = Array.isArray(movie.genres) ? movie.genres : [];
 
   return (
     <div className="flex gap-4 p-4 bg-card border border-border/50 rounded-2xl relative group hover:border-border transition-colors">
       {/* Dismiss */}
       <button
-        onClick={() => onDismiss(movie.tmdbId)}
+        onClick={() => setMenuOpen((v) => !v)}
         className="absolute top-3 right-3 w-6 h-6 rounded-full bg-secondary text-muted-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-muted transition-all z-10"
         title="Not interested"
         aria-label="Not interested"
       >
         <X className="w-3 h-3" />
       </button>
+      <DismissMenu
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onHide={() => onDismiss(movie.tmdbId)}
+        onMuteLikeThis={() => onMuteLikeThis(movie)}
+        hasGenres={genres.length > 0}
+      />
 
       {/* Poster */}
       <div className="relative shrink-0 w-[72px] rounded-xl overflow-hidden bg-secondary border border-border/50" style={{ aspectRatio: "2/3" }}>
@@ -262,6 +335,7 @@ export default function SuggestionsPage() {
   const queryClient = useQueryClient();
   const createMovie = useCreateMovie();
   const { dismissed, dismiss, clearAll } = useDismissed();
+  const { muteGenres } = useMuteGenres();
 
   const [activeTab, setActiveTab] = useState("foryou");
   const [trendingLang, setTrendingLang] = useState<string>("all");
@@ -300,6 +374,28 @@ export default function SuggestionsPage() {
     });
   };
 
+  const handleMuteLikeThis = async (movie: any) => {
+    const genres: string[] = Array.isArray(movie.genres) && movie.genres.length > 0
+      ? movie.genres.slice(0, 2)
+      : [];
+    dismiss(movie.tmdbId);
+    if (genres.length === 0) {
+      toast.message("Hidden for now", {
+        description: "No genre tags on this title — muted only this film.",
+      });
+      return;
+    }
+    try {
+      await muteGenres(genres);
+      toast.success(`Won't recommend ${genres.join(" / ")} films`, {
+        description: "Manage muted genres anytime in Profile → Preferences.",
+      });
+      queryClient.invalidateQueries({ queryKey: getGetBecauseYouLikedQueryKey() });
+      setAiResults(null);
+    } catch {
+      toast.error("Couldn't update preferences");
+    }
+  };
   const doAdd = (movie: any, status: "watched" | "watchlist", rating?: string | null) => {
     const safeRating =
       rating && rating in RATING_LABELS ? rating : null;
@@ -425,6 +521,7 @@ export default function SuggestionsPage() {
                       inLibrary={movie.tmdbId ? inLibrarySet.has(movie.tmdbId) : false}
                       onAdd={handleAdd}
                       onDismiss={dismiss}
+                      onMuteLikeThis={handleMuteLikeThis}
                     />
                   ))}
                 </div>
@@ -472,6 +569,7 @@ export default function SuggestionsPage() {
                     inLibrary={!!movie.tmdbId && inLibrarySet.has(movie.tmdbId)}
                     onAdd={handleAdd}
                     onDismiss={dismiss}
+                    onMuteLikeThis={handleMuteLikeThis}
                   />
                 ))}
               </div>
@@ -512,6 +610,7 @@ export default function SuggestionsPage() {
                     inLibrary={!!movie.tmdbId && inLibrarySet.has(movie.tmdbId)}
                     onAdd={handleAdd}
                     onDismiss={dismiss}
+                    onMuteLikeThis={handleMuteLikeThis}
                   />
                 ))}
               </div>

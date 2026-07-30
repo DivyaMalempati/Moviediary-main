@@ -102,6 +102,10 @@ export const getMovieStatsResponseRecentlyWatchedItemRewatchCountMin = 0;
 export const GetMovieStatsResponse = zod.object({
   "totalWatched": zod.number(),
   "totalWatchlist": zod.number(),
+  "totalRewatches": zod.number().optional(),
+  "thisMonth": zod.number().optional(),
+  "lovedCount": zod.number().optional(),
+  "highlyRatedCount": zod.number().optional(),
   "byLanguage": zod.array(zod.object({
   "key": zod.string(),
   "count": zod.number()
@@ -118,6 +122,10 @@ export const GetMovieStatsResponse = zod.object({
   "key": zod.string(),
   "count": zod.number()
 })),
+  "byDecade": zod.array(zod.object({
+  "key": zod.string(),
+  "count": zod.number()
+})).optional(),
   "recentlyWatched": zod.array(zod.object({
   "id": zod.number(),
   "title": zod.string(),

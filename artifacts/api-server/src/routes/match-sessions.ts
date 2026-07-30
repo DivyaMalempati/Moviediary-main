@@ -65,6 +65,8 @@ async function loadPrefs(userId: string): Promise<ExplicitPreferences> {
     genres: row?.preferredGenres ?? [],
     providerIds: row?.preferredProviders ?? [],
     watchRegion: row?.watchRegion ?? "IN",
+    maxCertification: row?.maxCertification ?? null,
+    mutedGenres: row?.mutedGenres ?? [],
   };
 }
 

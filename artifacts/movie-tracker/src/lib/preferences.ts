@@ -3,11 +3,16 @@ import { getAuthHeaders, isDemoMode, hasClerkTokenGetter, refreshGuestSession } 
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+/** India CBFC max certification for recommendations. */
+export type MaxCertification = "U" | "UA" | "A";
+
 export interface UserPreferences {
   preferredLanguages: string[];
   preferredGenres: string[];
   preferredProviders: number[];
   watchRegion: string;
+  maxCertification: MaxCertification | null;
+  mutedGenres: string[];
   onboardingCompletedAt: string | null;
 }
 
@@ -16,6 +21,8 @@ export type PreferencesInput = {
   preferredGenres: string[];
   preferredProviders?: number[];
   watchRegion?: string;
+  maxCertification?: MaxCertification | null;
+  mutedGenres?: string[];
 };
 
 const defaultPreferences: UserPreferences = {
@@ -23,6 +30,8 @@ const defaultPreferences: UserPreferences = {
   preferredGenres: [],
   preferredProviders: [],
   watchRegion: "IN",
+  maxCertification: null,
+  mutedGenres: [],
   onboardingCompletedAt: null,
 };
 
@@ -39,6 +48,20 @@ function canCallPreferencesApi(): boolean {
     return true;
   }
   return false;
+}
+
+function normalizePrefs(data: Partial<UserPreferences>): UserPreferences {
+  const cert = data.maxCertification;
+  const maxCertification =
+    cert === "U" || cert === "UA" || cert === "A" ? cert : null;
+  return {
+    ...defaultPreferences,
+    ...data,
+    preferredProviders: Array.isArray(data.preferredProviders) ? data.preferredProviders : [],
+    watchRegion: data.watchRegion || "IN",
+    maxCertification,
+    mutedGenres: Array.isArray(data.mutedGenres) ? data.mutedGenres : [],
+  };
 }
 
 async function fetchPreferences(): Promise<UserPreferences> {
@@ -63,13 +86,7 @@ async function fetchPreferences(): Promise<UserPreferences> {
 
   if (res.status === 401) throw new PreferencesAuthError();
   if (!res.ok) throw new Error("Failed to load preferences");
-  const data = await res.json();
-  return {
-    ...defaultPreferences,
-    ...data,
-    preferredProviders: Array.isArray(data.preferredProviders) ? data.preferredProviders : [],
-    watchRegion: data.watchRegion || "IN",
-  };
+  return normalizePrefs(await res.json());
 }
 
 async function savePreferences(prefs: PreferencesInput): Promise<UserPreferences> {
@@ -95,6 +112,8 @@ async function savePreferences(prefs: PreferencesInput): Promise<UserPreferences
         preferredGenres: prefs.preferredGenres,
         preferredProviders: prefs.preferredProviders ?? [],
         watchRegion: prefs.watchRegion ?? "IN",
+        maxCertification: prefs.maxCertification ?? null,
+        mutedGenres: prefs.mutedGenres ?? [],
       }),
     });
   };
@@ -108,13 +127,7 @@ async function savePreferences(prefs: PreferencesInput): Promise<UserPreferences
 
   if (res.status === 401) throw new PreferencesAuthError();
   if (!res.ok) throw new Error("Failed to save preferences");
-  const data = await res.json();
-  return {
-    ...defaultPreferences,
-    ...data,
-    preferredProviders: Array.isArray(data.preferredProviders) ? data.preferredProviders : [],
-    watchRegion: data.watchRegion || "IN",
-  };
+  return normalizePrefs(await res.json());
 }
 
 export function usePreferences() {
@@ -137,6 +150,31 @@ export function useSavePreferences() {
       qc.setQueryData(["preferences"], data);
     },
   });
+}
+
+/** Mute genres so Discover/Swipe stop recommending films like this. */
+export function useMuteGenres() {
+  const { data: prefs } = usePreferences();
+  const { mutateAsync, isPending } = useSavePreferences();
+
+  const muteGenres = async (genres: string[]) => {
+    if (!genres.length) return prefs;
+    const existing = prefs?.mutedGenres ?? [];
+    const next = [...existing];
+    for (const g of genres) {
+      if (!next.some((x) => x.toLowerCase() === g.toLowerCase())) next.push(g);
+    }
+    return mutateAsync({
+      preferredLanguages: prefs?.preferredLanguages ?? [],
+      preferredGenres: prefs?.preferredGenres ?? [],
+      preferredProviders: prefs?.preferredProviders ?? [],
+      watchRegion: prefs?.watchRegion ?? "IN",
+      maxCertification: prefs?.maxCertification ?? null,
+      mutedGenres: next,
+    });
+  };
+
+  return { muteGenres, isPending };
 }
 
 export type WatchProviderCatalogItem = {
@@ -174,4 +212,15 @@ export const FEATURED_PROVIDER_IDS = [
   232,  // Zee5
   350,  // Apple TV
   11,   // MUBI
+];
+
+export const CERTIFICATION_OPTIONS: {
+  value: MaxCertification | null;
+  label: string;
+  hint: string;
+}[] = [
+  { value: null, label: "Any age", hint: "No certification filter" },
+  { value: "U", label: "U", hint: "Universal / family" },
+  { value: "UA", label: "UA & under", hint: "Parental guidance" },
+  { value: "A", label: "A included", hint: "Adults allowed" },
 ];

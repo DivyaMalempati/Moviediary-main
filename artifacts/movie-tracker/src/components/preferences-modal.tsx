@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Settings } from "lucide-react";
+import { Settings, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -10,7 +10,13 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { LanguagePicker, GenrePicker, ProviderPicker } from "@/components/taste-picker";
-import { usePreferences, useSavePreferences } from "@/lib/preferences";
+import {
+  usePreferences,
+  useSavePreferences,
+  CERTIFICATION_OPTIONS,
+  type MaxCertification,
+} from "@/lib/preferences";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export function PreferencesModal({
@@ -25,6 +31,8 @@ export function PreferencesModal({
   const [languages, setLanguages] = useState<string[]>([]);
   const [genres, setGenres] = useState<string[]>([]);
   const [providers, setProviders] = useState<number[]>([]);
+  const [maxCertification, setMaxCertification] = useState<MaxCertification | null>(null);
+  const [mutedGenres, setMutedGenres] = useState<string[]>([]);
 
   const handleOpen = (val: boolean) => {
     if (val) {
@@ -33,6 +41,8 @@ export function PreferencesModal({
         setLanguages(next?.preferredLanguages ?? []);
         setGenres(next?.preferredGenres ?? []);
         setProviders(next?.preferredProviders ?? []);
+        setMaxCertification(next?.maxCertification ?? null);
+        setMutedGenres(next?.mutedGenres ?? []);
       });
     }
     setOpen(val);
@@ -54,6 +64,8 @@ export function PreferencesModal({
         preferredGenres: genres,
         preferredProviders: providers,
         watchRegion: prefs?.watchRegion ?? "IN",
+        maxCertification,
+        mutedGenres,
       },
       {
         onSuccess: () => {
@@ -85,7 +97,7 @@ export function PreferencesModal({
         <SheetHeader className="px-6 py-5 border-b border-border">
           <SheetTitle className="text-base font-semibold">Cinema Preferences</SheetTitle>
           <SheetDescription className="text-sm text-muted-foreground">
-            Languages, genres, and streaming services. Swipe and Search can prioritise films you can stream tonight.
+            Languages, genres, age rating, and streaming. Swipe and Discover respect what you mute.
           </SheetDescription>
         </SheetHeader>
 
@@ -109,6 +121,61 @@ export function PreferencesModal({
               <GenrePicker selected={genres} onToggle={toggleGenre} />
             </section>
 
+            <section className="space-y-3">
+              <div>
+                <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Age rating
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Limit Discover and Swipe to India CBFC certifications at or below your pick.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {CERTIFICATION_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    onClick={() => setMaxCertification(opt.value)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-full text-sm font-medium border transition-all",
+                      maxCertification === opt.value
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-transparent text-muted-foreground border-border hover:border-foreground/40 hover:text-foreground",
+                    )}
+                    title={opt.hint}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            {mutedGenres.length > 0 && (
+              <section className="space-y-3">
+                <div>
+                  <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Don&apos;t recommend
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Genres you asked us to skip. Remove one to bring it back.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {mutedGenres.map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setMutedGenres((prev) => prev.filter((x) => x !== g))}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border border-border bg-secondary/40 text-foreground hover:border-rose-400/50 hover:text-rose-200 transition-colors"
+                    >
+                      {g}
+                      <X className="w-3 h-3 opacity-60" />
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+
             <section className="space-y-4">
               <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
                 Streaming services
@@ -123,12 +190,14 @@ export function PreferencesModal({
         )}
 
         <div className="px-6 py-4 border-t border-border flex items-center justify-between gap-3">
-          {(languages.length > 0 || genres.length > 0 || providers.length > 0) && (
+          {(languages.length > 0 || genres.length > 0 || providers.length > 0 || mutedGenres.length > 0 || maxCertification) && (
             <button
               onClick={() => {
                 setLanguages([]);
                 setGenres([]);
                 setProviders([]);
+                setMutedGenres([]);
+                setMaxCertification(null);
               }}
               className="text-xs text-muted-foreground hover:text-foreground transition-colors"
             >

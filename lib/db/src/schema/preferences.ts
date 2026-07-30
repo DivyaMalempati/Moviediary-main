@@ -8,6 +8,10 @@ export const userPreferencesTable = pgTable("user_preferences", {
   preferredProviders: integer("preferred_providers").array().notNull().default([]),
   // ISO 3166-1 watch region for JustWatch/TMDB provider availability.
   watchRegion: text("watch_region").notNull().default("IN"),
+  // Max India content certification for Discover/Swipe (U | UA | A). Null/empty = any.
+  maxCertification: text("max_certification"),
+  // Genres the user never wants recommended ("don't recommend movies like this").
+  mutedGenres: text("muted_genres").array().notNull().default([]),
   // Set the first time a user ever saves preferences (onboarding, or the
   // settings-gear modal for existing users who never saw onboarding). Used
   // to decide whether to show the onboarding step before swipe.

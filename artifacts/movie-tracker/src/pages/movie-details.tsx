@@ -24,7 +24,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getPosterUrl, RATING_LABELS, formatWatchDate } from "@/lib/movie-utils";
 import { LanguageBadge } from "@/components/language-badge";
 import { MoviePosterCard } from "@/components/movie-card";
-import { Star, Heart, Bookmark, Check, Trash2, ArrowLeft, Loader2, Calendar, Clapperboard, Tv, Eye, BookmarkPlus, Film, FolderOpen, Plus, X, RotateCcw } from "lucide-react";
+import { Star, Heart, Bookmark, Check, Trash2, ArrowLeft, Loader2, Calendar, Clapperboard, Tv, Eye, BookmarkPlus, Film, FolderOpen, Plus, X, RotateCcw, Ban } from "lucide-react";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
@@ -49,7 +49,7 @@ import {
   useRemoveFromCollection,
   useCreateCollection,
 } from "@/lib/collections-api";
-
+import { useMuteGenres } from "@/lib/preferences";
 export default function MovieDetailsPage() {
   const params = useParams();
   const id = parseInt(params.id || "0", 10);
@@ -61,6 +61,7 @@ export default function MovieDetailsPage() {
   const deleteMovie = useDeleteMovie();
   const createMovie = useCreateMovie();
   const rewatchMovie = useRewatchMovie();
+  const { muteGenres, isPending: mutingGenres } = useMuteGenres();
 
   const { data: library } = useListMovies(undefined, { query: { queryKey: getListMoviesQueryKey() } });
   const libraryTmdbIds = useMemo(
@@ -257,6 +258,22 @@ export default function MovieDetailsPage() {
       });
     } else {
       doAddTmdb(tmdbMovie, "watchlist");
+    }
+  };
+
+  const handleMuteLikeThis = async () => {
+    const genres = (movie?.genres ?? []).slice(0, 2);
+    if (!genres.length) {
+      toast.message("No genres on this title to mute");
+      return;
+    }
+    try {
+      await muteGenres(genres);
+      toast.success(`Won't recommend ${genres.join(" / ")} films`, {
+        description: "Change this anytime in Profile → Preferences.",
+      });
+    } catch {
+      toast.error("Couldn't update preferences");
     }
   };
 
@@ -668,6 +685,24 @@ export default function MovieDetailsPage() {
 
         {/* Sidebar content */}
         <div className="space-y-8">
+          {(movie.genres?.length ?? 0) > 0 && (
+            <section>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full justify-start gap-2 bg-transparent text-muted-foreground hover:text-foreground"
+                onClick={handleMuteLikeThis}
+                disabled={mutingGenres}
+              >
+                <Ban className="w-3.5 h-3.5" />
+                Don&apos;t recommend movies like this
+              </Button>
+              <p className="text-[11px] text-muted-foreground mt-2 leading-relaxed">
+                Skips {(movie.genres ?? []).slice(0, 2).join(" / ")} in Discover and Swipe.
+              </p>
+            </section>
+          )}
+
           {similarMovies && similarMovies.length > 0 && (
             <section>
               <h3 className="text-lg font-semibold mb-4">Similar Films</h3>

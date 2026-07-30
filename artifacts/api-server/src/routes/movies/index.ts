@@ -125,7 +125,14 @@ router.get("/movies/stats", requireAuth, async (req: any, res): Promise<void> =>
       .groupBy(moviesTable.rating)
       .orderBy(desc(count())),
     db.select().from(moviesTable).where(and(userCond, eq(moviesTable.status, "watched"))).orderBy(desc(moviesTable.createdAt)).limit(6),
-    db.select({ genres: moviesTable.genres, createdAt: moviesTable.createdAt, watchedAt: moviesTable.watchedAt })
+    db.select({
+      genres: moviesTable.genres,
+      createdAt: moviesTable.createdAt,
+      watchedAt: moviesTable.watchedAt,
+      releaseYear: moviesTable.releaseYear,
+      rewatchCount: moviesTable.rewatchCount,
+      rating: moviesTable.rating,
+    })
       .from(moviesTable)
       .where(and(userCond, eq(moviesTable.status, "watched"))),
   ]);
@@ -143,22 +150,50 @@ router.get("/movies/stats", requireAuth, async (req: any, res): Promise<void> =>
 
   // Compute monthly counts from watchedAt (fall back to createdAt when null)
   const monthCounts: Record<string, number> = {};
+  const now = new Date();
+  const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  let thisMonth = 0;
+  let totalRewatches = 0;
+  let lovedCount = 0;
+  let highlyRatedCount = 0;
+  const decadeCounts: Record<string, number> = {};
+
   for (const row of allWatched) {
     const d = row.watchedAt ?? row.createdAt;
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     monthCounts[key] = (monthCounts[key] ?? 0) + 1;
+    if (key === thisMonthKey) thisMonth += 1;
+
+    totalRewatches += row.rewatchCount ?? 0;
+    if (row.rating === "loved") lovedCount += 1;
+    if (row.rating === "loved" || row.rating === "great") highlyRatedCount += 1;
+
+    if (row.releaseYear && row.releaseYear >= 1900 && row.releaseYear <= 2100) {
+      const decadeStart = Math.floor(row.releaseYear / 10) * 10;
+      const decadeKey = `${decadeStart}s`;
+      decadeCounts[decadeKey] = (decadeCounts[decadeKey] ?? 0) + 1;
+    }
   }
   const byMonth = Object.entries(monthCounts)
+    .map(([key, count]) => ({ key, count }))
+    .sort((a, b) => a.key.localeCompare(b.key));
+
+  const byDecade = Object.entries(decadeCounts)
     .map(([key, count]) => ({ key, count }))
     .sort((a, b) => a.key.localeCompare(b.key));
 
   res.json({
     totalWatched: Number(watchedCount.count),
     totalWatchlist: Number(watchlistCount.count),
+    totalRewatches,
+    thisMonth,
+    lovedCount,
+    highlyRatedCount,
     byLanguage: byLanguage.map((r) => ({ key: r.key ?? "unknown", count: Number(r.count) })),
     byRating: byRating.filter((r) => r.key).map((r) => ({ key: r.key!, count: Number(r.count) })),
     byGenre,
     byMonth,
+    byDecade,
     recentlyWatched: recentlyWatched.map(dbMovieToResponse),
   });
 });

@@ -211,11 +211,26 @@ export type WatchFilter = {
   watchRegion?: string;
 };
 
+/** India CBFC max certification for discover (U ⊂ UA ⊂ A). */
+export type CertificationFilter = {
+  country?: string;
+  /** Max allowed: U, UA, or A. A / unset = no certification filter. */
+  max?: string | null;
+};
+
 function applyWatchFilter(params: Record<string, string>, watch?: WatchFilter) {
   if (!watch?.providerIds?.length) return;
   params.with_watch_providers = watch.providerIds.join("|");
   params.watch_region = watch.watchRegion || "IN";
   params.with_watch_monetization_types = "flatrate";
+}
+
+function applyCertificationFilter(params: Record<string, string>, cert?: CertificationFilter) {
+  const max = cert?.max?.toUpperCase();
+  if (!max || max === "A") return;
+  if (max !== "U" && max !== "UA") return;
+  params.certification_country = cert?.country || "IN";
+  params["certification.lte"] = max;
 }
 
 export async function discoverIndian(language?: string) {
@@ -268,6 +283,7 @@ export async function discoverMovies(
     params.with_genres = String(genreId);
   }
   applyWatchFilter(params, watch);
+  applyCertificationFilter(params, extras?.certification);
   const [res, { idToName }] = await Promise.all([tmdbFetch("/discover/movie", params), getGenreMaps()]);
   const data = (await res.json()) as { results: TmdbMovieRaw[] };
   return data.results.map((m) => mapTmdbMovie(m, idToName));
@@ -279,6 +295,7 @@ export type DiscoverExtras = {
   voteCountLte?: number;
   voteAverageGte?: number;
   keywordId?: number;
+  certification?: CertificationFilter;
 };
 
 /** High-rated titles available on the user's OTT apps (streaming bucket). */
@@ -287,11 +304,13 @@ export async function discoverStreamingHighlights(
   page: number,
   genreId: number | undefined,
   watch: WatchFilter,
+  certification?: CertificationFilter,
 ) {
   return discoverMovies(languages, watch.watchRegion || "IN", page, genreId, watch, {
     sortBy: "vote_average.desc",
     voteCountGte: 100,
     voteAverageGte: 6.5,
+    certification,
   });
 }
 
@@ -304,12 +323,14 @@ export async function discoverHiddenGems(
   page = 1,
   genreId?: number,
   watch?: WatchFilter,
+  certification?: CertificationFilter,
 ) {
   return discoverMovies(languages, undefined, page, genreId, watch, {
     sortBy: "vote_average.desc",
     voteCountGte: 50,
     voteCountLte: 3000,
     voteAverageGte: 7.2,
+    certification,
   });
 }
 
@@ -320,11 +341,13 @@ export async function discoverByKeyword(
   page = 1,
   genreId?: number,
   watch?: WatchFilter,
+  certification?: CertificationFilter,
 ) {
   return discoverMovies(languages, undefined, page, genreId, watch, {
     sortBy: "popularity.desc",
     voteCountGte: 30,
     keywordId,
+    certification,
   });
 }
 
@@ -334,6 +357,7 @@ export async function discoverIconicMovies(
   page = 1,
   genreId?: number,
   watch?: WatchFilter,
+  certification?: CertificationFilter,
 ) {
   const params: Record<string, string> = {
     sort_by: "vote_average.desc",
@@ -348,6 +372,7 @@ export async function discoverIconicMovies(
     params.with_genres = String(genreId);
   }
   applyWatchFilter(params, watch);
+  applyCertificationFilter(params, certification);
   const [res, { idToName }] = await Promise.all([tmdbFetch("/discover/movie", params), getGenreMaps()]);
   const data = (await res.json()) as { results: TmdbMovieRaw[] };
   return data.results.map((m) => mapTmdbMovie(m, idToName));
