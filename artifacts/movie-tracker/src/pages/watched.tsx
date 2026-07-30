@@ -11,6 +11,8 @@ import {
   Clapperboard, Search, Loader2, Upload, X, Download, ChevronDown, RotateCcw, Bell, Users,
 } from "lucide-react";
 import { RewatchLogDialog } from "@/components/rewatch-log-dialog";
+import { ShareMovieSheet } from "@/components/share-movie-sheet";
+import type { ShareMovieInput } from "@/lib/share-movie";
 import {
   findAnniversaryReminders,
   formatAnniversaryCopy,
@@ -166,6 +168,8 @@ export default function WatchedPage() {
   const queryClient = useQueryClient();
   const rewatchMovie = useRewatchMovie();
   const [pendingRewatch, setPendingRewatch] = useState<any | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [sharePayload, setSharePayload] = useState<ShareMovieInput | null>(null);
   const [reminderDismissed, setReminderDismissed] = useState(false);
   const [releaseReminderDismissed, setReleaseReminderDismissed] = useState(false);
   const [genreFilter, setGenreFilter]     = useState("all");
@@ -185,6 +189,7 @@ export default function WatchedPage() {
   const submitRewatch = (payload: { rating: string | null; watchedAt?: string | null }) => {
     if (!pendingRewatch) return;
     const id = pendingRewatch.id as number;
+    const filmSnapshot = pendingRewatch;
     if (!id) {
       toast.error("Couldn't log rewatch — film id missing");
       setPendingRewatch(null);
@@ -199,10 +204,27 @@ export default function WatchedPage() {
       {
         onSuccess: (movie) => {
           const times = 1 + (movie.rewatchCount ?? 0);
+          const nextRating = payload.rating || movie.rating || filmSnapshot?.rating || null;
           toast.success(
             payload.watchedAt
               ? `Rewatch logged · ×${times} · ${formatWatchDate(payload.watchedAt)}`
               : `Rewatch logged · ×${times}`,
+            {
+              action: {
+                label: "Share",
+                onClick: () => {
+                  setSharePayload({
+                    title: movie.title,
+                    rating: nextRating,
+                    notes: movie.notes ?? filmSnapshot?.notes,
+                    timesSeen: times,
+                    isRewatch: true,
+                    releaseYear: movie.releaseYear,
+                  });
+                  setShareOpen(true);
+                },
+              },
+            },
           );
           queryClient.invalidateQueries({ queryKey: getListMoviesQueryKey({ status: "watched" }) });
           queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
@@ -586,6 +608,17 @@ export default function WatchedPage() {
           onConfirm={submitRewatch}
           onCancel={() => setPendingRewatch(null)}
         />
+        {sharePayload && (
+          <ShareMovieSheet
+            movie={sharePayload}
+            open={shareOpen}
+            onOpenChange={(next) => {
+              setShareOpen(next);
+              if (!next) setSharePayload(null);
+            }}
+            hideTrigger
+          />
+        )}
 
       </div>
     </Layout>
