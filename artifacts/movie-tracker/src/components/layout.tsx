@@ -1,28 +1,14 @@
-import { ReactNode, Component, ErrorInfo } from "react";
+import type { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useUser } from "@clerk/react";
 import { Clapperboard, Eye, Bookmark, PlusCircle, Sparkles, FolderOpen, BarChart2, Upload, User, Shuffle, Users, BookOpen, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isDemoMode } from "@/lib/demo-auth";
 import { FeatureWalkthroughHost } from "@/components/feature-walkthrough";
+import { ClerkBoundary } from "@/components/clerk-boundary";
 
 interface LayoutProps {
   children: ReactNode;
-}
-
-// ── Error boundary so Clerk hooks never crash the whole page ─────────────────
-class ClerkBoundary extends Component<
-  { fallback: ReactNode; children: ReactNode },
-  { error: boolean }
-> {
-  state = { error: false };
-  static getDerivedStateFromError() { return { error: true }; }
-  componentDidCatch(err: Error, info: ErrorInfo) {
-    console.warn("[ClerkBoundary] caught:", err.message, info);
-  }
-  render() {
-    return this.state.error ? this.props.fallback : this.props.children;
-  }
 }
 
 // ── Sidebar user section (links to /profile) ──────────────────────────────────
