@@ -7,6 +7,7 @@
  */
 
 export interface WatchProvider {
+  providerId?: number;
   name: string;
   /** @nullable */
   logoPath?: string | null;

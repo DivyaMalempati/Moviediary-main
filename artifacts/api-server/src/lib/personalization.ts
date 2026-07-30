@@ -3,9 +3,13 @@ import { eq, and } from "drizzle-orm";
 import {
   discoverMovies,
   discoverIconicMovies,
+  discoverHiddenGems,
+  discoverStreamingHighlights,
+  discoverByKeyword,
   getSimilarMovies,
   getRecommendations,
   getGenreNameToIdMap,
+  type WatchFilter,
 } from "./tmdb.js";
 import { logger } from "./logger.js";
 
@@ -24,16 +28,26 @@ const UNRATED_WEIGHT = 0.25;
 export interface ExplicitPreferences {
   languages: string[]; // ISO 639-1 codes, from onboarding/settings
   genres: string[]; // genre names, from onboarding/settings
+  providerIds?: number[]; // TMDB watch provider IDs
+  watchRegion?: string; // ISO country for watch availability
 }
 
 export interface TasteProfile {
   hasImplicitData: boolean; // has at least one rated watched film
   topGenres: string[]; // implicit, from ratings — ranked highest-weight first
   topLanguages: string[]; // implicit, from ratings — ranked highest-weight first
+  /** Genre name → accumulated rating weight (for partner intersection). */
+  genreWeights: Record<string, number>;
   seedMovies: { tmdbId: number; weight: number }[]; // top-rated films to seed similar/recommendations
 }
 
-const EMPTY_PROFILE: TasteProfile = { hasImplicitData: false, topGenres: [], topLanguages: [], seedMovies: [] };
+const EMPTY_PROFILE: TasteProfile = {
+  hasImplicitData: false,
+  topGenres: [],
+  topLanguages: [],
+  genreWeights: {},
+  seedMovies: [],
+};
 
 export async function buildTasteProfile(userId: string): Promise<TasteProfile> {
   const watched = await db
@@ -75,13 +89,21 @@ export async function buildTasteProfile(userId: string): Promise<TasteProfile> {
     .slice(0, 5)
     .map(({ tmdbId, weight }) => ({ tmdbId, weight }));
 
+  const genreWeights = Object.fromEntries(
+    [...genreScores.entries()].filter(([, score]) => score > 0),
+  );
+
   const hasRatedFilm = seedCandidates.length > 0 || topGenres.length > 0;
-  return { hasImplicitData: hasRatedFilm, topGenres, topLanguages, seedMovies };
+  return {
+    hasImplicitData: hasRatedFilm,
+    topGenres,
+    topLanguages,
+    genreWeights,
+    seedMovies,
+  };
 }
 
-/** Implicit signal (learned from ratings) always ranks ahead of explicit
- *  (stated at onboarding) — behavior should adapt as taste data accumulates,
- *  with the stated preference as a steady baseline rather than the ceiling. */
+/** Implicit signal ranks ahead of explicit stated prefs. */
 function mergeRanked(implicit: string[], explicit: string[], cap: number): string[] {
   const merged = [...implicit];
   for (const item of explicit) {
@@ -90,7 +112,39 @@ function mergeRanked(implicit: string[], explicit: string[], cap: number): strin
   return merged.slice(0, cap);
 }
 
+/**
+ * Resolve discover languages.
+ * Explicit onboarding/settings languages are a hard allowlist.
+ */
+export function resolveLanguages(
+  implicit: string[],
+  explicit: string[],
+  fallback: string[],
+  cap = 8,
+): string[] {
+  if (explicit.length > 0) {
+    const ranked = [
+      ...implicit.filter((l) => explicit.includes(l)),
+      ...explicit.filter((l) => !implicit.includes(l)),
+    ];
+    return ranked.slice(0, cap);
+  }
+  if (implicit.length > 0) return implicit.slice(0, cap);
+  return fallback.slice(0, cap);
+}
+
+function filterByLanguages(
+  films: SwipeCandidate[],
+  allowed: string[] | null,
+): SwipeCandidate[] {
+  if (!allowed || allowed.length === 0) return films;
+  const set = new Set(allowed);
+  return films.filter((f) => !f.originalLanguage || set.has(f.originalLanguage));
+}
+
 // ── Pool assembly ────────────────────────────────────────────────────────────
+
+export type DeckSource = "safe" | "streaming" | "wildcard" | "trope";
 
 export interface SwipeCandidate {
   tmdbId: number;
@@ -101,18 +155,23 @@ export interface SwipeCandidate {
   overview: string | null;
   genres: string[] | null;
   voteAverage?: number | null;
+  /** Which 80/20 deck bucket produced this card. */
+  source?: DeckSource;
 }
 
-const TARGET_BATCH = 20;
+/** Final visible deck size (matches frontend DECK_SIZE). */
+export const TARGET_DECK = 12;
 
-const MIX_WARM = { seedBased: 0.45, genreWeighted: 0.3, iconic: 0.15, latest: 0.1 };
-// Cold start (no ratings yet) has no seeds to draw "similar to" from — lean
-// on the explicit onboarding genres/languages instead of generic popular.
-const MIX_COLD_WITH_PREFS = { genreWeighted: 0.55, iconic: 0.25, latest: 0.2 };
-const MIX_COLD_NO_PREFS = { iconic: 0.5, latest: 0.5 };
-// UI genre chip selected — skip seed "similar" (it ignores the chip and floods
-// Action with Action/Crime/Drama hybrids). Discover only against the chip genre.
-const MIX_GENRE_FILTER = { genreWeighted: 0.6, iconic: 0.25, latest: 0.15 };
+/**
+ * 80/20 familiarity mix:
+ *  - 60% Safe Matches — top genre/keyword (seed + genre-weighted) taste
+ *  - 20% Contextual/Streaming — high-rated on the user's OTT apps
+ *  - 20% Wildcard/Hidden Gems — vote_average >= 7.2, vote_count <= 3000
+ */
+export const MIX_DECK = { safe: 0.6, streaming: 0.2, wildcard: 0.2 };
+
+const MIX_GENRE_FILTER = { safe: 0.7, streaming: 0.15, wildcard: 0.15 };
+const MIX_TROPE = { safe: 0.5, streaming: 0.2, wildcard: 0.3 };
 
 function shuffle<T>(arr: T[]): T[] {
   const a = arr.slice();
@@ -123,23 +182,18 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-/**
- * How strongly a film belongs to the selected genre.
- * TMDB lists genres in relevance order — primary Action should beat
- * Drama/Crime films that merely tag Action as a tertiary genre.
- */
+function tagSource(films: SwipeCandidate[], source: DeckSource): SwipeCandidate[] {
+  return films.map((f) => ({ ...f, source: f.source ?? source }));
+}
+
 function genreFitScore(film: SwipeCandidate, genreName: string): number {
   const genres = film.genres ?? [];
   const idx = genres.indexOf(genreName);
   if (idx < 0) return -1;
 
-  // Position: primary >> secondary >> later tags
   const positionScore = idx === 0 ? 100 : idx === 1 ? 55 : idx === 2 ? 25 : 10;
-  // Fewer tags = more focused (Action-only > Action/Crime/Drama)
   const focusBonus = Math.max(0, 24 - Math.max(0, genres.length - 1) * 8);
 
-  // Soft-penalize when the chip genre is secondary to a broad primary
-  // (Drama/Crime often pull Action decks toward crime-dramas).
   let companionPenalty = 0;
   if (idx >= 1) {
     const primary = genres[0];
@@ -149,7 +203,6 @@ function genreFitScore(film: SwipeCandidate, genreName: string): number {
   return positionScore + focusBonus - companionPenalty;
 }
 
-/** Prefer primary-genre matches; light jitter so decks don't feel deterministic. */
 function rankByGenreFit(films: SwipeCandidate[], genreName: string | undefined): SwipeCandidate[] {
   if (!genreName) return films;
   return films
@@ -170,8 +223,6 @@ function dedupeAndFilter(
   const filtered = candidates.filter((m) => {
     if (!m.tmdbId || !m.posterPath || excludeIds.has(m.tmdbId) || seen.has(m.tmdbId)) return false;
     if (genreName && !(m.genres ?? []).includes(genreName)) return false;
-    // When a chip is selected, drop films where the genre is only a late tag
-    // (e.g. Drama/Crime/Action with Action in 3rd+ slot) — those feel off-genre.
     if (genreName) {
       const idx = (m.genres ?? []).indexOf(genreName);
       if (idx > 1) return false;
@@ -183,14 +234,99 @@ function dedupeAndFilter(
   return genreName ? rankByGenreFit(filtered, genreName) : filtered;
 }
 
+export function assembleDeckMix(
+  pools: Partial<Record<DeckSource, SwipeCandidate[]>>,
+  mix: Partial<Record<DeckSource, number>>,
+  target: number,
+  opts: { shuffleResult?: boolean } = {},
+): SwipeCandidate[] {
+  const keys = Object.keys(mix) as DeckSource[];
+  const wanted = Object.fromEntries(
+    keys.map((k) => [k, Math.round(target * (mix[k] ?? 0))]),
+  ) as Record<DeckSource, number>;
+
+  // Ensure quotas sum to target when rounding drifts.
+  const quotaSum = keys.reduce((s, k) => s + wanted[k], 0);
+  if (quotaSum !== target && keys.length > 0) {
+    const primary = keys[0];
+    wanted[primary] = Math.max(0, wanted[primary] + (target - quotaSum));
+  }
+
+  const takenIds = new Set<number>();
+  const result: SwipeCandidate[] = [];
+  const take = (pool: SwipeCandidate[] | undefined, n: number, source: DeckSource) => {
+    if (!pool || n <= 0) return;
+    let taken = 0;
+    for (const m of pool) {
+      if (taken >= n) break;
+      if (takenIds.has(m.tmdbId)) continue;
+      takenIds.add(m.tmdbId);
+      result.push({ ...m, source: m.source ?? source });
+      taken++;
+    }
+  };
+
+  for (const key of keys) take(pools[key], wanted[key], key);
+
+  if (result.length < target) {
+    const leftovers = opts.shuffleResult === false
+      ? keys.flatMap((k) => pools[k] ?? [])
+      : shuffle(keys.flatMap((k) => pools[k] ?? []));
+    take(leftovers, target - result.length, keys[0] ?? "safe");
+  }
+
+  return opts.shuffleResult === false ? result : shuffle(result);
+}
+
+async function fetchSafeMatches(opts: {
+  profile: TasteProfile;
+  effectiveLanguages: string[];
+  page: number;
+  genreIds: number[];
+  genreIdFilter?: number;
+  watch?: WatchFilter;
+}): Promise<SwipeCandidate[]> {
+  const { profile, effectiveLanguages, page, genreIds, genreIdFilter, watch } = opts;
+  const safe: SwipeCandidate[] = [];
+
+  if (!watch && profile.seedMovies.length > 0 && !genreIdFilter) {
+    const seedResults = await Promise.allSettled(
+      profile.seedMovies.map((s) =>
+        Promise.all([getSimilarMovies(s.tmdbId), getRecommendations(s.tmdbId)]),
+      ),
+    );
+    for (const r of seedResults) {
+      if (r.status === "fulfilled") {
+        const [similar, recs] = r.value;
+        safe.push(...similar, ...recs);
+      } else {
+        logger.warn({ err: r.reason }, "Seed-based swipe fetch failed for one seed movie");
+      }
+    }
+  }
+
+  const gids = genreIdFilter
+    ? [genreIdFilter]
+    : genreIds.slice(0, 3);
+  if (gids.length > 0) {
+    const genreCalls = gids.map((gid) =>
+      discoverMovies(effectiveLanguages, undefined, page, gid, watch).catch(() => []),
+    );
+    safe.push(...(await Promise.all(genreCalls)).flat());
+  } else {
+    safe.push(
+      ...(await discoverMovies(effectiveLanguages, undefined, page, undefined, watch).catch(() => [])),
+    );
+    safe.push(
+      ...(await discoverIconicMovies(effectiveLanguages, page, undefined, watch).catch(() => [])),
+    );
+  }
+
+  return tagSource(safe, "safe");
+}
+
 /**
- * Builds a personalized swipe batch, blending:
- *  - implicit taste learned from rated watch history (strongest, once it exists)
- *  - explicit preferences stated at onboarding / in settings (baseline, always available)
- *
- * A brand-new user who just finished onboarding gets a genre/language-weighted
- * deck immediately — not a generic popular/iconic fallback — even with zero
- * watch history yet.
+ * Builds a personalized 10–12 card swipe deck with the 60/20/20 mix.
  */
 export async function getPersonalizedSwipePool(opts: {
   profile: TasteProfile;
@@ -198,149 +334,187 @@ export async function getPersonalizedSwipePool(opts: {
   fallbackLanguages: string[];
   page: number;
   genreIdFilter?: number;
+  keywordId?: number;
   excludeIds: Set<number>;
+  /** Override deck size (default 12). */
+  target?: number;
 }): Promise<SwipeCandidate[]> {
-  const { profile, explicitPrefs, fallbackLanguages, page, genreIdFilter, excludeIds } = opts;
+  const {
+    profile,
+    explicitPrefs,
+    fallbackLanguages,
+    page,
+    genreIdFilter,
+    keywordId,
+    excludeIds,
+    target = TARGET_DECK,
+  } = opts;
 
-  const languages = mergeRanked(profile.topLanguages, explicitPrefs.languages, 6);
-  const effectiveLanguages = languages.length > 0 ? languages : fallbackLanguages;
+  const languageAllowlist =
+    explicitPrefs.languages.length > 0 ? explicitPrefs.languages : null;
+  const effectiveLanguages = resolveLanguages(
+    profile.topLanguages,
+    explicitPrefs.languages,
+    fallbackLanguages,
+  );
+
+  const providers = explicitPrefs.providerIds ?? [];
+  const watchRegion = explicitPrefs.watchRegion || "IN";
+  const watch: WatchFilter | undefined =
+    providers.length > 0 ? { providerIds: providers, watchRegion } : undefined;
+
+  // Streaming bucket always uses OTT filter when available.
+  const streamingWatch = watch;
 
   const nameToId = await getGenreNameToIdMap().catch(() => new Map<string, number>());
   const idToName = new Map([...nameToId.entries()].map(([name, id]) => [id, name]));
   const genreNames = mergeRanked(profile.topGenres, explicitPrefs.genres, 4);
   const genreIds = genreNames.map((g) => nameToId.get(g)).filter((id): id is number => !!id);
 
-  const clean = (list: SwipeCandidate[]) => dedupeAndFilter(list, excludeIds, genreIdFilter, idToName);
-  // When a UI chip is active, keep rank order from clean(); otherwise shuffle for variety.
-  const prep = (list: SwipeCandidate[]) => (genreIdFilter ? clean(list) : shuffle(clean(list)));
+  const clean = (list: SwipeCandidate[]) =>
+    filterByLanguages(dedupeAndFilter(list, excludeIds, genreIdFilter, idToName), languageAllowlist);
+  const prep = (list: SwipeCandidate[], source: DeckSource) =>
+    tagSource(genreIdFilter ? clean(list) : shuffle(clean(list)), source);
 
-  // When there's no explicit UI genre filter, pick from the user's preferred
-  // genre IDs so that ALL pool buckets (not just genreWeighted) respect taste.
-  // page-based rotation gives variety across pages while staying within prefs.
-  const iconicGenreId  = genreIdFilter ?? genreIds[page % Math.max(genreIds.length, 1)];
-  const latestGenreId  = genreIdFilter ?? genreIds[(page + 1) % Math.max(genreIds.length, 1)];
+  const mixGenreId =
+    genreIdFilter ?? genreIds[page % Math.max(genreIds.length, 1)];
 
-  // ── Genre chip selected: fetch ONLY that genre (ignore taste Drama/Crime mix
-  //    and seed-similar, which is what was flooding Action decks with hybrids) ──
-  if (genreIdFilter) {
-    const [primaryPage, nextPage, iconic, latest] = await Promise.all([
-      discoverMovies(effectiveLanguages, undefined, page, genreIdFilter).catch(() => []),
-      discoverMovies(effectiveLanguages, undefined, page + 1, genreIdFilter).catch(() => []),
-      discoverIconicMovies(effectiveLanguages, page, genreIdFilter).catch(() => []),
-      // Offset latest page so it doesn't duplicate the primary discover page
-      discoverMovies(effectiveLanguages, undefined, page + 2, genreIdFilter).catch(() => []),
+  // Trope / keyword override — still apply 80/20 familiarity around the trope.
+  if (keywordId != null) {
+    const [tropePage, streaming, gems] = await Promise.all([
+      discoverByKeyword(keywordId, effectiveLanguages, page, genreIdFilter, undefined).catch(() => []),
+      streamingWatch
+        ? discoverByKeyword(keywordId, effectiveLanguages, page, genreIdFilter, streamingWatch).catch(() => [])
+        : Promise.resolve([]),
+      discoverByKeyword(keywordId, effectiveLanguages, page + 1, genreIdFilter, undefined)
+        .then(async (base) => {
+          const gems = await discoverHiddenGems(effectiveLanguages, page, genreIdFilter).catch(() => []);
+          return [...base, ...gems];
+        })
+        .catch(() => []),
     ]);
     const pools = {
-      genreWeighted: prep([...primaryPage, ...nextPage]),
-      iconic: prep(iconic),
-      latest: prep(latest),
+      safe: prep(tropePage, "trope"),
+      streaming: prep(streaming.length ? streaming : tropePage, "streaming"),
+      wildcard: prep(gems, "wildcard"),
     };
-    // Assemble by mix ratios, then re-rank so primary-genre films lead the deck.
-    const batch = assemble(pools, MIX_GENRE_FILTER, TARGET_BATCH, { shuffleResult: false });
+    return assembleDeckMix(pools, MIX_TROPE, target);
+  }
+
+  const [safeRaw, streamingRaw, wildcardRaw] = await Promise.all([
+    fetchSafeMatches({
+      profile,
+      effectiveLanguages,
+      page,
+      genreIds,
+      genreIdFilter,
+      // Safe matches are NOT locked to OTT — familiarity from taste.
+      watch: undefined,
+    }),
+    streamingWatch
+      ? discoverStreamingHighlights(
+          effectiveLanguages,
+          page,
+          mixGenreId,
+          streamingWatch,
+        ).catch(() => [])
+      : Promise.resolve([] as SwipeCandidate[]),
+    discoverHiddenGems(effectiveLanguages, page, mixGenreId).catch(() => []),
+  ]);
+
+  // If user has no OTT prefs, fold streaming quota into safe (still 80% familiarity).
+  const hasStreaming = streamingRaw.length > 0 && !!streamingWatch;
+  const pools = {
+    safe: prep(safeRaw, "safe"),
+    streaming: hasStreaming ? prep(streamingRaw, "streaming") : [],
+    wildcard: prep(wildcardRaw, "wildcard"),
+  };
+
+  const mix = genreIdFilter
+    ? MIX_GENRE_FILTER
+    : hasStreaming
+      ? MIX_DECK
+      : { safe: 0.8, streaming: 0, wildcard: 0.2 };
+
+  const batch = assembleDeckMix(pools, mix, target, {
+    shuffleResult: !genreIdFilter,
+  });
+
+  if (genreIdFilter) {
     const genreName = idToName.get(genreIdFilter);
     return genreName ? rankByGenreFit(batch, genreName) : batch;
   }
-
-  // ── Cold start: no rated watch history yet ──────────────────────────────
-  if (!profile.hasImplicitData || profile.seedMovies.length === 0) {
-    if (genreIds.length > 0 || explicitPrefs.languages.length > 0) {
-      // They told us what they like at onboarding — use it immediately.
-      // Use up to 3 genre IDs so more of the stated taste is covered.
-      const genreCalls = genreIds
-        .slice(0, 3)
-        .map((gid) => discoverMovies(effectiveLanguages, undefined, page, gid).catch(() => []));
-      const [genreResults, iconic, latest] = await Promise.all([
-        Promise.all(genreCalls.length ? genreCalls : [discoverMovies(effectiveLanguages, undefined, page, iconicGenreId).catch(() => [])]),
-        discoverIconicMovies(effectiveLanguages, page, iconicGenreId).catch(() => []),
-        discoverMovies(effectiveLanguages, undefined, page, latestGenreId).catch(() => []),
-      ]);
-      const pools = {
-        genreWeighted: prep(genreResults.flat()),
-        iconic: prep(iconic),
-        latest: prep(latest),
-      };
-      return assemble(pools, MIX_COLD_WITH_PREFS, TARGET_BATCH);
-    }
-
-    // No signal at all (shouldn't normally happen once onboarding is in
-    // place, but covers users who skip it) — old generic behavior.
-    const [iconic, latest] = await Promise.all([
-      discoverIconicMovies(effectiveLanguages, page, genreIdFilter).catch(() => []),
-      discoverMovies(effectiveLanguages, undefined, page, genreIdFilter).catch(() => []),
-    ]);
-    const pools = { iconic: prep(iconic), latest: prep(latest) };
-    return assemble(pools, MIX_COLD_NO_PREFS, TARGET_BATCH);
-  }
-
-  // ── Warm: has rated watch history — implicit taste leads, explicit prefs
-  //    still fill in the genre/language pool (mergeRanked already blended them) ──
-  const seedResults = await Promise.allSettled(
-    profile.seedMovies.map((s) => Promise.all([getSimilarMovies(s.tmdbId), getRecommendations(s.tmdbId)])),
-  );
-  let seedBased: SwipeCandidate[] = [];
-  for (const r of seedResults) {
-    if (r.status === "fulfilled") {
-      const [similar, recs] = r.value;
-      seedBased.push(...similar, ...recs);
-    } else {
-      logger.warn({ err: r.reason }, "Seed-based swipe fetch failed for one seed movie");
-    }
-  }
-
-  let genreWeighted: SwipeCandidate[] = [];
-  if (genreIds.length > 0) {
-    // Use up to 3 genre IDs — more coverage of stated/learned taste.
-    const genreCalls = genreIds.slice(0, 3).map((gid) => discoverMovies(effectiveLanguages, undefined, page, gid).catch(() => []));
-    genreWeighted = (await Promise.all(genreCalls)).flat();
-  }
-
-  // Iconic and latest also respect the user's genre preferences (not just the
-  // optional UI filter), so Drama/Romance don't flood the non-genre-weighted slots.
-  const iconic = await discoverIconicMovies(effectiveLanguages, page, iconicGenreId).catch(() => []);
-  const latest = await discoverMovies(effectiveLanguages, undefined, page, latestGenreId).catch(() => []);
-
-  const pools = {
-    seedBased: prep(seedBased),
-    genreWeighted: prep(genreWeighted),
-    iconic: prep(iconic),
-    latest: prep(latest),
-  };
-
-  return assemble(pools, MIX_WARM, TARGET_BATCH);
+  return batch;
 }
 
-function assemble<K extends string>(
-  pools: Record<K, SwipeCandidate[]>,
-  mix: Record<K, number>,
-  target: number,
-  opts: { shuffleResult?: boolean } = {},
-): SwipeCandidate[] {
-  const wanted = Object.fromEntries(
-    (Object.keys(mix) as K[]).map((k) => [k, Math.round(target * mix[k])]),
-  ) as Record<K, number>;
-
-  const takenIds = new Set<number>();
-  const result: SwipeCandidate[] = [];
-  const take = (pool: SwipeCandidate[], n: number) => {
-    let taken = 0;
-    for (const m of pool) {
-      if (taken >= n) break;
-      if (takenIds.has(m.tmdbId)) continue;
-      takenIds.add(m.tmdbId);
-      result.push(m);
-      taken++;
+/**
+ * Intersect two taste profiles for partner match decks:
+ * multiply shared genre weights, prefer shared languages & OTT platforms.
+ */
+export function intersectTasteProfiles(
+  a: TasteProfile,
+  b: TasteProfile,
+  prefsA: ExplicitPreferences,
+  prefsB: ExplicitPreferences,
+): {
+  profile: TasteProfile;
+  explicitPrefs: ExplicitPreferences;
+} {
+  const sharedGenreWeights: Record<string, number> = {};
+  for (const [genre, wA] of Object.entries(a.genreWeights)) {
+    const wB = b.genreWeights[genre];
+    if (wB != null && wA > 0 && wB > 0) {
+      sharedGenreWeights[genre] = wA * wB;
     }
-  };
-
-  (Object.keys(wanted) as K[]).forEach((key) => take(pools[key], wanted[key]));
-
-  if (result.length < target) {
-    // Prefer already-ranked leftovers when genre-filtered; shuffle otherwise.
-    const leftovers = opts.shuffleResult === false
-      ? (Object.keys(pools) as K[]).flatMap((k) => pools[k])
-      : shuffle((Object.keys(pools) as K[]).flatMap((k) => pools[k]));
-    take(leftovers, target - result.length);
+  }
+  // Fall back to union of top genres when intersection is empty.
+  let topGenres = Object.entries(sharedGenreWeights)
+    .sort((x, y) => y[1] - x[1])
+    .slice(0, 4)
+    .map(([name]) => name);
+  if (topGenres.length === 0) {
+    topGenres = mergeRanked(a.topGenres, b.topGenres, 4);
   }
 
-  return opts.shuffleResult === false ? result : shuffle(result);
+  const langIntersect = a.topLanguages.filter((l) => b.topLanguages.includes(l));
+  const explicitLangIntersect = prefsA.languages.filter((l) => prefsB.languages.includes(l));
+  const languages =
+    explicitLangIntersect.length > 0
+      ? explicitLangIntersect
+      : langIntersect.length > 0
+        ? langIntersect
+        : mergeRanked(prefsA.languages, prefsB.languages, 6);
+
+  const providerIntersect = (prefsA.providerIds ?? []).filter((id) =>
+    (prefsB.providerIds ?? []).includes(id),
+  );
+  const providerUnion = [
+    ...new Set([...(prefsA.providerIds ?? []), ...(prefsB.providerIds ?? [])]),
+  ];
+
+  const seedMovies = [...a.seedMovies, ...b.seedMovies]
+    .sort((x, y) => y.weight - x.weight)
+    .filter((s, i, arr) => arr.findIndex((t) => t.tmdbId === s.tmdbId) === i)
+    .slice(0, 5);
+
+  return {
+    profile: {
+      hasImplicitData: a.hasImplicitData || b.hasImplicitData,
+      topGenres,
+      topLanguages: langIntersect.length > 0 ? langIntersect : mergeRanked(a.topLanguages, b.topLanguages, 5),
+      genreWeights: sharedGenreWeights,
+      seedMovies,
+    },
+    explicitPrefs: {
+      languages,
+      genres: mergeRanked(
+        prefsA.genres,
+        prefsB.genres,
+        4,
+      ),
+      // Prefer shared OTT; fall back to union so the couple has something to watch.
+      providerIds: providerIntersect.length > 0 ? providerIntersect : providerUnion,
+      watchRegion: prefsA.watchRegion || prefsB.watchRegion || "IN",
+    },
+  };
 }

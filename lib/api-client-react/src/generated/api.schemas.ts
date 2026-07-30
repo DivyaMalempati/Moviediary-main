@@ -45,6 +45,8 @@ export interface Movie {
      * @minimum 0
      */
   rewatchCount: number;
+  /** Optional dates logged for rewatches (ISO 8601). Length may be less than rewatchCount when some rewatches were logged without a date. */
+  rewatchDates: string[];
 }
 
 export type MovieInputStatus = typeof MovieInputStatus[keyof typeof MovieInputStatus];
@@ -108,6 +110,11 @@ export interface RewatchInput {
      * @nullable
      */
   rating?: string | null;
+  /**
+     * Optional date for this rewatch (ISO 8601 date or datetime). Omit or null to log a rewatch without recording a date.
+     * @nullable
+     */
+  watchedAt?: string | null;
 }
 
 export interface CountByKey {
@@ -155,6 +162,7 @@ export interface AiSuggestionsInput {
 }
 
 export interface WatchProvider {
+  providerId?: number;
   name: string;
   /** @nullable */
   logoPath?: string | null;

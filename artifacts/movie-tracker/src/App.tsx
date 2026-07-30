@@ -6,7 +6,8 @@ import { Switch, Route, useLocation, Router as WouterRouter, Redirect } from "wo
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/sonner";
-import { isDemoMode, initDemoMode, disableDemoMode, enableDemoMode } from "@/lib/demo-auth";
+import { ClerkAuthTokenBridge } from "@/components/clerk-auth-token-bridge";
+import { isDemoMode, initDemoMode, disableDemoMode, enableDemoMode, clearAppSession } from "@/lib/demo-auth";
 
 import LandingPage from "@/pages/landing";
 import WatchedPage from "@/pages/watched";
@@ -19,6 +20,9 @@ import ImportPage from "@/pages/import";
 import ProfilePage from "@/pages/profile";
 import CollectionsPage from "@/pages/collections";
 import StatsPage from "@/pages/stats";
+import PartnerPage, { PairInvitePage } from "@/pages/partner";
+import MatchSessionPage from "@/pages/match-session";
+import GuidePage from "@/pages/guide";
 import NotFound from "@/pages/not-found";
 
 // Initialise demo mode header injection before any render
@@ -99,10 +103,13 @@ function AppPages() {
       <Route path="/add" component={AddPage} />
       <Route path="/suggestions" component={SuggestionsPage} />
       <Route path="/swipe" component={SwipePage} />
+      <Route path="/partner" component={PartnerPage} />
+      <Route path="/pair/:code" component={PairInvitePage} />
+      <Route path="/match/:id" component={MatchSessionPage} />
+      <Route path="/guide" component={GuidePage} />
       <Route path="/movie/:id" component={MovieDetailsPage} />
       <Route path="/import" component={ImportPage} />
       <Route path="/profile" component={ProfilePage} />
-      <Route path="/swipe" component={SwipePage} />
       <Route path="/collections" component={CollectionsPage} />
       <Route path="/collections/:id" component={CollectionsPage} />
       <Route path="/stats" component={StatsPage} />
@@ -141,6 +148,9 @@ function ClerkQueryClientCacheInvalidator() {
   useEffect(() => {
     const unsubscribe = addListener(({ user }) => {
       const userId = user?.id ?? null;
+      // Signed-in Clerk session must never keep sending a demo guest token.
+      if (userId) disableDemoMode();
+      else clearAppSession();
       if (prevUserIdRef.current !== undefined && prevUserIdRef.current !== userId) {
         qc.clear();
       }
@@ -198,10 +208,13 @@ function ClerkRouter() {
       <Route path="/add" component={() => <ProtectedRoute component={AddPage} />} />
       <Route path="/suggestions" component={() => <ProtectedRoute component={SuggestionsPage} />} />
       <Route path="/swipe" component={() => <ProtectedRoute component={SwipePage} />} />
+      <Route path="/partner" component={() => <ProtectedRoute component={PartnerPage} />} />
+      <Route path="/pair/:code" component={() => <ProtectedRoute component={PairInvitePage} />} />
+      <Route path="/match/:id" component={() => <ProtectedRoute component={MatchSessionPage} />} />
+      <Route path="/guide" component={() => <ProtectedRoute component={GuidePage} />} />
       <Route path="/movie/:id" component={() => <ProtectedRoute component={MovieDetailsPage} />} />
       <Route path="/import" component={() => <ProtectedRoute component={ImportPage} />} />
       <Route path="/profile" component={() => <ProtectedRoute component={ProfilePage} />} />
-      <Route path="/swipe" component={() => <ProtectedRoute component={SwipePage} />} />
       <Route path="/collections" component={() => <ProtectedRoute component={CollectionsPage} />} />
       <Route path="/collections/:id" component={() => <ProtectedRoute component={CollectionsPage} />} />
       <Route path="/stats" component={() => <ProtectedRoute component={StatsPage} />} />
@@ -229,7 +242,9 @@ function ClerkProviderWithRoutes() {
     >
       <QueryClientProvider client={queryClient}>
         <ClerkQueryClientCacheInvalidator />
-        <ClerkRouter />
+        <ClerkAuthTokenBridge>
+          <ClerkRouter />
+        </ClerkAuthTokenBridge>
         <Toaster />
       </QueryClientProvider>
     </ClerkProvider>

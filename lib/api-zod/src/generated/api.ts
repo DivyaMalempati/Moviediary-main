@@ -43,7 +43,8 @@ export const ListMoviesResponseItem = zod.object({
   "overview": zod.string().nullish(),
   "watchedAt": zod.string().nullish(),
   "createdAt": zod.string(),
-  "rewatchCount": zod.number().min(listMoviesResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)')
+  "rewatchCount": zod.number().min(listMoviesResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)'),
+  "rewatchDates": zod.array(zod.string()).describe('Optional dates logged for rewatches (ISO 8601). Length may be less than rewatchCount when some rewatches were logged without a date.\n')
 })
 export const ListMoviesResponse = zod.array(ListMoviesResponseItem)
 
@@ -86,7 +87,8 @@ export const CreateMovieResponse = zod.object({
   "overview": zod.string().nullish(),
   "watchedAt": zod.string().nullish(),
   "createdAt": zod.string(),
-  "rewatchCount": zod.number().min(createMovieResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)')
+  "rewatchCount": zod.number().min(createMovieResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)'),
+  "rewatchDates": zod.array(zod.string()).describe('Optional dates logged for rewatches (ISO 8601). Length may be less than rewatchCount when some rewatches were logged without a date.\n')
 })
 
 
@@ -130,7 +132,8 @@ export const GetMovieStatsResponse = zod.object({
   "overview": zod.string().nullish(),
   "watchedAt": zod.string().nullish(),
   "createdAt": zod.string(),
-  "rewatchCount": zod.number().min(getMovieStatsResponseRecentlyWatchedItemRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)')
+  "rewatchCount": zod.number().min(getMovieStatsResponseRecentlyWatchedItemRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)'),
+  "rewatchDates": zod.array(zod.string()).describe('Optional dates logged for rewatches (ISO 8601). Length may be less than rewatchCount when some rewatches were logged without a date.\n')
 })).optional()
 })
 
@@ -170,7 +173,8 @@ export const GetMovieResponse = zod.object({
   "overview": zod.string().nullish(),
   "watchedAt": zod.string().nullish(),
   "createdAt": zod.string(),
-  "rewatchCount": zod.number().min(getMovieResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)')
+  "rewatchCount": zod.number().min(getMovieResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)'),
+  "rewatchDates": zod.array(zod.string()).describe('Optional dates logged for rewatches (ISO 8601). Length may be less than rewatchCount when some rewatches were logged without a date.\n')
 })
 
 
@@ -216,7 +220,8 @@ export const UpdateMovieResponse = zod.object({
   "overview": zod.string().nullish(),
   "watchedAt": zod.string().nullish(),
   "createdAt": zod.string(),
-  "rewatchCount": zod.number().min(updateMovieResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)')
+  "rewatchCount": zod.number().min(updateMovieResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)'),
+  "rewatchDates": zod.array(zod.string()).describe('Optional dates logged for rewatches (ISO 8601). Length may be less than rewatchCount when some rewatches were logged without a date.\n')
 })
 
 
@@ -255,7 +260,8 @@ export const MatchMovieToTmdbResponse = zod.object({
   "overview": zod.string().nullish(),
   "watchedAt": zod.string().nullish(),
   "createdAt": zod.string(),
-  "rewatchCount": zod.number().min(matchMovieToTmdbResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)')
+  "rewatchCount": zod.number().min(matchMovieToTmdbResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)'),
+  "rewatchDates": zod.array(zod.string()).describe('Optional dates logged for rewatches (ISO 8601). Length may be less than rewatchCount when some rewatches were logged without a date.\n')
 })
 
 
@@ -267,7 +273,8 @@ export const RewatchMovieParams = zod.object({
 })
 
 export const RewatchMovieBody = zod.object({
-  "rating": zod.string().nullish().describe('Optional updated rating from this rewatch')
+  "rating": zod.string().nullish().describe('Optional updated rating from this rewatch'),
+  "watchedAt": zod.string().nullish().describe('Optional date for this rewatch (ISO 8601 date or datetime). Omit or null to log a rewatch without recording a date.\n')
 })
 
 export const rewatchMovieResponseRewatchCountMin = 0;
@@ -288,7 +295,8 @@ export const RewatchMovieResponse = zod.object({
   "overview": zod.string().nullish(),
   "watchedAt": zod.string().nullish(),
   "createdAt": zod.string(),
-  "rewatchCount": zod.number().min(rewatchMovieResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)')
+  "rewatchCount": zod.number().min(rewatchMovieResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)'),
+  "rewatchDates": zod.array(zod.string()).describe('Optional dates logged for rewatches (ISO 8601). Length may be less than rewatchCount when some rewatches were logged without a date.\n')
 })
 
 
@@ -385,14 +393,17 @@ export const GetWatchProvidersParams = zod.object({
 export const GetWatchProvidersResponse = zod.object({
   "tmdbId": zod.number(),
   "flatrate": zod.array(zod.object({
+  "providerId": zod.number().optional(),
   "name": zod.string(),
   "logoPath": zod.string().nullish()
 })).nullish(),
   "rent": zod.array(zod.object({
+  "providerId": zod.number().optional(),
   "name": zod.string(),
   "logoPath": zod.string().nullish()
 })).nullish(),
   "buy": zod.array(zod.object({
+  "providerId": zod.number().optional(),
   "name": zod.string(),
   "logoPath": zod.string().nullish()
 })).nullish(),

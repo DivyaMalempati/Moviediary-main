@@ -1,9 +1,10 @@
 import { ReactNode, Component, ErrorInfo } from "react";
 import { Link, useLocation } from "wouter";
 import { useUser } from "@clerk/react";
-import { Clapperboard, Eye, Bookmark, PlusCircle, Sparkles, FolderOpen, BarChart2, Upload, User, Shuffle } from "lucide-react";
+import { Clapperboard, Eye, Bookmark, PlusCircle, Sparkles, FolderOpen, BarChart2, Upload, User, Shuffle, Users, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isDemoMode } from "@/lib/demo-auth";
+import { FeatureWalkthroughHost } from "@/components/feature-walkthrough";
 
 interface LayoutProps {
   children: ReactNode;
@@ -82,6 +83,8 @@ export function Layout({ children }: LayoutProps) {
     { href: "/add",         label: "Add",         icon: PlusCircle },
     { href: "/suggestions", label: "Discover",    icon: Sparkles },
     { href: "/swipe",       label: "Swipe",       icon: Shuffle },
+    { href: "/partner",     label: "Partner",     icon: Users },
+    { href: "/guide",       label: "Guide",       icon: BookOpen },
     { href: "/import",      label: "Import",      icon: Upload },
   ];
 
@@ -159,6 +162,7 @@ export function Layout({ children }: LayoutProps) {
           );
         })}
       </nav>
+      <FeatureWalkthroughHost />
     </div>
   );
 }

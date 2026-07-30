@@ -35,4 +35,6 @@ export interface Movie {
      * @minimum 0
      */
   rewatchCount: number;
+  /** Optional dates logged for rewatches (ISO 8601). Length may be less than rewatchCount when some rewatches were logged without a date. */
+  rewatchDates: string[];
 }

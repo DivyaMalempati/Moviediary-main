@@ -52,12 +52,20 @@ export const moviesTable = pgTable(
     genres: text("genres").array(),
     overview: text("overview"),
 
-    // Kept as "first/last watched" convenience column. A dedicated
-    // watch_events table for full rewatch history lands in Sprint 3.
+    // Kept as "last watched" convenience column (updated on each rewatch).
+    // rewatchDates holds optional dated rewatch entries; undated rewatches
+    // only increment rewatchCount.
     watchedAt: timestamp("watched_at", { withTimezone: true }),
 
     // Number of rewatches after the first watch (0 = watched once).
     rewatchCount: integer("rewatch_count").notNull().default(0),
+
+    // Optional dates for each rewatch (ISO timestamps). Length may be less
+    // than rewatchCount when some rewatches were logged without a date.
+    rewatchDates: timestamp("rewatch_dates", { withTimezone: true })
+      .array()
+      .notNull()
+      .default(sql`'{}'::timestamptz[]`),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })

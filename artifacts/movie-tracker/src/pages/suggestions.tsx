@@ -3,7 +3,8 @@ import { Layout } from "@/components/layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { LanguageBadge } from "@/components/language-badge";
-import { getPosterUrl } from "@/lib/movie-utils";
+import { RatingPickerDialog } from "@/components/rating-picker-dialog";
+import { getPosterUrl, RATING_LABELS } from "@/lib/movie-utils";
 import {
   useGetTrendingIndia,
   getGetTrendingIndiaQueryKey,
@@ -23,7 +24,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { RatingPickerDialog } from "@/components/rating-picker-dialog";
 
 // ---------------------------------------------------------------------------
 // Dismissed-movies hook — persisted to localStorage
@@ -301,30 +301,40 @@ export default function SuggestionsPage() {
   };
 
   const doAdd = (movie: any, status: "watched" | "watchlist", rating?: string | null) => {
+    const safeRating =
+      rating && rating in RATING_LABELS ? rating : null;
+
     createMovie.mutate({
       data: {
         title: movie.title,
         status,
-        ...(rating ? { rating } : {}),
         ...(movie.tmdbId != null && { tmdbId: movie.tmdbId }),
         ...(movie.posterPath != null && { posterPath: movie.posterPath }),
         ...((movie.releaseYear ?? movie.year) != null && { releaseYear: movie.releaseYear ?? movie.year }),
-        ...((movie.originalLanguage ?? movie.language) != null && { originalLanguage: movie.originalLanguage ?? movie.language }),
+        ...((movie.originalLanguage ?? movie.language) != null && {
+          originalLanguage: movie.originalLanguage ?? movie.language,
+        }),
+        ...(status === "watched" && safeRating ? { rating: safeRating } : {}),
       },
     }, {
       onSuccess: () => {
-        toast.success(`Added "${movie.title}" to ${status}`);
-        queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
+        toast.success(
+          status === "watched"
+            ? `Logged "${movie.title}" as watched`
+            : `Added "${movie.title}" to watchlist`,
+        );
+        queryClient.invalidateQueries({ queryKey: getListMoviesQueryKey() });
       },
+      onError: () => toast.error(`Couldn't add "${movie.title}". Try again.`),
     });
   };
 
   const handleAdd = (movie: any, status: "watched" | "watchlist") => {
     if (status === "watched") {
       setPendingWatched(movie);
-    } else {
-      doAdd(movie, "watchlist");
+      return;
     }
+    doAdd(movie, "watchlist");
   };
 
   const trendingData = trendingLang === "all" ? trending : discover;
@@ -332,9 +342,10 @@ export default function SuggestionsPage() {
 
   // Filter helpers
   const notDismissed = (m: any) => !dismissed.has(m.tmdbId);
-  const visibleTrending = trendingData?.filter(notDismissed) ?? [];
-  const visibleLiked = becauseLiked?.filter(notDismissed) ?? [];
-  const visibleAi = aiResults?.filter(notDismissed) ?? [];
+  const notInLibrary = (m: any) => !m.tmdbId || !inLibrarySet.has(m.tmdbId);
+  const visibleTrending = trendingData?.filter((m) => notDismissed(m) && notInLibrary(m)) ?? [];
+  const visibleLiked = becauseLiked?.filter((m) => notDismissed(m) && notInLibrary(m)) ?? [];
+  const visibleAi = aiResults?.filter((m) => notDismissed(m) && notInLibrary(m)) ?? [];
 
   const dismissedCount = dismissed.size;
 
@@ -420,9 +431,13 @@ export default function SuggestionsPage() {
 
                 {visibleAi.length === 0 && aiResults && aiResults.length > 0 && (
                   <div className="text-center py-10 text-muted-foreground text-sm">
-                    All suggestions hidden.{" "}
+                    No new picks right now — everything here is already in your library or hidden.{" "}
                     <button onClick={clearAll} className="underline underline-offset-2 hover:text-foreground">
-                      Restore them
+                      Restore hidden
+                    </button>
+                    {" · "}
+                    <button onClick={handleGenerateAi} className="underline underline-offset-2 hover:text-foreground">
+                      Find more
                     </button>
                   </div>
                 )}
@@ -508,12 +523,13 @@ export default function SuggestionsPage() {
       <RatingPickerDialog
         open={!!pendingWatched}
         movieTitle={pendingWatched?.title ?? ""}
+        confirmOnSelect
+        onCancel={() => setPendingWatched(null)}
         onConfirm={(rating) => {
           const movie = pendingWatched;
           setPendingWatched(null);
           if (movie) doAdd(movie, "watched", rating);
         }}
-        onCancel={() => setPendingWatched(null)}
       />
     </Layout>
   );
