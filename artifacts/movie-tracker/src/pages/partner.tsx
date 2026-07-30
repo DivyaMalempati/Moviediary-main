@@ -15,6 +15,7 @@ import {
   ArrowRight,
   Heart,
   Play,
+  Settings,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -83,7 +84,7 @@ export default function PartnerPage() {
         setSessions([]);
       }
     } catch {
-      toast.error("Couldn’t load partner link");
+      toast.error("Couldn’t load movie night");
     } finally {
       setLoading(false);
     }
@@ -102,13 +103,13 @@ export default function PartnerPage() {
         credentials: "include",
       });
       if (res.status === 401 || res.status === 403) {
-        toast.error("Sign in to invite your spouse");
+        toast.error("Sign in to invite someone to movie night");
         return;
       }
       if (!res.ok) throw new Error("invite failed");
       const data = (await res.json()) as Invite;
       setInvite(data);
-      toast.success("Share link ready");
+      toast.success("Invite link ready — send it to your friend");
     } catch {
       toast.error("Couldn’t create invite");
     } finally {
@@ -132,7 +133,7 @@ export default function PartnerPage() {
         toast.error((err as { error?: string }).error ?? "Couldn’t join");
         return;
       }
-      toast.success("You’re linked — ready to watch together");
+      toast.success("You’re in — start a movie night when you’re ready");
       setJoinCode("");
       setInvite(null);
       await refresh();
@@ -152,12 +153,12 @@ export default function PartnerPage() {
         credentials: "include",
       });
       if (!res.ok && res.status !== 204) throw new Error("unlink failed");
-      toast.success("Unlinked");
+      toast.success("Movie-night pair cleared");
       setPartner(null);
       setSessions([]);
       setSessionShareUrl(null);
     } catch {
-      toast.error("Couldn’t unlink");
+      toast.error("Couldn’t clear pair");
     } finally {
       setBusy(false);
     }
@@ -173,7 +174,7 @@ export default function PartnerPage() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        toast.error((err as { error?: string }).error ?? "Couldn’t start watch-together");
+        toast.error((err as { error?: string }).error ?? "Couldn’t start movie night");
         return;
       }
       const data = (await res.json()) as { id: number };
@@ -181,13 +182,13 @@ export default function PartnerPage() {
       setSessionShareUrl(url);
       try {
         await navigator.clipboard.writeText(url);
-        toast.success("Watch-together link copied — send it to your spouse");
+        toast.success("Movie-night link copied — share it so you can both swipe");
       } catch {
-        toast.success("Watch-together deck ready — share the link below");
+        toast.success("Deck ready — share the link below so they can join");
       }
       setLocation(`/match/${data.id}`);
     } catch {
-      toast.error("Couldn’t start watch-together");
+      toast.error("Couldn’t start movie night");
     } finally {
       setBusy(false);
     }
@@ -198,7 +199,7 @@ export default function PartnerPage() {
     const url = inviteUrl(invite.path);
     try {
       await navigator.clipboard.writeText(url);
-      toast.success("Share link copied");
+      toast.success("Invite link copied");
     } catch {
       toast.message(url);
     }
@@ -208,7 +209,7 @@ export default function PartnerPage() {
     const url = inviteUrl(path);
     try {
       await navigator.clipboard.writeText(url);
-      toast.success("Watch-together link copied");
+      toast.success("Movie-night link copied");
     } catch {
       toast.message(url);
     }
@@ -233,33 +234,45 @@ export default function PartnerPage() {
           </p>
           <h1 className="text-2xl font-semibold flex items-center gap-2">
             <Users className="w-6 h-6 text-primary" />
-            Watch with your spouse
+            Movie night ritual
           </h1>
           <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-            Link another Cinevault account with a share link, then play a shared deck —
-            when you both like a film, it&apos;s a match you can log to both diaries.
+            Before Friday night — or whenever friends meet up — share a link and swipe the same
+            deck. Each of you keeps your own genres and languages in Preferences. You don&apos;t
+            type what they like. You both swipe, and mutual likes become tonight&apos;s shortlist.
           </p>
         </div>
 
-        <ol className="grid gap-2 text-sm text-muted-foreground">
+        <ol className="grid gap-3 text-sm text-muted-foreground">
           <li className="flex gap-2">
             <span className="font-mono text-foreground/80">1.</span>
-            Share a link so they sign in and link accounts
+            <span>
+              Each person sets their own genres &amp; languages in{" "}
+              <Link href="/profile" className="text-foreground underline-offset-2 hover:underline">
+                Preferences
+              </Link>
+              {" "}— never fill in for each other
+            </span>
           </li>
           <li className="flex gap-2">
             <span className="font-mono text-foreground/80">2.</span>
-            Start watch-together and send them the session link
+            Share an invite so they join this movie night
           </li>
           <li className="flex gap-2">
             <span className="font-mono text-foreground/80">3.</span>
-            Swipe the same films — celebrate mutual likes
+            Start the deck (built from both of your tastes) and swipe together
+          </li>
+          <li className="flex gap-2">
+            <span className="font-mono text-foreground/80">4.</span>
+            When you both like a film, it&apos;s a match — pick from those for tonight
           </li>
         </ol>
 
         {isDemoMode() && (
           <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 space-y-2">
             <p className="text-sm text-sky-50">
-              Demo session — you can create a share link and try the flow. For a permanent spouse link, sign in on both devices later.
+              Demo session — you can try the invite and swipe ritual here. Sign in on both devices
+              for a real movie night with friends.
             </p>
             <Link href="/sign-in">
               <Button size="sm" variant="outline" className="h-8 text-xs">
@@ -273,39 +286,50 @@ export default function PartnerPage() {
           <section className="space-y-5">
             <div className="rounded-xl border border-border bg-secondary/40 p-4 space-y-2">
               <p className="text-xs uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
-                <Heart className="w-3.5 h-3.5" /> Linked
+                <Heart className="w-3.5 h-3.5" /> Ready for tonight
               </p>
               <p className="text-sm">
-                You&apos;re connected and ready to watch together.
+                You&apos;re paired. Start a deck whenever you want to decide what to watch.
               </p>
               <p className="text-xs text-muted-foreground">
-                Linked {new Date(partner.createdAt).toLocaleDateString("en-IN")}
+                Paired {new Date(partner.createdAt).toLocaleDateString("en-IN")}
               </p>
             </div>
 
             <div className="flex flex-wrap gap-2">
               <Button onClick={startMatch} disabled={busy} className="gap-2">
                 <Play className="w-4 h-4" />
-                Play watch-together
+                Start movie night
+              </Button>
+              <Button variant="outline" asChild className="gap-2">
+                <Link href="/profile">
+                  <Settings className="w-4 h-4" />
+                  My preferences
+                </Link>
               </Button>
               <Button variant="outline" onClick={unlink} disabled={busy} className="gap-2">
                 <Unlink className="w-4 h-4" />
-                Unlink
+                Clear pair
               </Button>
             </div>
 
             {sessionShareUrl && (
               <div className="rounded-xl border border-border bg-card p-4 space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  Session link for your spouse
+                  Send this so they can swipe the same deck
                 </p>
                 <p className="text-xs break-all text-muted-foreground">{sessionShareUrl}</p>
-                <Button size="sm" variant="secondary" className="gap-2" onClick={() => {
-                  void navigator.clipboard.writeText(sessionShareUrl).then(
-                    () => toast.success("Copied"),
-                    () => toast.message(sessionShareUrl),
-                  );
-                }}>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="gap-2"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(sessionShareUrl).then(
+                      () => toast.success("Copied"),
+                      () => toast.message(sessionShareUrl),
+                    );
+                  }}
+                >
                   <Copy className="w-3.5 h-3.5" />
                   Copy again
                 </Button>
@@ -314,7 +338,7 @@ export default function PartnerPage() {
 
             {sessions.length > 0 && (
               <div className="space-y-3">
-                <h2 className="text-sm font-semibold">Open sessions</h2>
+                <h2 className="text-sm font-semibold">Open movie nights</h2>
                 <ul className="space-y-2">
                   {sessions.map((s) => (
                     <li
@@ -327,7 +351,12 @@ export default function PartnerPage() {
                           Started {new Date(s.createdAt).toLocaleString("en-IN")}
                         </p>
                       </div>
-                      <Button size="sm" variant="secondary" onClick={() => copySession(s.path)} className="gap-1">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => copySession(s.path)}
+                        className="gap-1"
+                      >
                         <Copy className="w-3 h-3" />
                         Share
                       </Button>
@@ -345,13 +374,14 @@ export default function PartnerPage() {
           <section className="space-y-6">
             <div className="space-y-3">
               <h2 className="text-sm font-semibold flex items-center gap-2">
-                <Link2 className="w-4 h-4" /> Invite with a share link
+                <Link2 className="w-4 h-4" /> Invite someone
               </h2>
               <p className="text-xs text-muted-foreground">
-                They open the link, sign in to their own account, and you&apos;re linked.
+                They open the link, sign in with their own account (and their own Preferences), and
+                you&apos;re ready to swipe.
               </p>
               <Button onClick={createInvite} disabled={busy}>
-                Create share link
+                Create invite link
               </Button>
               {invite && (
                 <div className="rounded-xl border border-border bg-secondary/40 p-4 space-y-3">
@@ -364,7 +394,7 @@ export default function PartnerPage() {
                   </p>
                   <Button size="sm" variant="secondary" onClick={copyInvite} className="gap-2">
                     <Copy className="w-3.5 h-3.5" />
-                    Copy share link
+                    Copy invite link
                   </Button>
                 </div>
               )}
@@ -380,14 +410,17 @@ export default function PartnerPage() {
                   className="font-mono"
                 />
                 <Button onClick={() => join()} disabled={busy || !joinCode.trim()}>
-                  Link
+                  Join
                 </Button>
               </div>
             </div>
           </section>
         )}
 
-        <Link href="/swipe" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        <Link
+          href="/swipe"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
           Solo swipe instead <ArrowRight className="w-3.5 h-3.5" />
         </Link>
       </div>
@@ -401,7 +434,7 @@ export function PairInvitePage() {
   const code = params.code ?? "";
   const [, setLocation] = useLocation();
   const [status, setStatus] = useState<"joining" | "error" | "done">("joining");
-  const [message, setMessage] = useState("Linking accounts…");
+  const [message, setMessage] = useState("Joining movie night…");
 
   useEffect(() => {
     if (!code) {
@@ -422,16 +455,16 @@ export function PairInvitePage() {
         if (cancelled) return;
         if (!res.ok) {
           setStatus("error");
-          setMessage((err as { error?: string }).error ?? "Couldn’t redeem invite");
+          setMessage((err as { error?: string }).error ?? "Couldn’t join invite");
           return;
         }
         setStatus("done");
-        toast.success("You’re linked — ready to watch together");
+        toast.success("You’re in — start a movie night when you’re ready");
         setLocation("/partner");
       } catch {
         if (!cancelled) {
           setStatus("error");
-          setMessage("Couldn’t redeem invite");
+          setMessage("Couldn’t join invite");
         }
       }
     })();

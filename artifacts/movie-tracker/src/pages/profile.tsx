@@ -33,30 +33,18 @@ async function exportLibrary() {
 }
 
 function preferencesSummary(prefs: {
-  preferredLanguages: string[];
-  preferredGenres: string[];
   preferredProviders: number[];
   maxCertification?: string | null;
-  mutedGenres?: string[];
 } | undefined): string {
   if (!prefs) return "Loading…";
   const parts: string[] = [];
-  if (prefs.preferredLanguages.length) {
-    parts.push(`${prefs.preferredLanguages.length} language${prefs.preferredLanguages.length === 1 ? "" : "s"}`);
-  }
-  if (prefs.preferredGenres.length) {
-    parts.push(`${prefs.preferredGenres.length} genre${prefs.preferredGenres.length === 1 ? "" : "s"}`);
-  }
   if (prefs.maxCertification) {
     parts.push(`max ${prefs.maxCertification}`);
-  }
-  if (prefs.mutedGenres?.length) {
-    parts.push(`${prefs.mutedGenres.length} muted`);
   }
   if (prefs.preferredProviders.length) {
     parts.push(`${prefs.preferredProviders.length} service${prefs.preferredProviders.length === 1 ? "" : "s"}`);
   }
-  return parts.length ? parts.join(" · ") : "Not set yet";
+  return parts.length ? parts.join(" · ") : "Cinema taste & streaming";
 }
 
 function ProfileShell({
@@ -96,7 +84,7 @@ function ProfileShell({
               <span className="flex-1 text-left">
                 <span className="block">Together</span>
                 <span className="block text-xs text-muted-foreground font-normal">
-                  Link spouse · watch-together decks
+                  Movie-night ritual · share a link & swipe
                 </span>
               </span>
               <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />

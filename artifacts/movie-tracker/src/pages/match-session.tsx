@@ -194,7 +194,7 @@ export default function MatchSessionPage() {
               onClick={() => {
                 const url = `${window.location.origin}${BASE}/match/${sessionId}`;
                 void navigator.clipboard.writeText(url).then(
-                  () => toast.success("Session link copied — send to your spouse"),
+                  () => toast.success("Link copied — send it so they can swipe the same deck"),
                   () => toast.message(url),
                 );
               }}

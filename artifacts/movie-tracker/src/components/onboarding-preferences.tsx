@@ -50,8 +50,8 @@ const VALUE_PROPS = [
   },
   {
     icon: MessageCircle,
-    title: "Match & decide",
-    desc: "Link a partner and find something you both want tonight.",
+    title: "Movie night ritual",
+    desc: "Share a link, swipe together, and let mutual likes pick tonight’s film.",
   },
 ];
 

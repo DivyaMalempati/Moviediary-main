@@ -147,7 +147,7 @@ export function Layout({ children }: LayoutProps) {
         {/* Always-visible Together shortcut on all breakpoints */}
         {location !== "/partner" && (
           <div className="sticky top-0 z-40 border-b border-border/60 bg-background/90 backdrop-blur-md px-4 py-2 flex items-center justify-between gap-3">
-            <p className="text-xs text-muted-foreground truncate">Watch with your spouse</p>
+            <p className="text-xs text-muted-foreground truncate">Movie night — share a link & swipe</p>
             <Link
               href="/partner"
               className="inline-flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-2.5 py-1 text-xs font-medium"
