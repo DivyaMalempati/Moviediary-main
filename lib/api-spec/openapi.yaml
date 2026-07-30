@@ -182,6 +182,35 @@ paths:
         "404":
           description: Not found
 
+  /movies/{id}/rewatch:
+    post:
+      operationId: rewatchMovie
+      tags: [movies]
+      summary: Log a rewatch for an already-watched movie
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RewatchInput"
+      responses:
+        "200":
+          description: Updated movie after rewatch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Movie"
+        "400":
+          description: Movie is not marked watched
+        "404":
+          description: Not found
+
   /tmdb/search:
     get:
       operationId: searchTmdb
@@ -352,7 +381,7 @@ components:
 
     Movie:
       type: object
-      required: [id, title, status, createdAt]
+      required: [id, title, status, createdAt, rewatchCount]
       properties:
         id:
           type: integer
@@ -383,6 +412,10 @@ components:
           type: ["string", "null"]
         createdAt:
           type: string
+        rewatchCount:
+          type: integer
+          minimum: 0
+          description: Number of rewatches after the first watch (0 = watched once)
 
     MovieInput:
       type: object
@@ -444,6 +477,13 @@ components:
           type: ["string", "null"]
         watchedAt:
           type: ["string", "null"]
+
+    RewatchInput:
+      type: object
+      properties:
+        rating:
+          type: ["string", "null"]
+          description: Optional updated rating from this rewatch
 
     MovieStats:
       type: object

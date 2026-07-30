@@ -6,14 +6,15 @@ import { LanguageBadge } from "@/components/language-badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { useListMovies, useGetMovieStats } from "@workspace/api-client-react";
+import { useListMovies, useGetMovieStats, useRewatchMovie, getListMoviesQueryKey, getGetMovieStatsQueryKey } from "@workspace/api-client-react";
 import {
-  Clapperboard, Search, Loader2, Upload, X, Download, ChevronDown,
+  Clapperboard, Search, Loader2, Upload, X, Download, ChevronDown, RotateCcw,
 } from "lucide-react";
+import { RatingPickerDialog } from "@/components/rating-picker-dialog";
 
 // ── CSV export ────────────────────────────────────────────────────────────────
 function exportCSV(movies: any[], filename: string) {
-  const cols = ["title", "status", "rating", "year", "language", "genres", "notes", "added", "watched"];
+  const cols = ["title", "status", "rating", "year", "language", "genres", "notes", "added", "watched", "rewatches"];
   const rows = movies.map((m) => [
     m.title,
     "watched",
@@ -24,6 +25,7 @@ function exportCSV(movies: any[], filename: string) {
     m.notes ?? "",
     m.createdAt ? new Date(m.createdAt).toLocaleDateString() : "",
     m.watchedAt ? new Date(m.watchedAt).toLocaleDateString() : "",
+    m.rewatchCount ?? 0,
   ]);
   const csv = [cols, ...rows]
     .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
@@ -117,8 +119,8 @@ function sortMovies(list: any[], sort: SortKey) {
 }
 
 // ── Collapsible section ───────────────────────────────────────────────────────
-function Section({ title, movies, badge, defaultOpen = true }: {
-  title: string; movies: any[]; badge: number; defaultOpen?: boolean;
+function Section({ title, movies, badge, defaultOpen = true, onRewatch }: {
+  title: string; movies: any[]; badge: number; defaultOpen?: boolean; onRewatch: (movie: any) => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   if (movies.length === 0) return null;
@@ -143,6 +145,22 @@ function Section({ title, movies, badge, defaultOpen = true }: {
               language={movie.originalLanguage}
               rating={movie.rating}
               year={movie.releaseYear}
+              rewatchCount={movie.rewatchCount}
+              overlayAction={
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="shadow-lg shadow-black/50 bg-white text-black hover:bg-white/90"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onRewatch(movie);
+                  }}
+                >
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Rewatch
+                </Button>
+              }
             />
           ))}
         </div>
@@ -153,6 +171,9 @@ function Section({ title, movies, badge, defaultOpen = true }: {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function WatchedPage() {
+  const queryClient = useQueryClient();
+  const rewatchMovie = useRewatchMovie();
+  const [pendingRewatch, setPendingRewatch] = useState<any | null>(null);
   const [genreFilter, setGenreFilter]     = useState("all");
   const [languageFilter, setLanguageFilter] = useState("all");
   const [ratingFilter, setRatingFilter]   = useState("all");
@@ -165,6 +186,28 @@ export default function WatchedPage() {
   const updateSort = (s: SortKey) => {
     setSort(s);
     try { localStorage.setItem("cinevault:sort", s); } catch {}
+  };
+
+  const submitRewatch = (rating: string | null) => {
+    if (!pendingRewatch) return;
+    const id = pendingRewatch.id as number;
+    setPendingRewatch(null);
+    rewatchMovie.mutate(
+      { id, data: rating != null ? { rating } : {} },
+      {
+        onSuccess: (movie) => {
+          toast.success(
+            movie.rewatchCount > 1
+              ? `Rewatch logged · ×${1 + movie.rewatchCount}`
+              : "Rewatch logged"
+          );
+          queryClient.invalidateQueries({ queryKey: getListMoviesQueryKey({ status: "watched" }) });
+          queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
+          queryClient.invalidateQueries({ queryKey: getGetMovieStatsQueryKey() });
+        },
+        onError: () => toast.error("Failed to log rewatch"),
+      }
+    );
   };
 
   const { data: stats }   = useGetMovieStats();
@@ -384,9 +427,9 @@ export default function WatchedPage() {
           </div>
         ) : useSections ? (
           <div className="space-y-8">
-            <Section title="Needs a rating" badge={needsRating.length} movies={needsRating} defaultOpen={true} />
-            <Section title={`Added in ${CURRENT_YEAR}`} badge={thisYear.length} movies={thisYear} defaultOpen={true} />
-            <Section title="Earlier" badge={earlier.length} movies={earlier} defaultOpen={true} />
+            <Section title="Needs a rating" badge={needsRating.length} movies={needsRating} defaultOpen={true} onRewatch={setPendingRewatch} />
+            <Section title={`Added in ${CURRENT_YEAR}`} badge={thisYear.length} movies={thisYear} defaultOpen={true} onRewatch={setPendingRewatch} />
+            <Section title="Earlier" badge={earlier.length} movies={earlier} defaultOpen={true} onRewatch={setPendingRewatch} />
           </div>
         ) : (
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-4 md:gap-6">
@@ -399,10 +442,36 @@ export default function WatchedPage() {
                 language={movie.originalLanguage}
                 rating={movie.rating}
                 year={movie.releaseYear}
+                rewatchCount={movie.rewatchCount}
+                overlayAction={
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="shadow-lg shadow-black/50 bg-white text-black hover:bg-white/90"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setPendingRewatch(movie);
+                    }}
+                  >
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    Rewatch
+                  </Button>
+                }
               />
             ))}
           </div>
         )}
+
+        <RatingPickerDialog
+          open={!!pendingRewatch}
+          movieTitle={pendingRewatch?.title ?? ""}
+          confirmOnSelect
+          titleSuffix=" this time"
+          skipLabel="Skip rating · still log rewatch"
+          onConfirm={submitRewatch}
+          onCancel={() => setPendingRewatch(null)}
+        />
 
       </div>
     </Layout>

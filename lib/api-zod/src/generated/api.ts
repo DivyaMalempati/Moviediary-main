@@ -25,6 +25,10 @@ export const ListMoviesQueryParams = zod.object({
   "rating": zod.coerce.string().optional()
 })
 
+export const listMoviesResponseRewatchCountMin = 0;
+
+
+
 export const ListMoviesResponseItem = zod.object({
   "id": zod.number(),
   "title": zod.string(),
@@ -38,7 +42,8 @@ export const ListMoviesResponseItem = zod.object({
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
   "watchedAt": zod.string().nullish(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "rewatchCount": zod.number().min(listMoviesResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)')
 })
 export const ListMoviesResponse = zod.array(ListMoviesResponseItem)
 
@@ -63,6 +68,10 @@ export const CreateMovieBody = zod.object({
   "watchedAt": zod.string().optional()
 })
 
+export const createMovieResponseRewatchCountMin = 0;
+
+
+
 export const CreateMovieResponse = zod.object({
   "id": zod.number(),
   "title": zod.string(),
@@ -76,13 +85,18 @@ export const CreateMovieResponse = zod.object({
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
   "watchedAt": zod.string().nullish(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "rewatchCount": zod.number().min(createMovieResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)')
 })
 
 
 /**
  * @summary Get library statistics
  */
+export const getMovieStatsResponseRecentlyWatchedItemRewatchCountMin = 0;
+
+
+
 export const GetMovieStatsResponse = zod.object({
   "totalWatched": zod.number(),
   "totalWatchlist": zod.number(),
@@ -115,7 +129,8 @@ export const GetMovieStatsResponse = zod.object({
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
   "watchedAt": zod.string().nullish(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "rewatchCount": zod.number().min(getMovieStatsResponseRecentlyWatchedItemRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)')
 })).optional()
 })
 
@@ -137,6 +152,10 @@ export const GetMovieParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const getMovieResponseRewatchCountMin = 0;
+
+
+
 export const GetMovieResponse = zod.object({
   "id": zod.number(),
   "title": zod.string(),
@@ -150,7 +169,8 @@ export const GetMovieResponse = zod.object({
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
   "watchedAt": zod.string().nullish(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "rewatchCount": zod.number().min(getMovieResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)')
 })
 
 
@@ -178,6 +198,10 @@ export const UpdateMovieBody = zod.object({
   "watchedAt": zod.string().nullish()
 })
 
+export const updateMovieResponseRewatchCountMin = 0;
+
+
+
 export const UpdateMovieResponse = zod.object({
   "id": zod.number(),
   "title": zod.string(),
@@ -191,7 +215,8 @@ export const UpdateMovieResponse = zod.object({
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
   "watchedAt": zod.string().nullish(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "rewatchCount": zod.number().min(updateMovieResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)')
 })
 
 
@@ -212,6 +237,10 @@ export const MatchMovieToTmdbParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const matchMovieToTmdbResponseRewatchCountMin = 0;
+
+
+
 export const MatchMovieToTmdbResponse = zod.object({
   "id": zod.number(),
   "title": zod.string(),
@@ -225,7 +254,41 @@ export const MatchMovieToTmdbResponse = zod.object({
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
   "watchedAt": zod.string().nullish(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "rewatchCount": zod.number().min(matchMovieToTmdbResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)')
+})
+
+
+/**
+ * @summary Log a rewatch for an already-watched movie
+ */
+export const RewatchMovieParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RewatchMovieBody = zod.object({
+  "rating": zod.string().nullish().describe('Optional updated rating from this rewatch')
+})
+
+export const rewatchMovieResponseRewatchCountMin = 0;
+
+
+
+export const RewatchMovieResponse = zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "status": zod.enum(['watched', 'watchlist']),
+  "rating": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "tmdbId": zod.number().nullish(),
+  "posterPath": zod.string().nullish(),
+  "releaseYear": zod.number().nullish(),
+  "originalLanguage": zod.string().nullish(),
+  "genres": zod.array(zod.string()).nullish(),
+  "overview": zod.string().nullish(),
+  "watchedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "rewatchCount": zod.number().min(rewatchMovieResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)')
 })
 
 

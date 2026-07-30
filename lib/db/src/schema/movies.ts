@@ -56,6 +56,9 @@ export const moviesTable = pgTable(
     // watch_events table for full rewatch history lands in Sprint 3.
     watchedAt: timestamp("watched_at", { withTimezone: true }),
 
+    // Number of rewatches after the first watch (0 = watched once).
+    rewatchCount: integer("rewatch_count").notNull().default(0),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()

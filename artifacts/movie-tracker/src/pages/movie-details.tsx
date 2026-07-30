@@ -18,12 +18,13 @@ import {
   useCreateMovie,
   useListMovies,
   getListMoviesQueryKey,
+  useRewatchMovie,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getPosterUrl, RATING_LABELS } from "@/lib/movie-utils";
 import { LanguageBadge } from "@/components/language-badge";
 import { MoviePosterCard } from "@/components/movie-card";
-import { Star, Heart, Bookmark, Check, Trash2, ArrowLeft, Loader2, Calendar, Clapperboard, Tv, Eye, BookmarkPlus, Film, FolderOpen, Plus, X } from "lucide-react";
+import { Star, Heart, Bookmark, Check, Trash2, ArrowLeft, Loader2, Calendar, Clapperboard, Tv, Eye, BookmarkPlus, Film, FolderOpen, Plus, X, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
@@ -57,6 +58,7 @@ export default function MovieDetailsPage() {
   const updateMovie = useUpdateMovie();
   const deleteMovie = useDeleteMovie();
   const createMovie = useCreateMovie();
+  const rewatchMovie = useRewatchMovie();
 
   const { data: library } = useListMovies(undefined, { query: { queryKey: getListMoviesQueryKey() } });
   const libraryTmdbIds = new Set((library ?? []).map((m) => m.tmdbId).filter(Boolean));
@@ -115,7 +117,12 @@ export default function MovieDetailsPage() {
     }
   }, [debouncedRating, debouncedNotes, id, saveChanges]);
 
-  const [ratingDialogMovie, setRatingDialogMovie] = useState<{ title: string; action: (r: string | null) => void } | null>(null);
+  const [ratingDialogMovie, setRatingDialogMovie] = useState<{
+    title: string;
+    action: (r: string | null) => void;
+    titleSuffix?: string;
+    skipLabel?: string;
+  } | null>(null);
   const [newColName, setNewColName] = useState("");
 
   // Collections
@@ -181,6 +188,33 @@ export default function MovieDetailsPage() {
         toast.success("Movie deleted");
         setLocation("/");
       }
+    });
+  };
+
+  const handleRewatch = () => {
+    if (!movie) return;
+    setRatingDialogMovie({
+      title: movie.title,
+      titleSuffix: " this time",
+      skipLabel: "Skip rating · still log rewatch",
+      action: (selectedRating) => {
+        setRatingDialogMovie(null);
+        rewatchMovie.mutate(
+          { id, data: selectedRating != null ? { rating: selectedRating } : {} },
+          {
+            onSuccess: (updated) => {
+              toast.success(`Rewatch logged · ×${1 + updated.rewatchCount}`);
+              if (selectedRating) {
+                setRating(selectedRating);
+                lastSaved.current = { ...lastSaved.current, rating: selectedRating };
+              }
+              queryClient.invalidateQueries({ queryKey: getGetMovieQueryKey(id) });
+              queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
+            },
+            onError: () => toast.error("Failed to log rewatch"),
+          }
+        );
+      },
     });
   };
 
@@ -305,7 +339,7 @@ export default function MovieDetailsPage() {
               </div>
             )}
             
-            <div className="flex items-center gap-3 pt-2">
+            <div className="flex items-center gap-3 pt-2 flex-wrap">
               <Button 
                 variant={movie.status === "watched" ? "default" : "outline"} 
                 className={movie.status === "watched" ? "bg-primary text-primary-foreground shadow-[0_0_20px_rgba(245,158,11,0.3)]" : "bg-background/50 backdrop-blur"}
@@ -314,6 +348,18 @@ export default function MovieDetailsPage() {
                 {movie.status === "watched" ? <Check className="w-4 h-4 mr-2" /> : <Bookmark className="w-4 h-4 mr-2" />}
                 {movie.status === "watched" ? "Watched" : "In Watchlist"}
               </Button>
+
+              {movie.status === "watched" && (
+                <Button
+                  variant="outline"
+                  className="bg-background/50 backdrop-blur"
+                  onClick={handleRewatch}
+                  disabled={rewatchMovie.isPending}
+                >
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Rewatch{(movie.rewatchCount ?? 0) > 0 ? ` · ×${1 + movie.rewatchCount}` : ""}
+                </Button>
+              )}
               
               <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -619,6 +665,9 @@ export default function MovieDetailsPage() {
       <RatingPickerDialog
         open={!!ratingDialogMovie}
         movieTitle={ratingDialogMovie?.title ?? ""}
+        confirmOnSelect
+        titleSuffix={ratingDialogMovie?.titleSuffix}
+        skipLabel={ratingDialogMovie?.skipLabel}
         onConfirm={(r) => ratingDialogMovie?.action(r)}
         onCancel={() => setRatingDialogMovie(null)}
       />

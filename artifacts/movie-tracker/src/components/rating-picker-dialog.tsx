@@ -19,6 +19,10 @@ interface RatingPickerDialogProps {
    * Pass false only for rare two-step flows that still need a confirm button.
    */
   confirmOnSelect?: boolean;
+  /** Optional suffix after the title, e.g. " this time". */
+  titleSuffix?: string;
+  /** Label for the skip action. */
+  skipLabel?: string;
 }
 
 export function RatingPickerDialog({
@@ -27,6 +31,8 @@ export function RatingPickerDialog({
   onConfirm,
   onCancel,
   confirmOnSelect = true,
+  titleSuffix = "",
+  skipLabel,
 }: RatingPickerDialogProps) {
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -58,6 +64,10 @@ export function RatingPickerDialog({
     setSelected((prev) => (prev === val ? null : val));
   };
 
+  const resolvedSkip =
+    skipLabel ??
+    (confirmOnSelect ? "Skip rating · still mark watched" : "Skip rating");
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-sm bg-background border-border">
@@ -67,7 +77,7 @@ export function RatingPickerDialog({
             <span className="text-primary truncate inline-block max-w-[16rem] align-bottom">
               {movieTitle}
             </span>
-            ?
+            {titleSuffix}?
           </DialogTitle>
         </DialogHeader>
 
@@ -103,7 +113,7 @@ export function RatingPickerDialog({
             className={confirmOnSelect ? "w-full text-muted-foreground" : "flex-1 text-muted-foreground"}
             onClick={handleSkip}
           >
-            {confirmOnSelect ? "Skip rating · still mark watched" : "Skip rating"}
+            {resolvedSkip}
           </Button>
           {!confirmOnSelect && (
             <Button

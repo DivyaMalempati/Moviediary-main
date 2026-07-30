@@ -40,6 +40,11 @@ export interface Movie {
   /** @nullable */
   watchedAt?: string | null;
   createdAt: string;
+  /**
+     * Number of rewatches after the first watch (0 = watched once)
+     * @minimum 0
+     */
+  rewatchCount: number;
 }
 
 export type MovieInputStatus = typeof MovieInputStatus[keyof typeof MovieInputStatus];
@@ -95,6 +100,14 @@ export interface MovieUpdate {
   overview?: string | null;
   /** @nullable */
   watchedAt?: string | null;
+}
+
+export interface RewatchInput {
+  /**
+     * Optional updated rating from this rewatch
+     * @nullable
+     */
+  rating?: string | null;
 }
 
 export interface CountByKey {
