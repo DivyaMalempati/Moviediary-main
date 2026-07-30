@@ -136,6 +136,7 @@ export function RewatchLogDialog({
 
         <div className="flex gap-2 mt-2">
           <Button
+            type="button"
             variant="ghost"
             size="sm"
             className="flex-1 text-muted-foreground"
@@ -143,7 +144,12 @@ export function RewatchLogDialog({
           >
             Cancel
           </Button>
-          <Button size="sm" className="flex-1" onClick={() => submit(selected)}>
+          <Button
+            type="button"
+            size="sm"
+            className="flex-1"
+            onClick={() => submit(selected)}
+          >
             Log rewatch
           </Button>
         </div>

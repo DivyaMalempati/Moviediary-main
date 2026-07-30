@@ -206,6 +206,10 @@ export default function MovieDetailsPage() {
 
   const submitRewatch = (payload: { rating: string | null; watchedAt?: string | null }) => {
     setRewatchDialogOpen(false);
+    if (!id) {
+      toast.error("Couldn't log rewatch — film id missing");
+      return;
+    }
     const data: { rating?: string | null; watchedAt?: string | null } = {};
     if (payload.rating != null) data.rating = payload.rating;
     if (payload.watchedAt) data.watchedAt = payload.watchedAt;
@@ -213,7 +217,7 @@ export default function MovieDetailsPage() {
       { id, data },
       {
         onSuccess: (updated) => {
-          const times = 1 + updated.rewatchCount;
+          const times = 1 + (updated.rewatchCount ?? 0);
           toast.success(
             payload.watchedAt
               ? `Rewatch logged · ×${times} · ${formatWatchDate(payload.watchedAt)}`
@@ -225,8 +229,17 @@ export default function MovieDetailsPage() {
           }
           queryClient.invalidateQueries({ queryKey: getGetMovieQueryKey(id) });
           queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
+          queryClient.invalidateQueries({ queryKey: ["movie-stats"] });
         },
-        onError: () => toast.error("Failed to log rewatch"),
+        onError: (err: any) => {
+          const msg =
+            err?.data?.error ||
+            (typeof err?.message === "string" && err.message.startsWith("HTTP")
+              ? err.message.replace(/^HTTP \d+[^:]*:?\s*/, "")
+              : null) ||
+            "Failed to log rewatch";
+          toast.error(msg);
+        },
       },
     );
   };

@@ -753,7 +753,7 @@ export const rewatchMovie = async (id: number,
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(rewatchInput)
+    body: JSON.stringify(rewatchInput ?? {})
   }
 );}
 

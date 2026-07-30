@@ -175,6 +175,11 @@ export default function WatchedPage() {
   const submitRewatch = (payload: { rating: string | null; watchedAt?: string | null }) => {
     if (!pendingRewatch) return;
     const id = pendingRewatch.id as number;
+    if (!id) {
+      toast.error("Couldn't log rewatch — film id missing");
+      setPendingRewatch(null);
+      return;
+    }
     setPendingRewatch(null);
     const data: { rating?: string | null; watchedAt?: string | null } = {};
     if (payload.rating != null) data.rating = payload.rating;
@@ -183,7 +188,7 @@ export default function WatchedPage() {
       { id, data },
       {
         onSuccess: (movie) => {
-          const times = 1 + movie.rewatchCount;
+          const times = 1 + (movie.rewatchCount ?? 0);
           toast.success(
             payload.watchedAt
               ? `Rewatch logged · ×${times} · ${formatWatchDate(payload.watchedAt)}`
@@ -193,7 +198,15 @@ export default function WatchedPage() {
           queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
           queryClient.invalidateQueries({ queryKey: getGetMovieStatsQueryKey() });
         },
-        onError: () => toast.error("Failed to log rewatch"),
+        onError: (err: any) => {
+          const msg =
+            err?.data?.error ||
+            (typeof err?.message === "string" && err.message.startsWith("HTTP")
+              ? err.message.replace(/^HTTP \d+[^:]*:?\s*/, "")
+              : null) ||
+            "Failed to log rewatch";
+          toast.error(msg);
+        },
       },
     );
   };

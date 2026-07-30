@@ -18,6 +18,32 @@ import { requireAuth } from "../../middlewares/requireAuth.js";
 
 const router: IRouter = Router();
 
+const VALID_RATINGS = new Set([
+  "loved",
+  "great",
+  "very_good",
+  "good",
+  "ok",
+  "avg",
+  "meh",
+]);
+
+function toIsoTimestamp(value: Date | string | null | undefined): string | null {
+  if (value == null) return null;
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
+function normalizeRewatchDates(
+  value: unknown,
+): Date[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((d) => (d instanceof Date ? d : new Date(d as string)))
+    .filter((d) => !Number.isNaN(d.getTime()));
+}
+
 function dbMovieToResponse(m: typeof moviesTable.$inferSelect) {
   return {
     id: m.id,
@@ -31,10 +57,11 @@ function dbMovieToResponse(m: typeof moviesTable.$inferSelect) {
     originalLanguage: m.originalLanguage ?? null,
     genres: m.genres ?? null,
     overview: m.overview ?? null,
-    watchedAt: m.watchedAt ? m.watchedAt.toISOString() : null,
-    createdAt: m.createdAt.toISOString(),
+    watchedAt: toIsoTimestamp(m.watchedAt),
+    createdAt: toIsoTimestamp(m.createdAt) ?? new Date(0).toISOString(),
     rewatchCount: m.rewatchCount ?? 0,
-    rewatchDates: (m.rewatchDates ?? []).map((d: Date) => d.toISOString()),
+    rewatchDates: normalizeRewatchDates(m.rewatchDates)
+      .map((d) => d.toISOString()),
   };
 }
 
@@ -316,54 +343,70 @@ router.post("/movies/:id/rewatch", requireAuth, async (req: any, res): Promise<v
     return;
   }
 
-  const [existing] = await db
-    .select()
-    .from(moviesTable)
-    .where(and(eq(moviesTable.userId, req.userId), eq(moviesTable.id, params.data.id)));
+  try {
+    const [existing] = await db
+      .select()
+      .from(moviesTable)
+      .where(and(eq(moviesTable.userId, req.userId), eq(moviesTable.id, params.data.id)));
 
-  if (!existing) {
-    res.status(404).json({ error: "Movie not found" });
-    return;
-  }
-
-  if (existing.status !== "watched") {
-    res.status(400).json({ error: "Only watched movies can be rewatched" });
-    return;
-  }
-
-  const updateValues: Partial<typeof moviesTable.$inferInsert> = {
-    rewatchCount: (existing.rewatchCount ?? 0) + 1,
-  };
-
-  // Optional dated rewatch: append to history and refresh last-watched.
-  // Undated rewatches only bump the count (date logging is optional).
-  const rawWatchedAt = body.data.watchedAt;
-  if (rawWatchedAt != null && String(rawWatchedAt).trim() !== "") {
-    const rewatchDate = new Date(rawWatchedAt);
-    if (Number.isNaN(rewatchDate.getTime())) {
-      res.status(400).json({ error: "Invalid watchedAt date" });
+    if (!existing) {
+      res.status(404).json({ error: "Movie not found" });
       return;
     }
-    updateValues.rewatchDates = [...(existing.rewatchDates ?? []), rewatchDate];
-    updateValues.watchedAt = rewatchDate;
+
+    if (existing.status !== "watched") {
+      res.status(400).json({ error: "Only watched movies can be rewatched" });
+      return;
+    }
+
+    const now = new Date();
+    const updateValues: Partial<typeof moviesTable.$inferInsert> = {
+      rewatchCount: (existing.rewatchCount ?? 0) + 1,
+      // Always refresh last-watched so the diary stays current even for undated rewatches.
+      watchedAt: now,
+    };
+
+    // Optional dated rewatch: append to history (and use that date as last-watched).
+    const rawWatchedAt = body.data.watchedAt;
+    if (rawWatchedAt != null && String(rawWatchedAt).trim() !== "") {
+      // Date-only (YYYY-MM-DD) → local noon to avoid timezone day-shift.
+      const raw = String(rawWatchedAt).trim();
+      const rewatchDate = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+        ? new Date(`${raw}T12:00:00`)
+        : new Date(raw);
+      if (Number.isNaN(rewatchDate.getTime())) {
+        res.status(400).json({ error: "Invalid watchedAt date" });
+        return;
+      }
+      const prevDates = normalizeRewatchDates(existing.rewatchDates);
+      updateValues.rewatchDates = [...prevDates, rewatchDate];
+      updateValues.watchedAt = rewatchDate;
+    }
+
+    if ("rating" in body.data && body.data.rating != null) {
+      if (!VALID_RATINGS.has(body.data.rating)) {
+        res.status(400).json({ error: "Invalid rating" });
+        return;
+      }
+      updateValues.rating = body.data.rating as typeof moviesTable.$inferInsert.rating;
+    }
+
+    const [movie] = await db
+      .update(moviesTable)
+      .set(updateValues)
+      .where(and(eq(moviesTable.userId, req.userId), eq(moviesTable.id, params.data.id)))
+      .returning();
+
+    if (!movie) {
+      res.status(404).json({ error: "Movie not found" });
+      return;
+    }
+
+    res.json(dbMovieToResponse(movie));
+  } catch (err) {
+    logger.error({ err, movieId: params.data.id, userId: req.userId }, "Failed to log rewatch");
+    res.status(500).json({ error: "Failed to log rewatch" });
   }
-
-  if ("rating" in body.data) {
-    updateValues.rating = body.data.rating ?? null;
-  }
-
-  const [movie] = await db
-    .update(moviesTable)
-    .set(updateValues)
-    .where(and(eq(moviesTable.userId, req.userId), eq(moviesTable.id, params.data.id)))
-    .returning();
-
-  if (!movie) {
-    res.status(404).json({ error: "Movie not found" });
-    return;
-  }
-
-  res.json(dbMovieToResponse(movie));
 });
 
 // DELETE /movies/:id
