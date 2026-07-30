@@ -26,8 +26,8 @@ const WORLD_CINEMA_DEFAULT = [
 
 function requireRegistered(req: any, res: any): boolean {
   const userId = req.userId as string;
-  if (!userId || userId.startsWith("guest_")) {
-    res.status(403).json({ error: "Sign in to use match sessions" });
+  if (!userId) {
+    res.status(401).json({ error: "Sign in to use match sessions" });
     return false;
   }
   return true;

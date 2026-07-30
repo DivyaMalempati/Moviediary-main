@@ -55,12 +55,6 @@ export default function PartnerPage() {
   const [sessionShareUrl, setSessionShareUrl] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (isDemoMode()) {
-      setPartner(null);
-      setSessions([]);
-      setLoading(false);
-      return;
-    }
     try {
       const [partnerRes, sessionsRes] = await Promise.all([
         fetch(`${BASE}/api/partners`, {
@@ -72,7 +66,7 @@ export default function PartnerPage() {
           credentials: "include",
         }),
       ]);
-      if (partnerRes.status === 403) {
+      if (partnerRes.status === 401 || partnerRes.status === 403) {
         setPartner(null);
         setSessions([]);
         setLoading(false);
@@ -107,7 +101,7 @@ export default function PartnerPage() {
         headers: await getAuthHeaders({ "Content-Type": "application/json" }),
         credentials: "include",
       });
-      if (res.status === 403) {
+      if (res.status === 401 || res.status === 403) {
         toast.error("Sign in to invite your spouse");
         return;
       }
@@ -263,13 +257,13 @@ export default function PartnerPage() {
         </ol>
 
         {isDemoMode() && (
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 space-y-3">
-            <p className="text-sm text-amber-100">
-              You&apos;re in demo mode. Together needs two signed-in accounts (you + spouse).
+          <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 space-y-2">
+            <p className="text-sm text-sky-50">
+              Demo session — you can create a share link and try the flow. For a permanent spouse link, sign in on both devices later.
             </p>
             <Link href="/sign-in">
-              <Button size="sm" className="bg-white text-black hover:bg-white/90">
-                Sign in to use Together
+              <Button size="sm" variant="outline" className="h-8 text-xs">
+                Sign in instead
               </Button>
             </Link>
           </div>
@@ -356,7 +350,7 @@ export default function PartnerPage() {
               <p className="text-xs text-muted-foreground">
                 They open the link, sign in to their own account, and you&apos;re linked.
               </p>
-              <Button onClick={createInvite} disabled={busy || isDemoMode()}>
+              <Button onClick={createInvite} disabled={busy}>
                 Create share link
               </Button>
               {invite && (
@@ -384,9 +378,8 @@ export default function PartnerPage() {
                   onChange={(e) => setJoinCode(e.target.value)}
                   placeholder="reel-a1b2c3d4"
                   className="font-mono"
-                  disabled={isDemoMode()}
                 />
-                <Button onClick={() => join()} disabled={busy || !joinCode.trim() || isDemoMode()}>
+                <Button onClick={() => join()} disabled={busy || !joinCode.trim()}>
                   Link
                 </Button>
               </div>
@@ -414,11 +407,6 @@ export function PairInvitePage() {
     if (!code) {
       setStatus("error");
       setMessage("Missing invite code");
-      return;
-    }
-    if (isDemoMode()) {
-      setStatus("error");
-      setMessage("Sign in to redeem a spouse invite");
       return;
     }
     let cancelled = false;
