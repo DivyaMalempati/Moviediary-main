@@ -30,13 +30,9 @@ export function RatingPickerDialog({
   movieTitle,
   onConfirm,
   onCancel,
-<<<<<<< HEAD
-  confirmOnSelect = false,
+  confirmOnSelect = true,
   titleSuffix = "",
   skipLabel,
-=======
-  confirmOnSelect = true,
->>>>>>> origin/main
 }: RatingPickerDialogProps) {
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -117,11 +113,7 @@ export function RatingPickerDialog({
             className={confirmOnSelect ? "w-full text-muted-foreground" : "flex-1 text-muted-foreground"}
             onClick={handleSkip}
           >
-<<<<<<< HEAD
             {resolvedSkip}
-=======
-            {confirmOnSelect ? "Skip rating · still mark watched" : "Skip rating"}
->>>>>>> origin/main
           </Button>
           {!confirmOnSelect && (
             <Button
