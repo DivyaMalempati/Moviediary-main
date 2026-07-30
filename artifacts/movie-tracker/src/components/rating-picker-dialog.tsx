@@ -14,7 +14,10 @@ interface RatingPickerDialogProps {
   movieTitle: string;
   onConfirm: (rating: string | null) => void;
   onCancel: () => void;
-  /** When true, tapping a rating submits immediately (no Mark Watched button). */
+  /**
+   * When true (default), tapping a rating submits immediately.
+   * Pass false only for rare two-step flows that still need a confirm button.
+   */
   confirmOnSelect?: boolean;
 }
 
@@ -23,7 +26,7 @@ export function RatingPickerDialog({
   movieTitle,
   onConfirm,
   onCancel,
-  confirmOnSelect = false,
+  confirmOnSelect = true,
 }: RatingPickerDialogProps) {
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -100,7 +103,7 @@ export function RatingPickerDialog({
             className={confirmOnSelect ? "w-full text-muted-foreground" : "flex-1 text-muted-foreground"}
             onClick={handleSkip}
           >
-            Skip rating
+            {confirmOnSelect ? "Skip rating · still mark watched" : "Skip rating"}
           </Button>
           {!confirmOnSelect && (
             <Button

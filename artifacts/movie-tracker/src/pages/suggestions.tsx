@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { RatingPickerDialog } from "@/components/rating-picker-dialog";
 
 // ---------------------------------------------------------------------------
 // Dismissed-movies hook — persisted to localStorage
@@ -285,6 +286,7 @@ export default function SuggestionsPage() {
   const getAiSuggestions = useGetAiSuggestions();
   const [aiResults, setAiResults] = useState<any[] | null>(null);
   const [aiSource, setAiSource] = useState<"ai" | "tmdb" | null>(null);
+  const [pendingWatched, setPendingWatched] = useState<any | null>(null);
 
   const handleGenerateAi = () => {
     getAiSuggestions.mutate({ data: { count: 10 } }, {
@@ -298,11 +300,12 @@ export default function SuggestionsPage() {
     });
   };
 
-  const handleAdd = (movie: any, status: "watched" | "watchlist") => {
+  const doAdd = (movie: any, status: "watched" | "watchlist", rating?: string | null) => {
     createMovie.mutate({
       data: {
         title: movie.title,
         status,
+        ...(rating ? { rating } : {}),
         ...(movie.tmdbId != null && { tmdbId: movie.tmdbId }),
         ...(movie.posterPath != null && { posterPath: movie.posterPath }),
         ...((movie.releaseYear ?? movie.year) != null && { releaseYear: movie.releaseYear ?? movie.year }),
@@ -314,6 +317,14 @@ export default function SuggestionsPage() {
         queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
       },
     });
+  };
+
+  const handleAdd = (movie: any, status: "watched" | "watchlist") => {
+    if (status === "watched") {
+      setPendingWatched(movie);
+    } else {
+      doAdd(movie, "watchlist");
+    }
   };
 
   const trendingData = trendingLang === "all" ? trending : discover;
@@ -493,6 +504,17 @@ export default function SuggestionsPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <RatingPickerDialog
+        open={!!pendingWatched}
+        movieTitle={pendingWatched?.title ?? ""}
+        onConfirm={(rating) => {
+          const movie = pendingWatched;
+          setPendingWatched(null);
+          if (movie) doAdd(movie, "watched", rating);
+        }}
+        onCancel={() => setPendingWatched(null)}
+      />
     </Layout>
   );
 }

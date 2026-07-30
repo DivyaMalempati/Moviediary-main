@@ -13,6 +13,8 @@ interface MoviePosterCardProps {
   year?: number | null;
   className?: string;
   actionNode?: React.ReactNode;
+  /** Centered overlay on the poster (e.g. Rate button). */
+  overlayAction?: React.ReactNode;
 }
 
 export function MoviePosterCard({
@@ -23,7 +25,8 @@ export function MoviePosterCard({
   rating,
   year,
   className,
-  actionNode
+  actionNode,
+  overlayAction,
 }: MoviePosterCardProps) {
   const posterUrl = getPosterUrl(posterPath);
 
@@ -59,6 +62,12 @@ export function MoviePosterCard({
               <Star className="w-3 h-3 text-white fill-white" />
             )}
             <span className="text-[10px] font-medium text-white">{RATING_LABELS[rating] || rating}</span>
+          </div>
+        )}
+
+        {overlayAction && (
+          <div className="absolute inset-0 z-30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            {overlayAction}
           </div>
         )}
       </Link>
