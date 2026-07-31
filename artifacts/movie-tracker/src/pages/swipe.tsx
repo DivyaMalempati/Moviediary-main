@@ -10,7 +10,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { getPosterUrl, RATING_LABELS } from "@/lib/movie-utils";
-import { getAuthHeaders } from "@/lib/demo-auth";
+import { authFetch, ensureClerkApiSession, getAuthHeaders } from "@/lib/demo-auth";
 import { usePreferences, PreferencesAuthError } from "@/lib/preferences";
 import { toast } from "sonner";
 import {
@@ -30,6 +30,7 @@ import {
   Clapperboard,
   Users,
   Undo2,
+  Shuffle,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
@@ -196,26 +197,34 @@ function useOnlineStatus(): boolean {
 }
 
 // ── API helpers ────────────────────────────────────────────────────────────────
+type SwipeBatchResult = {
+  films: SwipeFilm[];
+  status: "ok" | "auth" | "error" | "empty";
+};
+
 async function fetchSwipeBatch(
   page: number,
   genreId?: number | null,
   excludeIds?: Set<number>,
   onMyServices = false,
   tropeSlug?: string | null,
-): Promise<SwipeFilm[]> {
+): Promise<SwipeBatchResult> {
   try {
+    await ensureClerkApiSession();
     const params = new URLSearchParams({ page: String(page) });
     if (genreId != null) params.set("genreId", String(genreId));
     if (excludeIds && excludeIds.size > 0) params.set("excludeIds", [...excludeIds].join(","));
     if (onMyServices) params.set("onMyServices", "1");
     if (tropeSlug) params.set("trope", tropeSlug);
-    const res = await fetch(`${BASE}/api/discover/swipe?${params}`, {
-      headers: await getAuthHeaders(),
-      credentials: "include",
-    });
-    if (!res.ok) return [];
-    return res.json();
-  } catch { return []; }
+    const res = await authFetch(`${BASE}/api/discover/swipe?${params}`);
+    if (res.status === 401 || res.status === 403) return { films: [], status: "auth" };
+    if (!res.ok) return { films: [], status: "error" };
+    const films = (await res.json()) as SwipeFilm[];
+    if (!Array.isArray(films) || films.length === 0) return { films: [], status: "empty" };
+    return { films, status: "ok" };
+  } catch {
+    return { films: [], status: "error" };
+  }
 }
 
 async function saveFilm(
@@ -311,16 +320,21 @@ async function fillDeck(
   target = DECK_SIZE,
   onMyServices = false,
   tropeSlug: TropeSlug = null,
-): Promise<{ films: SwipeFilm[]; nextPage: number }> {
+): Promise<{ films: SwipeFilm[]; nextPage: number; status: SwipeBatchResult["status"] }> {
   const collected: SwipeFilm[] = [];
   const seen = new Set(excludeIds);
   let page = startPage;
+  let lastStatus: SwipeBatchResult["status"] = "empty";
 
   for (let attempt = 0; attempt < 4 && collected.length < target; attempt++) {
     const batch = await fetchSwipeBatch(page, genreId, seen, onMyServices, tropeSlug);
     page += 1;
-    if (batch.length === 0) break;
-    for (const f of batch) {
+    lastStatus = batch.status;
+    if (batch.status === "auth" || batch.status === "error") {
+      return { films: collected.slice(0, target), nextPage: page, status: batch.status };
+    }
+    if (batch.films.length === 0) break;
+    for (const f of batch.films) {
       if (seen.has(f.tmdbId)) continue;
       seen.add(f.tmdbId);
       collected.push(f);
@@ -328,7 +342,11 @@ async function fillDeck(
     }
   }
 
-  return { films: collected.slice(0, target), nextPage: page };
+  return {
+    films: collected.slice(0, target),
+    nextPage: page,
+    status: collected.length > 0 ? "ok" : lastStatus,
+  };
 }
 
 function ProviderRow({
@@ -881,7 +899,8 @@ function SwipeDeck() {
   const [isRetrying, setIsRetrying] = useState(false);
   const [deckNumber, setDeckNumber] = useState(1);
   const [deckActions, setDeckActions] = useState(0);
-  const [deckSize, setDeckSize] = useState(DECK_SIZE);
+  const [deckSize, setDeckSize] = useState(0);
+  const [loadStatus, setLoadStatus] = useState<SwipeBatchResult["status"] | null>(null);
   const [undoStack, setUndoStack] = useState<UndoItem[]>([]);
   const [ratingFilm, setRatingFilm] = useState<SwipeFilm | null>(null);
   const seenRef = useRef<Set<number>>(getSeenToday());
@@ -892,15 +911,17 @@ function SwipeDeck() {
     setLoading(true);
     setShowFinishLine(false);
     setExhausted(false);
+    setLoadStatus(null);
     setQueue([]);
     setDeckActions(0);
+    setDeckSize(0);
     setUndoStack([]);
     finishingRef.current = false;
     pendingFinishRef.current = false;
     setRatingFilm(null);
     if (nextDeckNumber != null) setDeckNumber(nextDeckNumber);
 
-    const { films, nextPage } = await fillDeck(
+    const { films, nextPage, status } = await fillDeck(
       page,
       genreId,
       seenRef.current,
@@ -909,7 +930,10 @@ function SwipeDeck() {
       selectedTrope,
     );
     setQueue(films);
-    setDeckSize(films.length || DECK_SIZE);
+    // Never fake a full deck size when the API returned nothing — that showed
+    // "12 left" above an empty "All caught up" state.
+    setDeckSize(films.length);
+    setLoadStatus(status);
     setApiPage(nextPage);
     setLoading(false);
     if (films.length === 0) setExhausted(true);
@@ -1139,8 +1163,30 @@ function SwipeDeck() {
 
   const current = queue[0];
   const isQueueEmpty = !loading && (queue.length === 0 || exhausted);
-  const remainingInDeck = Math.max(0, deckSize - deckActions);
+  const remainingInDeck = queue.length > 0 ? Math.max(0, deckSize - deckActions) : 0;
   const stackH = Math.round(CARD_W * 1.58) + 20;
+  const emptyCopy =
+    loadStatus === "auth"
+      ? {
+          title: "Couldn’t load your deck",
+          body: "Your session didn’t reach the swipe API. Retry — or sign out and back in.",
+        }
+      : loadStatus === "error"
+        ? {
+            title: "Deck failed to load",
+            body: "Something went wrong building today’s list. Check your connection and try again.",
+          }
+        : savedFilms.length + watchedFilms.length > 0
+          ? {
+              title: "All caught up for today",
+              body: "Come back tomorrow for a fresh deck — or review what you saved.",
+            }
+          : {
+              title: "No matches right now",
+              body: onMyServices
+                ? "Nothing matched your streaming services + filters. Turn off “On my streaming services” or widen genres/tropes."
+                : "No new films match these filters. Try another genre/trope, or clear filters.",
+            };
 
   return (
     <Layout>
@@ -1166,12 +1212,18 @@ function SwipeDeck() {
             <p className="text-xs text-muted-foreground mt-0.5">
               {loading
                 ? "Building a short list…"
-                : `${remainingInDeck} left in deck ${deckNumber} · tap for details`}
+                : isQueueEmpty
+                  ? loadStatus === "auth" || loadStatus === "error"
+                    ? "Deck unavailable"
+                    : "No cards in this deck"
+                  : `${remainingInDeck} left in deck ${deckNumber} · tap for details`}
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             {!isOnline && <WifiOff className="w-3 h-3 text-amber-400" />}
-            <span className="tabular-nums">{deckActions}/{deckSize}</span>
+            <span className="tabular-nums">
+              {deckSize > 0 ? `${deckActions}/${deckSize}` : "—"}
+            </span>
           </div>
         </div>
 
@@ -1179,7 +1231,9 @@ function SwipeDeck() {
         <div className="w-full max-w-sm mb-3 h-1 rounded-full bg-white/10 overflow-hidden">
           <div
             className="h-full bg-white/70 transition-all duration-300"
-            style={{ width: `${deckSize ? Math.min(100, (deckActions / deckSize) * 100) : 0}%` }}
+            style={{
+              width: `${deckSize ? Math.min(100, (deckActions / deckSize) * 100) : 0}%`,
+            }}
           />
         </div>
 
@@ -1257,20 +1311,40 @@ function SwipeDeck() {
 
         ) : isQueueEmpty ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center gap-5 max-w-xs">
-            <div className="text-5xl">🎬</div>
+            <Clapperboard className="w-12 h-12 text-muted-foreground/50" />
             <div>
-              <h2 className="text-xl font-bold mb-2">All caught up for today</h2>
-              <p className="text-muted-foreground text-sm leading-relaxed">
-                {savedFilms.length + watchedFilms.length > 0
-                  ? "Come back tomorrow for a fresh deck — or review what you saved."
-                  : "No new films match your preferences right now. Check back tomorrow."}
-              </p>
+              <h2 className="text-xl font-bold mb-2">{emptyCopy.title}</h2>
+              <p className="text-muted-foreground text-sm leading-relaxed">{emptyCopy.body}</p>
             </div>
-            {(savedFilms.length > 0 || watchedFilms.length > 0) && (
-              <Button onClick={() => setShowFinishLine(true)} className="bg-white text-black hover:bg-white/90 gap-2">
-                <Bookmark className="w-4 h-4" /> See your picks
+            <div className="flex flex-col gap-2 w-full">
+              <Button
+                onClick={() => void startDeck(1, selectedGenreId, deckNumber)}
+                className="bg-white text-black hover:bg-white/90 gap-2"
+              >
+                <Shuffle className="w-4 h-4" /> Retry deck
               </Button>
-            )}
+              {(selectedGenreId != null || selectedTrope != null || onMyServices) && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSelectedGenreId(null);
+                    setSelectedTrope(null);
+                    setOnMyServices(false);
+                  }}
+                >
+                  Clear filters
+                </Button>
+              )}
+              {(savedFilms.length > 0 || watchedFilms.length > 0) && (
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowFinishLine(true)}
+                  className="gap-2"
+                >
+                  <Bookmark className="w-4 h-4" /> See your picks
+                </Button>
+              )}
+            </div>
           </div>
 
         ) : (
