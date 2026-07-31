@@ -181,6 +181,30 @@ export function disableDemoMode(): void {
   syncExtraAuthHeaders();
 }
 
+/**
+ * Leave demo/guest mode and hard-navigate to Clerk sign-in.
+ * Always use this (not a soft Link) so demo headers/tokens can't stick around
+ * and block Google sign-in on Replit preview hosts.
+ */
+export function exitDemoToSignIn(): void {
+  disableDemoMode();
+  clearAppSession();
+  localStorage.removeItem(GUEST_TOKEN_KEY);
+  localStorage.removeItem(DEMO_KEY);
+  const base = (import.meta.env.BASE_URL || "/").replace(/\/$/, "");
+  window.location.assign(`${window.location.origin}${base}/sign-in`);
+}
+
+/** Same as exitDemoToSignIn but for the sign-up route. */
+export function exitDemoToSignUp(): void {
+  disableDemoMode();
+  clearAppSession();
+  localStorage.removeItem(GUEST_TOKEN_KEY);
+  localStorage.removeItem(DEMO_KEY);
+  const base = (import.meta.env.BASE_URL || "/").replace(/\/$/, "");
+  window.location.assign(`${window.location.origin}${base}/sign-up`);
+}
+
 /** Call once on app startup to restore an existing guest session from localStorage. */
 export function initDemoMode(): void {
   if (isDemoMode()) {

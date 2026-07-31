@@ -3,7 +3,7 @@ import { useClerk, useUser } from "@clerk/react";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { PreferencesModal } from "@/components/preferences-modal";
-import { isDemoMode, disableDemoMode, clearAppSession, getAuthHeaders } from "@/lib/demo-auth";
+import { isDemoMode, exitDemoToSignIn, clearAppSession, getAuthHeaders } from "@/lib/demo-auth";
 import { usePreferences } from "@/lib/preferences";
 import { toast } from "sonner";
 import { ChevronRight, Download, LogOut, Settings, Upload, BookOpen, Play, Users, PlusCircle } from "lucide-react";
@@ -187,9 +187,7 @@ function DemoProfile() {
       subtitle="Local session"
       signOutLabel="Exit demo & sign in"
       onSignOut={() => {
-        disableDemoMode();
-        window.location.href =
-          (import.meta.env.BASE_URL || "/").replace(/\/$/, "") + "/sign-in";
+        exitDemoToSignIn();
       }}
       avatar={
         <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-sm font-semibold shrink-0">

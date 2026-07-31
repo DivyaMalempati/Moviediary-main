@@ -8,6 +8,7 @@ import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/sonner";
 import { ClerkAuthTokenBridge } from "@/components/clerk-auth-token-bridge";
 import { isDemoMode, initDemoMode, disableDemoMode, enableDemoMode, clearAppSession } from "@/lib/demo-auth";
+// disableDemoMode used when Clerk session appears / leaving guest mode
 
 import LandingPage from "@/pages/landing";
 import WatchedPage from "@/pages/watched";
@@ -33,8 +34,26 @@ const clerkEnvKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undef
 const clerkPubKey = clerkEnvKey
   ? publishableKeyFromHost(window.location.hostname, clerkEnvKey) || clerkEnvKey
   : undefined;
-const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+/** Absolute app URL helper (needed for OAuth return on Replit gateway hosts). */
+function absoluteAppUrl(path: string): string {
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  return `${window.location.origin}${basePath}${normalized === "/" ? "" : normalized}` || window.location.origin;
+}
+
+/**
+ * Clerk FAPI proxy — required on Replit production hosts so Google OAuth and
+ * session cookies work without a custom CNAME. Dev instances skip the proxy.
+ */
+function resolveClerkProxyUrl(): string | undefined {
+  const fromEnv = import.meta.env.VITE_CLERK_PROXY_URL as string | undefined;
+  if (fromEnv) return fromEnv;
+  if (import.meta.env.PROD) return "/api/__clerk";
+  return undefined;
+}
+
+const clerkProxyUrl = resolveClerkProxyUrl();
 
 function stripBase(path: string): string {
   return basePath && path.startsWith(basePath)
@@ -168,17 +187,46 @@ function ClerkQueryClientCacheInvalidator() {
 }
 
 function SignInPage() {
+  // Visiting sign-in must leave demo/guest mode or Google OAuth stays wedged.
+  useEffect(() => {
+    if (isDemoMode()) disableDemoMode();
+    clearAppSession();
+  }, []);
+
+  const afterAuth = absoluteAppUrl("/watched");
+
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
-      <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} appearance={clerkAppearance} />
+      <SignIn
+        routing="path"
+        path={`${basePath}/sign-in`}
+        signUpUrl={`${basePath}/sign-up`}
+        forceRedirectUrl={afterAuth}
+        fallbackRedirectUrl={afterAuth}
+        appearance={clerkAppearance}
+      />
     </div>
   );
 }
 
 function SignUpPage() {
+  useEffect(() => {
+    if (isDemoMode()) disableDemoMode();
+    clearAppSession();
+  }, []);
+
+  const afterAuth = absoluteAppUrl("/watched");
+
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
-      <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} appearance={clerkAppearance} />
+      <SignUp
+        routing="path"
+        path={`${basePath}/sign-up`}
+        signInUrl={`${basePath}/sign-in`}
+        forceRedirectUrl={afterAuth}
+        fallbackRedirectUrl={afterAuth}
+        appearance={clerkAppearance}
+      />
     </div>
   );
 }
@@ -270,13 +318,13 @@ function ClerkProviderWithRoutes() {
   const [, setLocation] = useLocation();
   return (
     <ClerkProvider
-      publishableKey={clerkPubKey}
+      publishableKey={clerkPubKey!}
       proxyUrl={clerkProxyUrl}
       appearance={clerkAppearance}
       signInUrl={`${basePath}/sign-in`}
       signUpUrl={`${basePath}/sign-up`}
-      afterSignInUrl={`${basePath}/partner`}
-      afterSignUpUrl={`${basePath}/partner`}
+      signInFallbackRedirectUrl={absoluteAppUrl("/watched")}
+      signUpFallbackRedirectUrl={absoluteAppUrl("/watched")}
       localization={{
         signIn: { start: { title: "Welcome back", subtitle: "Sign in to your Cinevault" } },
         signUp: { start: { title: "Create your vault", subtitle: "Start tracking Indian cinema" } },

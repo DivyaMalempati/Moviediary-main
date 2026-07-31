@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useUser } from "@clerk/react";
 import { Clapperboard, Eye, Bookmark, PlusCircle, Sparkles, FolderOpen, BarChart2, Upload, User, Shuffle, Users, BookOpen, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { isDemoMode } from "@/lib/demo-auth";
+import { isDemoMode, exitDemoToSignIn } from "@/lib/demo-auth";
 import { FeatureWalkthroughHost } from "@/components/feature-walkthrough";
 
 interface LayoutProps {
@@ -100,12 +100,20 @@ export function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-[100dvh] flex flex-col md:flex-row bg-background text-foreground">
-      {/* Unmistakable build marker — if you don't see this, you're not on the cloud agent */}
-      <div className="fixed top-0 inset-x-0 z-[100] bg-emerald-500 text-black text-center text-xs sm:text-sm font-bold py-1.5 px-3 tracking-wide">
-        CLOUD AGENT BUILD · Together + Share live · if this bar is missing you’re on the wrong localhost
-      </div>
+      {demo && (
+        <div className="fixed top-0 inset-x-0 z-[100] bg-amber-400 text-black text-xs sm:text-sm font-medium py-1.5 px-3 flex items-center justify-center gap-3">
+          <span>Demo mode — your data stays on this device</span>
+          <button
+            type="button"
+            onClick={() => exitDemoToSignIn()}
+            className="underline font-semibold hover:no-underline"
+          >
+            Exit &amp; sign in with Google
+          </button>
+        </div>
+      )}
       {/* Sidebar — Desktop */}
-      <aside className="hidden md:flex w-64 flex-col border-r border-border bg-card/30 backdrop-blur-md sticky top-0 h-screen pt-8">
+      <aside className={`hidden md:flex w-64 flex-col border-r border-border bg-card/30 backdrop-blur-md sticky top-0 h-screen ${demo ? "pt-8" : ""}`}>
         <div className="p-6 pb-2">
           <Link href="/watched" className="flex items-center gap-3 group">
             <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
@@ -113,7 +121,6 @@ export function Layout({ children }: LayoutProps) {
             </div>
             <div className="flex flex-col leading-tight">
               <span className="font-sans font-bold text-xl tracking-tight">Cinevault</span>
-              <span className="text-[10px] text-emerald-400/90 font-medium">Together enabled</span>
             </div>
           </Link>
         </div>
@@ -147,7 +154,7 @@ export function Layout({ children }: LayoutProps) {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 flex flex-col min-w-0 pb-20 md:pb-0 pt-8">
+      <main className={`flex-1 flex flex-col min-w-0 pb-20 md:pb-0 ${demo ? "pt-8" : ""}`}>
         {/* Always-visible Together shortcut on all breakpoints */}
         {location !== "/partner" && (
           <div className="sticky top-0 z-40 border-b border-border/60 bg-background/90 backdrop-blur-md px-4 py-2 flex items-center justify-between gap-3">
