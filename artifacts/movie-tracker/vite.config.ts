@@ -1,9 +1,32 @@
 import path from 'path';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 
 import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
+
+const workspaceRoot = path.resolve(import.meta.dirname, '../..');
+
+/**
+ * Replit Secrets often set CLERK_PUBLISHABLE_KEY (server name). Vite only
+ * embeds VITE_* into the browser bundle — mirror so Sign-in / Get started
+ * work after sharing Clerk with Replit without a second secret.
+ * Never mirror CLERK_SECRET_KEY (must stay server-only).
+ */
+function ensureViteClerkPublishableKey(mode: string) {
+  const fromFiles = loadEnv(mode, workspaceRoot, '');
+  const publishable =
+    process.env.VITE_CLERK_PUBLISHABLE_KEY ||
+    process.env.CLERK_PUBLISHABLE_KEY ||
+    fromFiles.VITE_CLERK_PUBLISHABLE_KEY ||
+    fromFiles.CLERK_PUBLISHABLE_KEY;
+
+  if (publishable && !process.env.VITE_CLERK_PUBLISHABLE_KEY) {
+    process.env.VITE_CLERK_PUBLISHABLE_KEY = publishable;
+  }
+}
+
+ensureViteClerkPublishableKey(process.env.NODE_ENV === 'production' ? 'production' : 'development');
 
 const rawPort = process.env.PORT;
 
