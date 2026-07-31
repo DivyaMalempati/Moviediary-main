@@ -72,6 +72,7 @@ _Populate as real preferences come up in conversation — e.g. naming convention
 
 ## Gotchas
 
+- **Replit ports:** the API artifact runs on **8080**, not 5000. The movie-tracker Vite proxy must use `API_PROXY_TARGET=http://127.0.0.1:8080` (set in `artifacts/movie-tracker/.replit-artifact/artifact.toml`). Local/Cursor `.env` can keep `:5000` to match `artifacts/api-server/.env`.
 - `RATING_LABELS` (`movie-utils.ts`) and the various `RATING_ORDER` maps in `watched.tsx`/`stats.tsx` must stay in sync — there's no single shared source for rating display order yet.
 - Movies are movie-only right now — TMDB search doesn't yet distinguish TV. Adding TV support means threading a `mediaType` field through search, add, and details, not just the DB column.
 - No rewatch tracking — logging a film again doesn't create a new entry, it just overwrites the one `watchedAt`/rating/notes. Don't assume watch history is complete when building stats features.
