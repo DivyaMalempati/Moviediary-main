@@ -2,22 +2,17 @@ import type { LucideIcon } from "lucide-react";
 import {
   Bookmark,
   Eye,
-  FolderOpen,
-  BarChart2,
   PlusCircle,
-  Sparkles,
   Shuffle,
   Users,
-  Upload,
-  RotateCcw,
+  Settings,
   Clapperboard,
-  Tv,
-  CalendarClock,
-  Bell,
+  User,
 } from "lucide-react";
+import { isFeatureEnabled } from "@/lib/features";
 
 /** Bump when the tour content changes so returning users see the new version once. */
-export const FEATURE_TOUR_VERSION = 2;
+export const FEATURE_TOUR_VERSION = 3;
 export const FEATURE_TOUR_STORAGE_KEY = `cinevault:feature-tour:v${FEATURE_TOUR_VERSION}`;
 
 export type FeatureGuideItem = {
@@ -28,213 +23,172 @@ export type FeatureGuideItem = {
   href: string;
   cta: string;
   icon: LucideIcon;
+  /** Optional feature flag — omitted items always show in the guide. */
+  feature?: Parameters<typeof isFeatureEnabled>[0];
 };
 
-/** Short first-visit walkthrough steps (keep lean). */
+/**
+ * First-visit walkthrough — MVP only.
+ * Each step explains the page and the main buttons.
+ */
 export const FEATURE_TOUR_STEPS: FeatureGuideItem[] = [
   {
-    id: "vault",
-    title: "Your vault",
-    summary: "Watched and Watchlist hold everything you’ve logged.",
+    id: "watched",
+    title: "Watched",
+    summary: "Your diary of films you’ve already seen.",
     detail:
-      "On day one you can tap posters you’ve seen to seed Watched. Later, rate films, save titles for later, and open any poster for notes, streaming, and similar picks.",
+      "Open any poster for rating, notes, and details. Use filters/search to find a title. This is home after you sign in.",
     href: "/watched",
     cta: "Open Watched",
     icon: Eye,
   },
   {
-    id: "swipe",
-    title: "Swipe decks",
-    summary: "A short personalized deck — not an endless scroll.",
+    id: "watchlist",
+    title: "Watchlist",
+    summary: "Films you’re saving for later.",
     detail:
-      "Left skips, right saves to Watchlist, up logs as Watched. Filter by genre, trope (heist, twist ending…), or what’s on your streaming apps.",
+      "From a poster, mark Watched (with a rating) when you finish it. Bottom nav → Watchlist.",
+    href: "/watchlist",
+    cta: "Open Watchlist",
+    icon: Bookmark,
+  },
+  {
+    id: "swipe",
+    title: "Swipe",
+    summary: "A short deck mixed for your taste — not endless scroll.",
+    detail:
+      "First visit: set your own genres & languages. Then swipe — left skips, right saves to Watchlist, up logs as Watched. Solo only (not movie night).",
     href: "/swipe",
-    cta: "Start swiping",
+    cta: "Open Swipe",
     icon: Shuffle,
   },
   {
-    id: "discover",
-    title: "Discover & movie night",
-    summary: "Recommendations for you — or a shared swipe ritual with a friend.",
+    id: "together",
+    title: "Together",
+    summary: "Movie night with a friend — shared deck, mutual likes.",
     detail:
-      "Discover mixes AI For You, Because You Liked, and Trending. Together is a movie-night ritual: each person keeps their own genres and languages, you share a link, swipe the same deck, and mutual likes become tonight’s shortlist.",
-    href: "/suggestions",
-    cta: "Open Discover",
-    icon: Sparkles,
+      "Create invite link → they join → tap Start movie night & swipe. That opens /match/… where you both swipe. Bottom-nav Swipe stays solo.",
+    href: "/partner",
+    cta: "Open Together",
+    icon: Users,
   },
   {
-    id: "more",
-    title: "Collections, stats & import",
-    summary: "Organize deeper, see your patterns, bring an old list in.",
+    id: "add-profile",
+    title: "Add & Profile",
+    summary: "Search to add titles; Preferences shape every deck.",
     detail:
-      "Build collections, check stats, import a CSV, and log rewatches with optional dates. Reopen this guide anytime from Profile.",
-    href: "/collections",
-    cta: "Browse collections",
-    icon: FolderOpen,
+      "Add: search TMDB and save to Watched or Watchlist. Profile: Preferences (genres, languages, streaming), export, sign out, and this guide.",
+    href: "/add",
+    cta: "Add a film",
+    icon: PlusCircle,
   },
 ];
 
-/** Full reference guide shown on /guide. */
+/** Full reference guide — MVP pages + what each main control does. */
 export const FEATURE_GUIDE_SECTIONS: Array<{
   heading: string;
   items: FeatureGuideItem[];
 }> = [
   {
-    heading: "Library",
+    heading: "Bottom navigation",
     items: [
       {
-        id: "watched",
+        id: "nav-watched",
         title: "Watched",
-        summary: "Your diary of films you’ve seen.",
+        summary: "Films you’ve logged as seen.",
         detail:
-          "Search, filter, and sort. Log a rewatch (date optional) and get anniversary reminders when a film hits the same day years later.",
+          "Tap a poster → film details. Search/filter at the top. Rewatch lives on the film page / Watched actions when available.",
         href: "/watched",
         cta: "Go to Watched",
         icon: Eye,
       },
       {
-        id: "watchlist",
+        id: "nav-watchlist",
         title: "Watchlist",
-        summary: "Films you’re saving for later.",
+        summary: "Saved for later.",
         detail:
-          "Rate from the poster overlay to move a title into Watched. Export your list anytime.",
+          "Rate or mark watched from the list to move a title into your diary.",
         href: "/watchlist",
         cta: "Go to Watchlist",
         icon: Bookmark,
       },
       {
-        id: "upcoming",
-        title: "Upcoming",
-        summary: "Releases you’re looking forward to — with reminders.",
+        id: "nav-swipe",
+        title: "Swipe (solo)",
+        summary: "Your private recommendation deck.",
         detail:
-          "Browse what’s coming to India, tap Remind me to save it on your watchlist with a release date, and get nudged when it lands (also on Watched).",
-        href: "/upcoming",
-        cta: "Open Upcoming",
-        icon: CalendarClock,
-      },
-      {
-        id: "add",
-        title: "Add",
-        summary: "Search TMDB and add to your vault.",
-        detail:
-          "Filter results to titles available on your streaming services when you’ve set them in Preferences.",
-        href: "/add",
-        cta: "Add a film",
-        icon: PlusCircle,
-      },
-      {
-        id: "import",
-        title: "Import",
-        summary: "Bring an existing list into Cinevault.",
-        detail:
-          "Paste or upload titles — we match them to TMDB and add watched or watchlist rows.",
-        href: "/import",
-        cta: "Import list",
-        icon: Upload,
-      },
-    ],
-  },
-  {
-    heading: "Find something to watch",
-    items: [
-      {
-        id: "swipe-guide",
-        title: "Swipe",
-        summary: "12-card decks mixed for your taste.",
-        detail:
-          "About 60% safe matches from your taste, 20% high-rated titles on your OTT apps, and 20% hidden gems. Genre and trope chips refine the deck.",
+          "Left = skip · Right = Watchlist · Up = Watched. Filters: genre / trope / streaming. Not used for movie night.",
         href: "/swipe",
         cta: "Open Swipe",
         icon: Shuffle,
       },
       {
-        id: "discover-guide",
-        title: "Discover",
-        summary: "For You, Because You Liked, and Trending India.",
+        id: "nav-together",
+        title: "Together",
+        summary: "Shared movie-night ritual.",
         detail:
-          "Mark picks watched or save them. Films already in your library stay out of the feed.",
-        href: "/suggestions",
-        cta: "Open Discover",
-        icon: Sparkles,
-      },
-      {
-        id: "partner-guide",
-        title: "Movie night ritual",
-        summary: "Share a link, swipe together, find what you both want tonight.",
-        detail:
-          "Each of you sets your own genres and languages in Preferences — you never fill in for each other. Invite a friend, start a shared deck built from both tastes, swipe the same films, and celebrate mutual likes as tonight’s shortlist.",
+          "1) Preferences (each person, own account) · 2) Create invite link · 3) Start movie night & swipe · 4) Mutual likes = tonight’s shortlist. Share the /match/… link so you swipe the same deck.",
         href: "/partner",
         cta: "Open Together",
         icon: Users,
       },
       {
-        id: "streaming",
-        title: "Streaming prefs",
-        summary: "Tell us which apps you actually use.",
+        id: "nav-profile",
+        title: "Profile",
+        summary: "Account, Preferences, guide, export.",
         detail:
-          "Set Netflix, Prime, Hotstar, and more under Profile → Preferences so Swipe and Add can bias toward what’s streamable tonight.",
+          "Preferences set languages, genres, and streaming apps. Replay walkthrough and open this Guide from here. Sign out / exit demo also live here.",
         href: "/profile",
-        cta: "Open Preferences",
-        icon: Tv,
+        cta: "Open Profile",
+        icon: User,
       },
     ],
   },
   {
-    heading: "Organize & revisit",
+    heading: "Key actions",
     items: [
       {
-        id: "collections-guide",
-        title: "Collections",
-        summary: "Manual lists or smart rules.",
+        id: "action-add",
+        title: "Add a film",
+        summary: "Search and add to Watched or Watchlist.",
         detail:
-          "Group films by mood, decade, or custom rules so your vault stays browsable.",
-        href: "/collections",
-        cta: "Open Collections",
-        icon: FolderOpen,
+          "Sidebar → Add (or Profile → Add a film). Type at least 2 characters. Optional: limit results to your streaming services from Preferences.",
+        href: "/add",
+        cta: "Add a film",
+        icon: PlusCircle,
       },
       {
-        id: "stats-guide",
-        title: "Stats",
-        summary: "See how you watch.",
+        id: "action-prefs",
+        title: "Preferences",
+        summary: "Your taste — never fill in for your partner.",
         detail:
-          "Totals, ratings mix, languages, genres, and monthly activity from your diary.",
-        href: "/stats",
-        cta: "Open Stats",
-        icon: BarChart2,
+          "Profile → Preferences. Each person keeps their own genres & languages. Together builds the shared deck from both profiles.",
+        href: "/profile",
+        cta: "Open Profile",
+        icon: Settings,
       },
       {
-        id: "rewatch-guide",
-        title: "Rewatches",
-        summary: "Count every revisit.",
-        detail:
-          "From Watched or a film’s page, log a rewatch with an optional date. History shows times watched and dated entries.",
-        href: "/watched",
-        cta: "Open Watched",
-        icon: RotateCcw,
-      },
-      {
-        id: "release-reminders",
-        title: "Release reminders",
-        summary: "Don’t miss a film you marked.",
-        detail:
-          "When a Looking forward title is due within a week, Watched shows a dismissible banner so you can open it or mark it watched.",
-        href: "/upcoming",
-        cta: "See Upcoming",
-        icon: Bell,
-      },
-      {
-        id: "vault-brand",
+        id: "action-details",
         title: "Film details",
-        summary: "The deep page for any title in your vault.",
+        summary: "Deep page for any title in your vault.",
         detail:
-          "Ratings, notes, where to watch, similar titles, language/version changes, and watch history live here.",
+          "Open from Watched, Watchlist, or Swipe. Edit rating/notes, see where to watch, similar titles, share, or remove.",
         href: "/watched",
-        cta: "Browse vault",
+        cta: "Browse Watched",
         icon: Clapperboard,
       },
     ],
   },
 ];
+
+export function visibleGuideSections() {
+  return FEATURE_GUIDE_SECTIONS.map((section) => ({
+    ...section,
+    items: section.items.filter(
+      (item) => !item.feature || isFeatureEnabled(item.feature),
+    ),
+  })).filter((section) => section.items.length > 0);
+}
 
 export function isFeatureTourDone(): boolean {
   try {

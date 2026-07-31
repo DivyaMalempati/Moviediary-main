@@ -59,10 +59,10 @@ export function FeatureWalkthrough({ open, onOpenChange }: FeatureWalkthroughPro
               Feature walkthrough · {step + 1}/{total}
             </p>
             <DialogTitle className="text-xl font-semibold tracking-tight">
-              How Cinevault works
+              Your Cinevault guide
             </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
-              A quick tour of the vault — skip anytime and reopen from Profile.
+              What each main page and button does — skip anytime; reopen from Profile → Guide.
             </DialogDescription>
           </DialogHeader>
 
