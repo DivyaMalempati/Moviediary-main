@@ -10,6 +10,10 @@ import { verifyGuestToken, verifyAppSessionToken } from "../routes/guest.js";
  *      (minted after a one-time Clerk Bearer exchange; works when Clerk
  *      cookies fail with X-Clerk-Auth-Reason: dev-browser-missing)
  *   3. Clerk session cookie / Authorization Bearer header
+ *
+ * Stale/invalid guest or app tokens must fall through to Clerk Bearer.
+ * Otherwise a leftover localStorage token after SESSION_SECRET rotation
+ * blocks signed-in users (e.g. Together invite → "Sign in to invite…").
  */
 export function requireAuth(req: any, res: any, next: any) {
   // 1. Guest session via signed token
@@ -21,9 +25,6 @@ export function requireAuth(req: any, res: any, next: any) {
       next();
       return;
     }
-    // Token present but invalid — reject early rather than falling through to Clerk
-    res.status(401).json({ error: "Invalid guest token" });
-    return;
   }
 
   // 2. First-party app session (Clerk exchange)
@@ -35,8 +36,6 @@ export function requireAuth(req: any, res: any, next: any) {
       next();
       return;
     }
-    res.status(401).json({ error: "Invalid session token" });
-    return;
   }
 
   // 3. Clerk (only when clerkMiddleware is mounted)

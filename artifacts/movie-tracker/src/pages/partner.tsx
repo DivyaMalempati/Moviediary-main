@@ -3,7 +3,12 @@ import { Link, useLocation, useParams } from "wouter";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getAuthHeaders, isDemoMode, exitDemoToSignIn } from "@/lib/demo-auth";
+import {
+  authFetch,
+  ensureClerkApiSession,
+  isDemoMode,
+  exitDemoToSignIn,
+} from "@/lib/demo-auth";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -57,15 +62,10 @@ export default function PartnerPage() {
 
   const refresh = useCallback(async () => {
     try {
+      await ensureClerkApiSession();
       const [partnerRes, sessionsRes] = await Promise.all([
-        fetch(`${BASE}/api/partners`, {
-          headers: await getAuthHeaders(),
-          credentials: "include",
-        }),
-        fetch(`${BASE}/api/match-sessions`, {
-          headers: await getAuthHeaders(),
-          credentials: "include",
-        }),
+        authFetch(`${BASE}/api/partners`),
+        authFetch(`${BASE}/api/match-sessions`),
       ]);
       if (partnerRes.status === 401 || partnerRes.status === 403) {
         setPartner(null);
@@ -97,13 +97,13 @@ export default function PartnerPage() {
   const createInvite = async () => {
     setBusy(true);
     try {
-      const res = await fetch(`${BASE}/api/partners/invite`, {
+      await ensureClerkApiSession();
+      const res = await authFetch(`${BASE}/api/partners/invite`, {
         method: "POST",
-        headers: await getAuthHeaders({ "Content-Type": "application/json" }),
-        credentials: "include",
+        headers: { "Content-Type": "application/json" },
       });
       if (res.status === 401 || res.status === 403) {
-        toast.error("Sign in to invite someone to movie night");
+        toast.error("Session expired — sign out and sign back in, then try again");
         return;
       }
       if (!res.ok) throw new Error("invite failed");
@@ -122,10 +122,10 @@ export default function PartnerPage() {
     if (!raw) return;
     setBusy(true);
     try {
-      const res = await fetch(`${BASE}/api/partners/join`, {
+      await ensureClerkApiSession();
+      const res = await authFetch(`${BASE}/api/partners/join`, {
         method: "POST",
-        headers: await getAuthHeaders({ "Content-Type": "application/json" }),
-        credentials: "include",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: raw.toLowerCase() }),
       });
       const err = await res.json().catch(() => ({}));
@@ -147,11 +147,7 @@ export default function PartnerPage() {
   const unlink = async () => {
     setBusy(true);
     try {
-      const res = await fetch(`${BASE}/api/partners`, {
-        method: "DELETE",
-        headers: await getAuthHeaders(),
-        credentials: "include",
-      });
+      const res = await authFetch(`${BASE}/api/partners`, { method: "DELETE" });
       if (!res.ok && res.status !== 204) throw new Error("unlink failed");
       toast.success("Movie-night pair cleared");
       setPartner(null);
@@ -167,10 +163,10 @@ export default function PartnerPage() {
   const startMatch = async () => {
     setBusy(true);
     try {
-      const res = await fetch(`${BASE}/api/match-sessions`, {
+      await ensureClerkApiSession();
+      const res = await authFetch(`${BASE}/api/match-sessions`, {
         method: "POST",
-        headers: await getAuthHeaders({ "Content-Type": "application/json" }),
-        credentials: "include",
+        headers: { "Content-Type": "application/json" },
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -469,10 +465,10 @@ export function PairInvitePage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${BASE}/api/partners/join`, {
+        await ensureClerkApiSession();
+        const res = await authFetch(`${BASE}/api/partners/join`, {
           method: "POST",
-          headers: await getAuthHeaders({ "Content-Type": "application/json" }),
-          credentials: "include",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ code: code.toLowerCase() }),
         });
         const err = await res.json().catch(() => ({}));
