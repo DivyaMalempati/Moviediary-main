@@ -55,15 +55,19 @@ const VALUE_PROPS = [
   },
 ];
 
-async function fetchSeedMovies(): Promise<SeedFilm[]> {
+async function fetchSeedMovies(signal?: AbortSignal): Promise<SeedFilm[]> {
   try {
+    // Public TMDB proxy — do not await Clerk/guest auth headers here.
+    // On Replit preview hosts getToken() can hang and leave the spinner forever.
     const res = await fetch(`${BASE}/api/tmdb/onboarding-seed`, {
-      headers: await getAuthHeaders(),
       credentials: "include",
+      signal,
     });
     if (!res.ok) return [];
-    return (await res.json()) as SeedFilm[];
-  } catch {
+    const data = (await res.json()) as SeedFilm[];
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") return [];
     return [];
   }
 }
@@ -161,6 +165,7 @@ function SeedStep({
   onToggle,
   onContinue,
   onSkip,
+  onRetry,
   saving,
 }: {
   films: SeedFilm[];
@@ -169,6 +174,7 @@ function SeedStep({
   onToggle: (id: number) => void;
   onContinue: () => void;
   onSkip: () => void;
+  onRetry: () => void;
   saving: boolean;
 }) {
   return (
@@ -197,9 +203,15 @@ function SeedStep({
             <Loader2 className="w-7 h-7 animate-spin" />
           </div>
         ) : films.length === 0 ? (
-          <p className="text-center text-sm text-muted-foreground py-16 px-6">
-            Couldn&apos;t load popular titles right now. Skip and set languages instead.
-          </p>
+          <div className="text-center py-16 px-6 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Couldn&apos;t load popular titles right now. Skip and set languages instead —
+              or tap retry.
+            </p>
+            <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+              Retry
+            </Button>
+          </div>
         ) : (
           <div className="max-w-3xl mx-auto grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-1.5 sm:gap-2">
             {films.map((film) => {
@@ -353,6 +365,7 @@ export function OnboardingPreferences({ onComplete }: { onComplete: () => void }
   const [step, setStep] = useState<Step>("welcome");
   const [seedFilms, setSeedFilms] = useState<SeedFilm[]>([]);
   const [seedLoading, setSeedLoading] = useState(false);
+  const [seedAttempt, setSeedAttempt] = useState(0);
   const [selectedSeen, setSelectedSeen] = useState<Set<number>>(new Set());
   const [savingSeen, setSavingSeen] = useState(false);
   const [languages, setLanguages] = useState<string[]>([]);
@@ -360,12 +373,28 @@ export function OnboardingPreferences({ onComplete }: { onComplete: () => void }
   const { mutate: savePrefs, isPending } = useSavePreferences();
 
   useEffect(() => {
-    if (step !== "seed" || seedFilms.length > 0 || seedLoading) return;
+    if (step !== "seed") return;
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 12_000);
+    let cancelled = false;
+
     setSeedLoading(true);
-    void fetchSeedMovies()
-      .then(setSeedFilms)
-      .finally(() => setSeedLoading(false));
-  }, [step, seedFilms.length, seedLoading]);
+    void fetchSeedMovies(controller.signal)
+      .then((films) => {
+        if (!cancelled) setSeedFilms(films);
+      })
+      .finally(() => {
+        window.clearTimeout(timeout);
+        if (!cancelled) setSeedLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [step, seedAttempt]);
 
   const filmById = useMemo(() => {
     const map = new Map<number, SeedFilm>();
@@ -450,6 +479,10 @@ export function OnboardingPreferences({ onComplete }: { onComplete: () => void }
               onToggle={toggleSeen}
               onContinue={() => void saveSeenAndContinue()}
               onSkip={() => setStep("prefs")}
+              onRetry={() => {
+                setSeedFilms([]);
+                setSeedAttempt((n) => n + 1);
+              }}
               saving={savingSeen}
             />
           </motion.div>
