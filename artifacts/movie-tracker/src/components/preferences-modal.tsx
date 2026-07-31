@@ -101,12 +101,10 @@ export function PreferencesModal({
           </SheetDescription>
         </SheetHeader>
 
-        {isLoading ? (
-          <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm py-12">
-            Loading…
-          </div>
-        ) : (
-          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-8">
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-8">
+            {isLoading && (
+              <p className="text-xs text-muted-foreground">Syncing saved preferences…</p>
+            )}
             <section className="space-y-4">
               <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
                 Languages
@@ -186,8 +184,7 @@ export function PreferencesModal({
                 watchRegion={prefs?.watchRegion ?? "IN"}
               />
             </section>
-          </div>
-        )}
+        </div>
 
         <div className="px-6 py-4 border-t border-border flex items-center justify-between gap-3">
           {(languages.length > 0 || genres.length > 0 || providers.length > 0 || mutedGenres.length > 0 || maxCertification) && (

@@ -40,8 +40,12 @@ router.get("/tmdb/onboarding-seed", async (_req, res): Promise<void> => {
 
 // GET /tmdb/genres — canonical {id, name} list, used by the onboarding genre picker
 router.get("/tmdb/genres", async (_req, res): Promise<void> => {
-  const genres = await getAllGenres();
-  res.json(genres);
+  try {
+    const genres = await getAllGenres();
+    res.json(genres);
+  } catch {
+    res.status(502).json({ error: "Failed to load genres" });
+  }
 });
 
 // GET /tmdb/search

@@ -154,11 +154,14 @@ export function ProviderPicker({
     return <p className="text-sm text-muted-foreground">Loading streaming services…</p>;
   }
 
-  if (isError || !catalog?.length) {
+  const list = catalog?.length ? catalog : [];
+
+  if (isError && !list.length) {
     return (
       <div className="flex items-center gap-3 text-sm text-muted-foreground">
-        <span>Couldn't load streaming services.</span>
+        <span>Couldn&apos;t load streaming services.</span>
         <button
+          type="button"
           onClick={() => refetch()}
           className="underline underline-offset-2 hover:text-foreground transition-colors"
         >
@@ -168,14 +171,23 @@ export function ProviderPicker({
     );
   }
 
-  const featured = FEATURED_PROVIDER_IDS
-    .map((id) => catalog.find((p) => p.providerId === id))
-    .filter(Boolean) as typeof catalog;
+  const featured = FEATURED_PROVIDER_IDS.map((id) => list.find((p) => p.providerId === id)).filter(
+    Boolean,
+  ) as typeof list;
   const featuredIds = new Set(featured.map((p) => p.providerId));
-  const selectedExtra = catalog.filter(
+  // If TMDB renamed apps (e.g. Hotstar → JioHotstar), still show a useful set.
+  const topByPriority = list
+    .filter((p) => !featuredIds.has(p.providerId))
+    .slice(0, featured.length >= 4 ? 0 : 8);
+  const selectedExtra = list.filter(
     (p) => selected.includes(p.providerId) && !featuredIds.has(p.providerId),
   );
-  const shown = [...featured, ...selectedExtra];
+  const shownIds = new Set<number>();
+  const shown = [...featured, ...topByPriority, ...selectedExtra].filter((p) => {
+    if (shownIds.has(p.providerId)) return false;
+    shownIds.add(p.providerId);
+    return true;
+  });
 
   return (
     <div className="space-y-3">
@@ -191,7 +203,8 @@ export function ProviderPicker({
         ))}
       </div>
       <p className="text-[11px] text-muted-foreground">
-        Region: {watchRegion}. Used by Search and Swipe when “Available on my streaming services” is on.
+        Region: {watchRegion}. Used by Search and Swipe when “Available on my streaming services” is
+        on.
       </p>
     </div>
   );

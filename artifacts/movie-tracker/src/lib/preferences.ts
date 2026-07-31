@@ -201,13 +201,37 @@ export type WatchProviderCatalogItem = {
   displayPriority?: number;
 };
 
-export async function fetchWatchProviderCatalog(watchRegion = "IN"): Promise<WatchProviderCatalogItem[]> {
-  const res = await fetch(
-    `${API_BASE}/api/tmdb/watch-provider-catalog?watchRegion=${encodeURIComponent(watchRegion)}`,
-    { credentials: "include", headers: await getAuthHeaders() },
-  );
-  if (!res.ok) return [];
-  return res.json();
+/**
+ * India-first streaming apps for Preferences when TMDB catalog is unreachable.
+ * IDs match current TMDB watch/providers for region IN (JioHotstar replaced Hotstar/JioCinema).
+ */
+export const FALLBACK_PROVIDERS: WatchProviderCatalogItem[] = [
+  { providerId: 8, name: "Netflix", logoPath: null, displayPriority: 1 },
+  { providerId: 119, name: "Amazon Prime Video", logoPath: null, displayPriority: 2 },
+  { providerId: 2336, name: "JioHotstar", logoPath: null, displayPriority: 3 },
+  { providerId: 232, name: "Zee5", logoPath: null, displayPriority: 4 },
+  { providerId: 237, name: "Sony Liv", logoPath: null, displayPriority: 5 },
+  { providerId: 350, name: "Apple TV", logoPath: null, displayPriority: 6 },
+  { providerId: 11, name: "MUBI", logoPath: null, displayPriority: 7 },
+  { providerId: 192, name: "YouTube", logoPath: null, displayPriority: 8 },
+];
+
+export async function fetchWatchProviderCatalog(
+  watchRegion = "IN",
+): Promise<WatchProviderCatalogItem[]> {
+  try {
+    // Public TMDB proxy — do not await Clerk headers (that hung Preferences on Replit).
+    const res = await fetch(
+      `${API_BASE}/api/tmdb/watch-provider-catalog?watchRegion=${encodeURIComponent(watchRegion)}`,
+      { credentials: "include" },
+    );
+    if (!res.ok) throw new Error(`catalog ${res.status}`);
+    const data = (await res.json()) as WatchProviderCatalogItem[];
+    if (!Array.isArray(data) || data.length === 0) throw new Error("empty catalog");
+    return data;
+  } catch {
+    return FALLBACK_PROVIDERS;
+  }
 }
 
 export function useWatchProviderCatalog(watchRegion = "IN") {
@@ -215,20 +239,23 @@ export function useWatchProviderCatalog(watchRegion = "IN") {
     queryKey: ["watch-provider-catalog", watchRegion],
     queryFn: () => fetchWatchProviderCatalog(watchRegion),
     staleTime: 24 * 60 * 60 * 1000,
+    retry: 1,
   });
 }
 
 /** Popular India streaming services shown first in the picker. */
 export const FEATURED_PROVIDER_IDS = [
-  8,    // Netflix
-  119,  // Amazon Prime Video
-  122,  // Hotstar / Disney+ Hotstar
-  337,  // Disney Plus
-  220,  // JioCinema
-  237,  // Sony LIV
-  232,  // Zee5
-  350,  // Apple TV
-  11,   // MUBI
+  8, // Netflix
+  119, // Amazon Prime Video
+  2336, // JioHotstar (replaces Disney+ Hotstar / JioCinema in IN)
+  122, // legacy Hotstar id (still matched if present)
+  220, // legacy JioCinema id
+  337, // Disney Plus (other regions)
+  237, // Sony Liv
+  232, // Zee5
+  350, // Apple TV
+  11, // MUBI
+  192, // YouTube
 ];
 
 export const CERTIFICATION_OPTIONS: {
