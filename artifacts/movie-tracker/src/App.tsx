@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ClerkProvider, SignIn, SignUp, Show, useClerk } from "@clerk/react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { dark } from "@clerk/themes";
@@ -43,13 +43,17 @@ function absoluteAppUrl(path: string): string {
 }
 
 /**
- * Clerk FAPI proxy — required on Replit production hosts so Google OAuth and
- * session cookies work without a custom CNAME. Dev instances skip the proxy.
+ * Clerk FAPI proxy — only for production Clerk instances (pk_live_).
+ * Development keys (pk_test_) must talk to Clerk directly; forcing /api/__clerk
+ * blanks Sign-in / Get started on Replit and other preview hosts.
+ * Opt in explicitly with VITE_CLERK_PROXY_URL when the host is registered
+ * as a Clerk proxy URL.
  */
 function resolveClerkProxyUrl(): string | undefined {
-  const fromEnv = import.meta.env.VITE_CLERK_PROXY_URL as string | undefined;
+  const fromEnv = (import.meta.env.VITE_CLERK_PROXY_URL as string | undefined)?.trim();
   if (fromEnv) return fromEnv;
-  if (import.meta.env.PROD) return "/api/__clerk";
+  const key = clerkEnvKey ?? "";
+  if (import.meta.env.PROD && key.includes("pk_live_")) return "/api/__clerk";
   return undefined;
 }
 
@@ -139,6 +143,24 @@ function AppPages() {
   );
 }
 
+function AuthUnavailablePage({ mode }: { mode: "sign-in" | "sign-up" }) {
+  return (
+    <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-3 bg-background px-4 text-center">
+      <h1 className="text-lg font-semibold">
+        {mode === "sign-in" ? "Sign in unavailable" : "Sign up unavailable"}
+      </h1>
+      <p className="text-sm text-muted-foreground max-w-sm">
+        Clerk isn&apos;t configured in this environment, so Google sign-in can&apos;t load.
+        Continue without signing in, or set{" "}
+        <code className="text-foreground">VITE_CLERK_PUBLISHABLE_KEY</code>.
+      </p>
+      <a href={`${basePath || ""}/`} className="text-sm underline text-foreground">
+        Back to home
+      </a>
+    </div>
+  );
+}
+
 // ── Demo mode — no Clerk, fixed userId on backend ───────────────────────────
 function DemoRouter() {
   useEffect(() => {
@@ -151,9 +173,9 @@ function DemoRouter() {
 
   return (
     <Switch>
-      <Route path="/" component={() => <Redirect to="/watched" />} />
-      <Route path="/sign-in" component={() => <Redirect to="/watched" />} />
-      <Route path="/sign-up" component={() => <Redirect to="/watched" />} />
+      <Route path="/" component={LandingPage} />
+      <Route path="/sign-in/*?" component={() => <AuthUnavailablePage mode="sign-in" />} />
+      <Route path="/sign-up/*?" component={() => <AuthUnavailablePage mode="sign-up" />} />
       <Route path="/onboarding" component={() => <Redirect to="/swipe" />} />
       <AppPages />
     </Switch>
@@ -186,17 +208,46 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
-function SignInPage() {
-  // Visiting sign-in must leave demo/guest mode or Google OAuth stays wedged.
+function AuthPageShell({
+  children,
+  mode,
+}: {
+  children: React.ReactNode;
+  mode: "sign-in" | "sign-up";
+}) {
+  const [showHelp, setShowHelp] = useState(false);
+
+  // Visiting auth must leave demo/guest mode or Google OAuth stays wedged.
   useEffect(() => {
     if (isDemoMode()) disableDemoMode();
     clearAppSession();
+    const t = window.setTimeout(() => setShowHelp(true), 8000);
+    return () => window.clearTimeout(t);
   }, []);
 
+  return (
+    <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 bg-background px-4">
+      {children}
+      {showHelp && (
+        <div className="max-w-sm text-center space-y-2 text-sm text-muted-foreground">
+          <p>
+            {mode === "sign-in" ? "Sign in" : "Sign up"} is taking longer than usual.
+            Check your connection, then try again.
+          </p>
+          <a href={absoluteAppUrl("/")} className="underline text-foreground">
+            Back to home
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SignInPage() {
   const afterAuth = absoluteAppUrl("/watched");
 
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
+    <AuthPageShell mode="sign-in">
       <SignIn
         routing="path"
         path={`${basePath}/sign-in`}
@@ -205,20 +256,15 @@ function SignInPage() {
         fallbackRedirectUrl={afterAuth}
         appearance={clerkAppearance}
       />
-    </div>
+    </AuthPageShell>
   );
 }
 
 function SignUpPage() {
-  useEffect(() => {
-    if (isDemoMode()) disableDemoMode();
-    clearAppSession();
-  }, []);
-
   const afterAuth = absoluteAppUrl("/watched");
 
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
+    <AuthPageShell mode="sign-up">
       <SignUp
         routing="path"
         path={`${basePath}/sign-up`}
@@ -227,7 +273,7 @@ function SignUpPage() {
         fallbackRedirectUrl={afterAuth}
         appearance={clerkAppearance}
       />
-    </div>
+    </AuthPageShell>
   );
 }
 

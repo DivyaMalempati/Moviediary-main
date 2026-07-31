@@ -1,6 +1,12 @@
 import { Clapperboard, Film, Sparkles, Star, Shuffle, Users } from "lucide-react";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { enableDemoMode, exitDemoToSignIn, exitDemoToSignUp } from "@/lib/demo-auth";
+import { clearAppSession, disableDemoMode, enableDemoMode } from "@/lib/demo-auth";
+
+function clearGuestBeforeAuth() {
+  disableDemoMode();
+  clearAppSession();
+}
 
 export default function LandingPage() {
   const enterApp = async (path = "/watched") => {
@@ -36,12 +42,16 @@ export default function LandingPage() {
             variant="ghost"
             size="sm"
             className="text-muted-foreground hover:text-foreground"
-            onClick={() => exitDemoToSignIn()}
+            asChild
           >
-            Sign in
+            <Link href="/sign-in" onClick={clearGuestBeforeAuth}>
+              Sign in
+            </Link>
           </Button>
-          <Button size="sm" className="bg-white text-black hover:bg-white/90" onClick={() => exitDemoToSignUp()}>
-            Get started
+          <Button size="sm" className="bg-white text-black hover:bg-white/90" asChild>
+            <Link href="/sign-up" onClick={clearGuestBeforeAuth}>
+              Get started
+            </Link>
           </Button>
         </div>
       </header>
@@ -65,17 +75,21 @@ export default function LandingPage() {
           <Button
             size="lg"
             className="bg-white text-black hover:bg-white/90 w-full text-base h-12"
-            onClick={() => exitDemoToSignUp()}
+            asChild
           >
-            Get started
+            <Link href="/sign-up" onClick={clearGuestBeforeAuth}>
+              Get started
+            </Link>
           </Button>
           <Button
             size="lg"
             variant="outline"
             className="w-full text-base h-12 bg-transparent"
-            onClick={() => exitDemoToSignIn()}
+            asChild
           >
-            Sign in
+            <Link href="/sign-in" onClick={clearGuestBeforeAuth}>
+              Sign in
+            </Link>
           </Button>
 
           <div className="flex items-center gap-3 w-full mt-1">
