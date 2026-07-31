@@ -1,7 +1,6 @@
-import { Link } from "wouter";
 import { Clapperboard, Film, Sparkles, Star, Shuffle, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { enableDemoMode } from "@/lib/demo-auth";
+import { enableDemoMode, exitDemoToSignIn, exitDemoToSignUp } from "@/lib/demo-auth";
 
 export default function LandingPage() {
   const enterApp = async (path = "/watched") => {
@@ -33,16 +32,17 @@ export default function LandingPage() {
           <span className="font-bold text-xl tracking-tight">Cinevault</span>
         </div>
         <div className="flex items-center gap-3">
-          <Link href="/sign-in">
-            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-              Sign in
-            </Button>
-          </Link>
-          <Link href="/sign-up">
-            <Button size="sm" className="bg-white text-black hover:bg-white/90">
-              Get started
-            </Button>
-          </Link>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground hover:text-foreground"
+            onClick={() => exitDemoToSignIn()}
+          >
+            Sign in
+          </Button>
+          <Button size="sm" className="bg-white text-black hover:bg-white/90" onClick={() => exitDemoToSignUp()}>
+            Get started
+          </Button>
         </div>
       </header>
 
@@ -62,47 +62,48 @@ export default function LandingPage() {
         </p>
 
         <div className="flex flex-col items-center gap-3 w-full max-w-xs">
-          <Link href="/sign-up" className="w-full">
-            <Button size="lg" className="bg-white text-black hover:bg-white/90 w-full text-base h-12">
-              Get started
-            </Button>
-          </Link>
-          <Link href="/sign-in" className="w-full">
-            <Button size="lg" variant="outline" className="w-full text-base h-12 bg-transparent">
-              Sign in
-            </Button>
-          </Link>
+          <Button
+            size="lg"
+            className="bg-white text-black hover:bg-white/90 w-full text-base h-12"
+            onClick={() => exitDemoToSignUp()}
+          >
+            Get started
+          </Button>
+          <Button
+            size="lg"
+            variant="outline"
+            className="w-full text-base h-12 bg-transparent"
+            onClick={() => exitDemoToSignIn()}
+          >
+            Sign in
+          </Button>
 
-          {!import.meta.env.PROD && (
-            <>
-              <div className="flex items-center gap-3 w-full mt-1">
-                <div className="flex-1 h-px bg-border/50" />
-                <span className="text-xs text-muted-foreground">or</span>
-                <div className="flex-1 h-px bg-border/50" />
-              </div>
+          <div className="flex items-center gap-3 w-full mt-1">
+            <div className="flex-1 h-px bg-border/50" />
+            <span className="text-xs text-muted-foreground">or</span>
+            <div className="flex-1 h-px bg-border/50" />
+          </div>
 
-              <Button
-                size="lg"
-                variant="ghost"
-                className="w-full text-base h-12 text-muted-foreground hover:text-foreground border border-border/50"
-                onClick={handleDemo}
-              >
-                Continue without signing in
-              </Button>
-              <Button
-                size="lg"
-                variant="ghost"
-                className="w-full text-base h-11 text-foreground border border-white/20 hover:bg-white/5"
-                onClick={handleTogether}
-              >
-                <Users className="w-4 h-4 mr-2" />
-                Open Together
-              </Button>
-              <p className="text-[11px] text-muted-foreground/60 -mt-1">
-                Data is saved on this device
-              </p>
-            </>
-          )}
+          <Button
+            size="lg"
+            variant="ghost"
+            className="w-full text-base h-12 text-muted-foreground hover:text-foreground border border-border/50"
+            onClick={handleDemo}
+          >
+            Continue without signing in
+          </Button>
+          <Button
+            size="lg"
+            variant="ghost"
+            className="w-full text-base h-11 text-foreground border border-white/20 hover:bg-white/5"
+            onClick={handleTogether}
+          >
+            <Users className="w-4 h-4 mr-2" />
+            Open Together
+          </Button>
+          <p className="text-[11px] text-muted-foreground/60 -mt-1">
+            Data is saved on this device
+          </p>
         </div>
       </main>
 

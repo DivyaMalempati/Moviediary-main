@@ -3,7 +3,7 @@ import { Link, useLocation, useParams } from "wouter";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getAuthHeaders, isDemoMode } from "@/lib/demo-auth";
+import { getAuthHeaders, isDemoMode, exitDemoToSignIn } from "@/lib/demo-auth";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -274,11 +274,14 @@ export default function PartnerPage() {
               Demo session — you can try the invite and swipe ritual here. Sign in on both devices
               for a real movie night with friends.
             </p>
-            <Link href="/sign-in">
-              <Button size="sm" variant="outline" className="h-8 text-xs">
-                Sign in instead
-              </Button>
-            </Link>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs"
+              onClick={() => exitDemoToSignIn()}
+            >
+              Sign in instead
+            </Button>
           </div>
         )}
 
