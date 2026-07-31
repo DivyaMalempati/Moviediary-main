@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { ChevronRight, Download, LogOut, Settings, Upload, BookOpen, Play, Users, PlusCircle, Loader2 } from "lucide-react";
 import { Link } from "wouter";
 import { useReplayFeatureTour } from "@/components/feature-walkthrough";
+import { isFeatureEnabled } from "@/lib/features";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -145,15 +146,17 @@ function ProfileShell({
             Replay walkthrough
           </button>
 
-          <Link href="/import">
-            <button
-              type="button"
-              className="w-full flex items-center gap-3 px-1 py-3 text-left text-sm hover:text-foreground text-foreground/90 transition-colors"
-            >
-              <Upload className="w-4 h-4 text-muted-foreground" />
-              Import
-            </button>
-          </Link>
+          {isFeatureEnabled("import") && (
+            <Link href="/import">
+              <button
+                type="button"
+                className="w-full flex items-center gap-3 px-1 py-3 text-left text-sm hover:text-foreground text-foreground/90 transition-colors"
+              >
+                <Upload className="w-4 h-4 text-muted-foreground" />
+                Import
+              </button>
+            </Link>
+          )}
           <button
             type="button"
             onClick={exportLibrary}

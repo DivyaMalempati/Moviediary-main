@@ -121,16 +121,16 @@ export default function LandingPage() {
         </div>
       </main>
 
-      {/* Features */}
+      {/* Features — MVP only */}
       <section className="border-t border-border/40 px-6 py-12">
         <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 text-center">
           {[
-            { icon: Film, title: "Full library", desc: "Watched diary, watchlist, ratings, notes, and rewatch history" },
-            { icon: Shuffle, title: "Swipe decks", desc: "Short personalized decks with genre, trope, and streaming filters" },
-            { icon: Sparkles, title: "Discover", desc: "For You, Because You Liked, and Trending India recommendations" },
-            { icon: Users, title: "Movie night", desc: "Share a link, swipe the same deck, and find what you both want tonight" },
-            { icon: Star, title: "Rate your way", desc: "Loved to Meh — confirm on tap when you mark something watched" },
-            { icon: Clapperboard, title: "Your taste", desc: "Languages, genres, and OTT apps shape every suggestion" },
+            { icon: Film, title: "Watched & Watchlist", desc: "Log films you’ve seen and save titles for later" },
+            { icon: Shuffle, title: "Swipe", desc: "Short solo decks mixed for your genres and languages" },
+            { icon: Users, title: "Together", desc: "Invite a friend, swipe the same deck, pick from mutual likes" },
+            { icon: Star, title: "Rate your way", desc: "Loved to Meh — quick ratings when you mark something watched" },
+            { icon: Clapperboard, title: "Add films", desc: "Search TMDB and drop titles straight into your vault" },
+            { icon: Sparkles, title: "Your taste", desc: "Preferences shape Swipe and movie-night decks — each person sets their own" },
           ].map(({ icon: Icon, title, desc }) => (
             <div key={title} className="flex flex-col items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">

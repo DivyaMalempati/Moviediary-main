@@ -26,6 +26,7 @@ import PartnerPage, { PairInvitePage } from "@/pages/partner";
 import MatchSessionPage from "@/pages/match-session";
 import GuidePage from "@/pages/guide";
 import NotFound from "@/pages/not-found";
+import { FeatureGate } from "@/components/feature-gate";
 
 // Initialise demo mode header injection before any render
 initDemoMode();
@@ -118,26 +119,30 @@ const clerkAppearance = {
   },
 };
 
+function gated(feature: Parameters<typeof FeatureGate>[0]["feature"], component: React.ComponentType) {
+  return () => <FeatureGate feature={feature} component={component} />;
+}
+
 // ── Shared app pages (used in both demo and Clerk mode) ─────────────────────
 function AppPages() {
   return (
     <Switch>
       <Route path="/watched" component={WatchedPage} />
       <Route path="/watchlist" component={WatchlistPage} />
-      <Route path="/upcoming" component={UpcomingPage} />
+      <Route path="/upcoming" component={gated("upcoming", UpcomingPage)} />
       <Route path="/add" component={AddPage} />
-      <Route path="/suggestions" component={SuggestionsPage} />
+      <Route path="/suggestions" component={gated("discover", SuggestionsPage)} />
       <Route path="/swipe" component={SwipePage} />
       <Route path="/partner" component={PartnerPage} />
       <Route path="/pair/:code" component={PairInvitePage} />
       <Route path="/match/:id" component={MatchSessionPage} />
       <Route path="/guide" component={GuidePage} />
       <Route path="/movie/:id" component={MovieDetailsPage} />
-      <Route path="/import" component={ImportPage} />
+      <Route path="/import" component={gated("import", ImportPage)} />
       <Route path="/profile" component={ProfilePage} />
-      <Route path="/collections" component={CollectionsPage} />
-      <Route path="/collections/:id" component={CollectionsPage} />
-      <Route path="/stats" component={StatsPage} />
+      <Route path="/collections" component={gated("collections", CollectionsPage)} />
+      <Route path="/collections/:id" component={gated("collections", CollectionsPage)} />
+      <Route path="/stats" component={gated("stats", StatsPage)} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -332,6 +337,13 @@ function SaveReturnAndRedirect({ path }: { path: string }) {
   return <Redirect to="/" />;
 }
 
+function protect(feature: Parameters<typeof FeatureGate>[0]["feature"] | null, component: React.ComponentType) {
+  const Page = feature
+    ? () => <FeatureGate feature={feature} component={component} />
+    : component;
+  return () => <ProtectedRoute component={Page} />;
+}
+
 function ClerkRouter() {
   return (
     <Switch>
@@ -339,22 +351,22 @@ function ClerkRouter() {
       <Route path="/sign-in/*?" component={SignInPage} />
       <Route path="/sign-up/*?" component={SignUpPage} />
       <Route path="/onboarding" component={() => <Redirect to="/swipe" />} />
-      <Route path="/watched" component={() => <ProtectedRoute component={WatchedPage} />} />
-      <Route path="/watchlist" component={() => <ProtectedRoute component={WatchlistPage} />} />
-      <Route path="/upcoming" component={() => <ProtectedRoute component={UpcomingPage} />} />
-      <Route path="/add" component={() => <ProtectedRoute component={AddPage} />} />
-      <Route path="/suggestions" component={() => <ProtectedRoute component={SuggestionsPage} />} />
-      <Route path="/swipe" component={() => <ProtectedRoute component={SwipePage} />} />
-      <Route path="/partner" component={() => <ProtectedRoute component={PartnerPage} />} />
-      <Route path="/pair/:code" component={() => <ProtectedRoute component={PairInvitePage} />} />
-      <Route path="/match/:id" component={() => <ProtectedRoute component={MatchSessionPage} />} />
-      <Route path="/guide" component={() => <ProtectedRoute component={GuidePage} />} />
-      <Route path="/movie/:id" component={() => <ProtectedRoute component={MovieDetailsPage} />} />
-      <Route path="/import" component={() => <ProtectedRoute component={ImportPage} />} />
-      <Route path="/profile" component={() => <ProtectedRoute component={ProfilePage} />} />
-      <Route path="/collections" component={() => <ProtectedRoute component={CollectionsPage} />} />
-      <Route path="/collections/:id" component={() => <ProtectedRoute component={CollectionsPage} />} />
-      <Route path="/stats" component={() => <ProtectedRoute component={StatsPage} />} />
+      <Route path="/watched" component={protect(null, WatchedPage)} />
+      <Route path="/watchlist" component={protect(null, WatchlistPage)} />
+      <Route path="/upcoming" component={protect("upcoming", UpcomingPage)} />
+      <Route path="/add" component={protect(null, AddPage)} />
+      <Route path="/suggestions" component={protect("discover", SuggestionsPage)} />
+      <Route path="/swipe" component={protect(null, SwipePage)} />
+      <Route path="/partner" component={protect(null, PartnerPage)} />
+      <Route path="/pair/:code" component={protect(null, PairInvitePage)} />
+      <Route path="/match/:id" component={protect(null, MatchSessionPage)} />
+      <Route path="/guide" component={protect(null, GuidePage)} />
+      <Route path="/movie/:id" component={protect(null, MovieDetailsPage)} />
+      <Route path="/import" component={protect("import", ImportPage)} />
+      <Route path="/profile" component={protect(null, ProfilePage)} />
+      <Route path="/collections" component={protect("collections", CollectionsPage)} />
+      <Route path="/collections/:id" component={protect("collections", CollectionsPage)} />
+      <Route path="/stats" component={protect("stats", StatsPage)} />
       <Route component={NotFound} />
     </Switch>
   );

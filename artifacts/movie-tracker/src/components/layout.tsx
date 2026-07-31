@@ -1,17 +1,63 @@
 import type { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useUser } from "@clerk/react";
-import { Clapperboard, Eye, Bookmark, PlusCircle, Sparkles, FolderOpen, BarChart2, Upload, User, Shuffle, Users, BookOpen, CalendarClock } from "lucide-react";
+import {
+  Clapperboard,
+  Eye,
+  Bookmark,
+  PlusCircle,
+  Sparkles,
+  FolderOpen,
+  BarChart2,
+  Upload,
+  User,
+  Shuffle,
+  Users,
+  BookOpen,
+  CalendarClock,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isDemoMode, exitDemoToSignIn } from "@/lib/demo-auth";
 import { FeatureWalkthroughHost } from "@/components/feature-walkthrough";
 import { ClerkBoundary } from "@/components/clerk-boundary";
+import { BOTTOM_NAV, SIDEBAR_NAV, enabledNav } from "@/lib/features";
 
 interface LayoutProps {
   children: ReactNode;
 }
 
-// ── Sidebar user section (links to /profile) ──────────────────────────────────
+function iconForHref(href: string): LucideIcon {
+  switch (href) {
+    case "/watched":
+      return Eye;
+    case "/watchlist":
+      return Bookmark;
+    case "/partner":
+      return Users;
+    case "/swipe":
+      return Shuffle;
+    case "/add":
+      return PlusCircle;
+    case "/guide":
+      return BookOpen;
+    case "/suggestions":
+      return Sparkles;
+    case "/upcoming":
+      return CalendarClock;
+    case "/collections":
+      return FolderOpen;
+    case "/stats":
+      return BarChart2;
+    case "/import":
+      return Upload;
+    case "/profile":
+      return User;
+    default:
+      return Clapperboard;
+  }
+}
+
 function ClerkUserSection() {
   const { user } = useUser();
   const initial =
@@ -59,30 +105,8 @@ function DemoUserSection() {
 export function Layout({ children }: LayoutProps) {
   const [location] = useLocation();
   const demo = isDemoMode();
-
-  // Sidebar — Together near the top so it isn’t lost under the fold
-  const sidebarItems = [
-    { href: "/watched",     label: "Watched",     icon: Eye },
-    { href: "/watchlist",   label: "Watchlist",   icon: Bookmark },
-    { href: "/partner",     label: "Together",    icon: Users },
-    { href: "/upcoming",    label: "Upcoming",    icon: CalendarClock },
-    { href: "/swipe",       label: "Swipe",       icon: Shuffle },
-    { href: "/suggestions", label: "Discover",    icon: Sparkles },
-    { href: "/add",         label: "Add",         icon: PlusCircle },
-    { href: "/collections", label: "Collections", icon: FolderOpen },
-    { href: "/stats",       label: "Stats",       icon: BarChart2 },
-    { href: "/guide",       label: "Guide",       icon: BookOpen },
-    { href: "/import",      label: "Import",      icon: Upload },
-  ];
-
-  // Bottom nav (mobile)
-  const bottomItems = [
-    { href: "/watched",   label: "Watched",  icon: Eye },
-    { href: "/watchlist", label: "Watchlist", icon: Bookmark },
-    { href: "/partner",   label: "Together", icon: Users },
-    { href: "/swipe",     label: "Swipe",     icon: Shuffle },
-    { href: "/profile",   label: "Profile",   icon: User },
-  ];
+  const sidebarItems = enabledNav(SIDEBAR_NAV);
+  const bottomItems = enabledNav(BOTTOM_NAV);
 
   return (
     <div className="min-h-[100dvh] flex flex-col md:flex-row bg-background text-foreground">
@@ -98,7 +122,7 @@ export function Layout({ children }: LayoutProps) {
           </button>
         </div>
       )}
-      {/* Sidebar — Desktop */}
+
       <aside className={`hidden md:flex w-64 flex-col border-r border-border bg-card/30 backdrop-blur-md sticky top-0 h-screen ${demo ? "pt-8" : ""}`}>
         <div className="p-6 pb-2">
           <Link href="/watched" className="flex items-center gap-3 group">
@@ -112,8 +136,9 @@ export function Layout({ children }: LayoutProps) {
         </div>
 
         <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto min-h-0">
-          {sidebarItems.map(({ href, label, icon: Icon }) => {
-            const isActive = location === href;
+          {sidebarItems.map(({ href, label }) => {
+            const Icon = iconForHref(href);
+            const isActive = location === href || location.startsWith(`${href}/`);
             return (
               <Link
                 key={href}
@@ -122,7 +147,7 @@ export function Layout({ children }: LayoutProps) {
                   "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
                   isActive
                     ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground",
                 )}
               >
                 <Icon className="w-5 h-5" />
@@ -139,46 +164,21 @@ export function Layout({ children }: LayoutProps) {
         </div>
       </aside>
 
-      {/* Main */}
       <main className={`flex-1 flex flex-col min-w-0 pb-20 md:pb-0 ${demo ? "pt-8" : ""}`}>
-        {/* Always-visible Together shortcut on all breakpoints */}
-        {location !== "/partner" && (
-          <div className="sticky top-0 z-40 border-b border-border/60 bg-background/90 backdrop-blur-md px-4 py-2 flex items-center justify-between gap-3">
-            <p className="text-xs text-muted-foreground truncate">Movie night — share a link & swipe</p>
-            <Link
-              href="/partner"
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-2.5 py-1 text-xs font-medium"
-            >
-              <Users className="w-3.5 h-3.5" />
-              Together
-            </Link>
-          </div>
-        )}
         <div className="flex-1 overflow-y-auto">{children}</div>
       </main>
 
-      {/* Fixed Together FAB — visible on every viewport so it can’t be missed */}
-      {location !== "/partner" && (
-        <Link
-          href="/partner"
-          className="fixed z-[60] bottom-24 right-4 md:bottom-6 md:right-6 inline-flex items-center gap-2 rounded-full bg-white text-black shadow-lg px-4 py-2.5 text-sm font-semibold hover:bg-white/90"
-        >
-          <Users className="w-4 h-4" />
-          Together
-        </Link>
-      )}
-
-      {/* Bottom Nav — Mobile */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-lg border-t border-border flex items-center justify-around px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-        {bottomItems.map(({ href, label, icon: Icon }) => {
-          const isActive = location === href;
+        {bottomItems.map(({ href, label }) => {
+          const Icon = iconForHref(href);
+          const isActive = location === href || (href !== "/" && location.startsWith(`${href}/`));
           return (
             <Link
               key={href}
               href={href}
               className={cn(
                 "flex flex-col items-center gap-1 p-2 min-w-[4rem] rounded-xl transition-colors",
-                isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                isActive ? "text-primary" : "text-muted-foreground hover:text-foreground",
               )}
             >
               <Icon className="w-6 h-6" />

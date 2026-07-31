@@ -1,12 +1,13 @@
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
-import { FEATURE_GUIDE_SECTIONS } from "@/lib/feature-guide";
+import { visibleGuideSections } from "@/lib/feature-guide";
 import { useReplayFeatureTour } from "@/components/feature-walkthrough";
 import { ArrowRight, BookOpen, Play } from "lucide-react";
 
 export default function GuidePage() {
   const { replay, dialog } = useReplayFeatureTour();
+  const sections = visibleGuideSections();
 
   return (
     <Layout>
@@ -14,14 +15,14 @@ export default function GuidePage() {
         <header className="space-y-4">
           <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2">
             <BookOpen className="w-3.5 h-3.5" />
-            Feature guide
+            MVP guide
           </p>
           <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
-            How Cinevault works
+            What each page &amp; button does
           </h1>
           <p className="text-muted-foreground text-base max-w-xl leading-relaxed">
-            Track what you’ve watched, swipe short personalized decks, discover
-            new titles, and run a movie-night swipe when you can’t decide tonight.
+            A short map of the stable app: vault, solo swipe, movie night, add,
+            and profile. Extra surfaces stay off until they&apos;re solid.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -38,7 +39,7 @@ export default function GuidePage() {
           </div>
         </header>
 
-        {FEATURE_GUIDE_SECTIONS.map((section) => (
+        {sections.map((section) => (
           <section key={section.heading} className="space-y-4">
             <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
               {section.heading}
