@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
-import { useClerk, useUser } from "@clerk/react";
+import { useAuth, useClerk, useUser } from "@clerk/react";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { PreferencesModal } from "@/components/preferences-modal";
+import { ClerkBoundary } from "@/components/clerk-boundary";
 import { isDemoMode, exitDemoToSignIn, clearAppSession, getAuthHeaders } from "@/lib/demo-auth";
 import { usePreferences } from "@/lib/preferences";
 import { toast } from "sonner";
-import { ChevronRight, Download, LogOut, Settings, Upload, BookOpen, Play, Users, PlusCircle } from "lucide-react";
+import { ChevronRight, Download, LogOut, Settings, Upload, BookOpen, Play, Users, PlusCircle, Loader2 } from "lucide-react";
 import { Link } from "wouter";
 import { useReplayFeatureTour } from "@/components/feature-walkthrough";
 
@@ -198,10 +199,47 @@ function DemoProfile() {
   );
 }
 
+function ProfileLoading() {
+  return (
+    <Layout>
+      <div className="flex h-[40vh] items-center justify-center text-muted-foreground text-sm gap-2">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        Loading account…
+      </div>
+    </Layout>
+  );
+}
+
+function ProfileClerkFallback() {
+  return (
+    <Layout>
+      <div className="max-w-md mx-auto px-4 py-10 space-y-4">
+        <h1 className="text-lg font-semibold">Account unavailable</h1>
+        <p className="text-sm text-muted-foreground">
+          Couldn&apos;t load your signed-in profile. Try signing in again.
+        </p>
+        <Link href="/sign-in">
+          <Button>Sign in</Button>
+        </Link>
+      </div>
+    </Layout>
+  );
+}
+
 function ClerkProfile() {
+  const { isLoaded, isSignedIn } = useAuth();
   const { signOut } = useClerk();
   const { user } = useUser();
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+  if (!isLoaded) {
+    return <ProfileLoading />;
+  }
+
+  if (!isSignedIn) {
+    // ProtectedRoute normally redirects; keep a safe fallback if Clerk session flickers.
+    return <ProfileClerkFallback />;
+  }
 
   const initial =
     user?.firstName?.[0] ??
@@ -215,7 +253,7 @@ function ClerkProfile() {
       signOutLabel="Sign out"
       onSignOut={() => {
         clearAppSession();
-        void signOut({ redirectUrl: basePath || "/" });
+        void signOut({ redirectUrl: `${window.location.origin}${basePath || ""}/` });
       }}
       avatar={
         user?.imageUrl ? (
@@ -231,5 +269,13 @@ function ClerkProfile() {
 }
 
 export default function ProfilePage() {
-  return isDemoMode() ? <DemoProfile /> : <ClerkProfile />;
+  if (isDemoMode()) {
+    return <DemoProfile />;
+  }
+
+  return (
+    <ClerkBoundary fallback={<ProfileClerkFallback />}>
+      <ClerkProfile />
+    </ClerkBoundary>
+  );
 }
