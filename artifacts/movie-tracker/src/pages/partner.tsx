@@ -381,8 +381,9 @@ export default function PartnerPage() {
               </li>
               <li className="flex gap-2">
                 <span className="font-mono text-foreground/80">3.</span>
-                Tap <span className="text-foreground">Start movie night &amp; swipe</span> — that
-                page is where you swipe together
+                After they join, this page shows{" "}
+                <span className="text-foreground">Start movie night &amp; swipe</span> — that opens
+                the shared deck
               </li>
               <li className="flex gap-2">
                 <span className="font-mono text-foreground/80">4.</span>
