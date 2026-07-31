@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
+import { motion, AnimatePresence } from "framer-motion";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { getPosterUrl } from "@/lib/movie-utils";
 import { getAuthHeaders } from "@/lib/demo-auth";
 import { RatingPickerDialog } from "@/components/rating-picker-dialog";
+import { MatchCelebrationBurst } from "@/components/match-celebration-burst";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -292,33 +294,57 @@ export default function MatchSessionPage() {
         )}
       </div>
 
-      {/* IT'S A MATCH overlay */}
-      {celebration && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-6">
-          <div className="max-w-sm w-full rounded-2xl border border-primary/40 bg-background p-6 text-center space-y-4 shadow-2xl">
-            <Popcorn className="w-12 h-12 mx-auto text-primary" />
-            <h2 className="text-2xl font-bold tracking-tight">IT&apos;S A MATCH!</h2>
-            <p className="text-sm text-muted-foreground">
-              You both liked <span className="text-foreground font-medium">{celebration.title}</span>
-            </p>
-            {celebration.posterPath && (
-              <img
-                src={getPosterUrl(celebration.posterPath, "w500") ?? ""}
-                alt={celebration.title}
-                className="mx-auto w-32 rounded-lg shadow-lg"
-              />
-            )}
-            <div className="flex flex-col gap-2">
-              <Button onClick={() => setLogFilm(celebration)}>
-                Log to both Watched diaries
-              </Button>
-              <Button variant="ghost" onClick={() => setCelebration(null)}>
-                Keep swiping
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* IT'S A MATCH overlay + popcorn / confetti burst */}
+      <AnimatePresence>
+        {celebration && (
+          <motion.div
+            className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <MatchCelebrationBurst active />
+            <motion.div
+              className="relative z-[91] max-w-sm w-full rounded-2xl border border-primary/40 bg-background p-6 text-center space-y-4 shadow-2xl"
+              initial={{ scale: 0.7, opacity: 0, y: 24 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 380, damping: 22 }}
+            >
+              <motion.div
+                initial={{ rotate: -12, scale: 0.5 }}
+                animate={{ rotate: [0, -8, 8, 0], scale: 1 }}
+                transition={{ duration: 0.7 }}
+              >
+                <Popcorn className="w-12 h-12 mx-auto text-amber-300" />
+              </motion.div>
+              <h2 className="text-2xl font-bold tracking-tight">IT&apos;S A MATCH!</h2>
+              <p className="text-sm text-muted-foreground">
+                You both liked{" "}
+                <span className="text-foreground font-medium">{celebration.title}</span>
+              </p>
+              {celebration.posterPath && (
+                <motion.img
+                  src={getPosterUrl(celebration.posterPath, "w500") ?? ""}
+                  alt={celebration.title}
+                  className="mx-auto w-32 rounded-lg shadow-lg"
+                  initial={{ y: 16, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.12 }}
+                />
+              )}
+              <div className="flex flex-col gap-2">
+                <Button onClick={() => setLogFilm(celebration)}>
+                  Log to both Watched diaries
+                </Button>
+                <Button variant="ghost" onClick={() => setCelebration(null)}>
+                  Keep swiping
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <RatingPickerDialog
         open={!!logFilm}
