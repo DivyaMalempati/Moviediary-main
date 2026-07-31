@@ -1378,16 +1378,25 @@ export default function SwipePage() {
         <div className="flex flex-col items-center justify-center gap-3 py-24 px-6 text-center">
           <p className="text-sm text-muted-foreground max-w-sm">
             {authFailed
-              ? "Session expired — refresh the page to sign in again."
+              ? "Couldn't sync your account session for Swipe. Retry, or refresh if it keeps failing."
               : "Couldn't load your preferences. Try again."}
           </p>
           <button
             type="button"
             className="text-sm underline text-foreground"
-            onClick={() => (authFailed ? window.location.reload() : void refetch())}
+            onClick={() => void refetch()}
           >
-            {authFailed ? "Refresh" : "Retry"}
+            Retry
           </button>
+          {authFailed && (
+            <button
+              type="button"
+              className="text-xs text-muted-foreground underline"
+              onClick={() => window.location.reload()}
+            >
+              Refresh page
+            </button>
+          )}
         </div>
       </Layout>
     );
