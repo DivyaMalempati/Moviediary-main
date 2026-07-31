@@ -104,18 +104,94 @@ async function resolveClerkToken(): Promise<string | null> {
   return token;
 }
 
-/** Guest / app-session headers + Clerk Bearer token when signed in. */
+/**
+ * Guest / app-session headers + Clerk Bearer token when signed in.
+ * When a Clerk JWT is available, never send guest headers — a leftover
+ * demo token must not take priority over a real account on the API.
+ */
 export async function getAuthHeaders(
   extra?: Record<string, string>,
 ): Promise<Record<string, string>> {
-  const headers: Record<string, string> = {
-    ...getGuestHeaders(),
-    ...getAppSessionHeaders(),
-    ...extra,
-  };
   const token = await resolveClerkToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
+  const headers: Record<string, string> = { ...extra };
+
+  if (token) {
+    // Signed-in path: Bearer + optional first-party app session. No guest.
+    if (isDemoMode()) {
+      localStorage.removeItem(DEMO_KEY);
+      localStorage.removeItem(GUEST_TOKEN_KEY);
+      syncExtraAuthHeaders();
+    }
+    Object.assign(headers, getAppSessionHeaders());
+    headers.Authorization = `Bearer ${token}`;
+    return headers;
+  }
+
+  Object.assign(headers, getGuestHeaders(), getAppSessionHeaders());
   return headers;
+}
+
+/**
+ * Ensure we have a usable API session for a signed-in Clerk user.
+ * Always remints x-cinevault-token from the current Clerk JWT so a dead
+ * token after SESSION_SECRET rotation can't block Together invites.
+ */
+export async function ensureClerkApiSession(): Promise<boolean> {
+  const token = await resolveClerkToken();
+  if (!token) return Boolean(localStorage.getItem(APP_TOKEN_KEY));
+
+  if (isDemoMode()) {
+    localStorage.removeItem(DEMO_KEY);
+    localStorage.removeItem(GUEST_TOKEN_KEY);
+  }
+
+  return establishAppSession(token);
+}
+
+/**
+ * fetch() with auth headers. On 401, drop a stale app token, remint from
+ * Clerk Bearer, and retry once — covers SESSION_SECRET rotations on Replit.
+ */
+export async function authFetch(
+  input: string,
+  init?: RequestInit,
+): Promise<Response> {
+  const mergeHeaders = async () => {
+    const auth = await getAuthHeaders();
+    const extra = init?.headers;
+    if (!extra) return auth;
+    if (extra instanceof Headers) {
+      const out = { ...auth };
+      extra.forEach((v, k) => {
+        out[k] = v;
+      });
+      return out;
+    }
+    return { ...auth, ...(extra as Record<string, string>) };
+  };
+
+  let res = await fetch(input, {
+    ...init,
+    credentials: init?.credentials ?? "include",
+    headers: await mergeHeaders(),
+  });
+
+  if (res.status !== 401) return res;
+
+  const clerkJwt = await resolveClerkToken();
+  if (!clerkJwt) return res;
+
+  clearAppSession();
+  localStorage.removeItem(GUEST_TOKEN_KEY);
+  if (isDemoMode()) localStorage.removeItem(DEMO_KEY);
+  await establishAppSession(clerkJwt);
+
+  res = await fetch(input, {
+    ...init,
+    credentials: init?.credentials ?? "include",
+    headers: await mergeHeaders(),
+  });
+  return res;
 }
 
 async function mintGuestToken(): Promise<string> {
