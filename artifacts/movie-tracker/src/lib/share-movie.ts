@@ -1,5 +1,7 @@
 import { RATING_LABELS, getPosterUrl } from "@/lib/movie-utils";
 
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
 export type ShareMovieInput = {
   title: string;
   rating?: string | null;
@@ -67,14 +69,62 @@ export async function copyShareText(text: string): Promise<boolean> {
   }
 }
 
-function loadImage(url: string): Promise<HTMLImageElement> {
+function loadImageFromUrl(url: string, crossOrigin: boolean): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    if (crossOrigin) img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error("poster load failed"));
     img.src = url;
   });
+}
+
+/**
+ * Load a poster for canvas drawing. Prefer the same-origin API proxy so
+ * Safari/Replit don't CORS-taint the canvas (which forced the black placeholder).
+ */
+async function loadPosterForCanvas(
+  posterPath: string,
+): Promise<{ img: CanvasImageSource; revoke?: () => void }> {
+  const path = posterPath.startsWith("/") ? posterPath : `/${posterPath}`;
+  const proxyUrl = `${BASE}/api/tmdb/poster-image?path=${encodeURIComponent(path)}&size=w780`;
+
+  try {
+    const res = await fetch(proxyUrl, { credentials: "same-origin" });
+    if (!res.ok) throw new Error(`proxy ${res.status}`);
+    const blob = await res.blob();
+    // Some proxies omit Content-Type; still try to decode as an image.
+    if (blob.type && !blob.type.startsWith("image/")) throw new Error("not an image");
+
+    if (typeof createImageBitmap === "function") {
+      const bitmap = await createImageBitmap(blob);
+      return {
+        img: bitmap,
+        revoke: () => {
+          try {
+            bitmap.close();
+          } catch {
+            /* ignore */
+          }
+        },
+      };
+    }
+
+    const objectUrl = URL.createObjectURL(blob);
+    try {
+      const img = await loadImageFromUrl(objectUrl, false);
+      return { img, revoke: () => URL.revokeObjectURL(objectUrl) };
+    } catch (err) {
+      URL.revokeObjectURL(objectUrl);
+      throw err;
+    }
+  } catch {
+    // Last resort: direct TMDB (may fail CORS on some hosts)
+    const direct = getPosterUrl(path, "w780");
+    if (!direct) throw new Error("no poster url");
+    const img = await loadImageFromUrl(direct, true);
+    return { img };
+  }
 }
 
 function wrapText(
@@ -152,7 +202,6 @@ export async function renderMovieShareCard(input: ShareMovieInput): Promise<Blob
   y += 48;
 
   // Poster
-  const posterUrl = getPosterUrl(input.posterPath, "w780");
   const posterW = 560;
   const posterH = 840;
   const posterX = (W - posterW) / 2;
@@ -162,20 +211,32 @@ export async function renderMovieShareCard(input: ShareMovieInput): Promise<Blob
   roundRect(ctx, posterX - 8, posterY - 8, posterW + 16, posterH + 16, 28);
   ctx.fill();
 
-  if (posterUrl) {
+  if (input.posterPath) {
+    let revoke: (() => void) | undefined;
     try {
-      const img = await loadImage(posterUrl);
+      const loaded = await loadPosterForCanvas(input.posterPath);
+      revoke = loaded.revoke;
+      const { img } = loaded;
+      const iw =
+        "naturalWidth" in img && (img as HTMLImageElement).naturalWidth
+          ? (img as HTMLImageElement).naturalWidth
+          : (img as ImageBitmap).width;
+      const ih =
+        "naturalHeight" in img && (img as HTMLImageElement).naturalHeight
+          ? (img as HTMLImageElement).naturalHeight
+          : (img as ImageBitmap).height;
       ctx.save();
       roundRect(ctx, posterX, posterY, posterW, posterH, 20);
       ctx.clip();
-      // Cover-fit
-      const scale = Math.max(posterW / img.width, posterH / img.height);
-      const dw = img.width * scale;
-      const dh = img.height * scale;
+      const scale = Math.max(posterW / iw, posterH / ih);
+      const dw = iw * scale;
+      const dh = ih * scale;
       ctx.drawImage(img, posterX + (posterW - dw) / 2, posterY + (posterH - dh) / 2, dw, dh);
       ctx.restore();
     } catch {
       drawPosterPlaceholder(ctx, posterX, posterY, posterW, posterH, input.title);
+    } finally {
+      revoke?.();
     }
   } else {
     drawPosterPlaceholder(ctx, posterX, posterY, posterW, posterH, input.title);
