@@ -350,13 +350,59 @@ export async function nativeShareMovie(
   }
 }
 
-export function downloadShareCard(blob: Blob, title: string) {
+function isAppleTouchDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return (
+    /iPad|iPhone|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
+
+/**
+ * Save the poster PNG. On iOS Safari `<a download>` is unreliable for blobs,
+ * so we fall back to the native share sheet (Save Image) or open the image.
+ */
+export async function downloadShareCard(
+  blob: Blob,
+  title: string,
+): Promise<"downloaded" | "shared" | "opened"> {
+  const filename = `${slugify(title)}-cinevault.png`;
+  const file = new File([blob], filename, { type: "image/png" });
+
+  if (
+    isAppleTouchDevice() &&
+    typeof navigator.share === "function" &&
+    typeof navigator.canShare === "function" &&
+    navigator.canShare({ files: [file] })
+  ) {
+    try {
+      await navigator.share({ files: [file], title: `${title} — Cinevault` });
+      return "shared";
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        throw err;
+      }
+      // Fall through to open-in-tab.
+    }
+  }
+
   const url = URL.createObjectURL(blob);
+  // Keep the blob URL alive long enough for download / new-tab load.
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+
+  if (isAppleTouchDevice()) {
+    window.open(url, "_blank", "noopener,noreferrer");
+    return "opened";
+  }
+
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${slugify(title)}-cinevault.png`;
+  a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  return "downloaded";
 }
 
 function slugify(title: string) {

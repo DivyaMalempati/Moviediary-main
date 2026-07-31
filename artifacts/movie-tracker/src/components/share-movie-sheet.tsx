@@ -114,13 +114,24 @@ export function ShareMovieSheet({
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!cardBlob) {
       toast.error("Poster isn’t ready yet");
       return;
     }
-    downloadShareCard(cardBlob, movie.title);
-    toast.success("Poster saved — share it with your caption");
+    try {
+      const result = await downloadShareCard(cardBlob, movie.title);
+      if (result === "shared") {
+        toast.success("Use Save Image in the share sheet");
+      } else if (result === "opened") {
+        toast.success("Poster opened — long-press to save");
+      } else {
+        toast.success("Poster saved — share it with your caption");
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      toast.error("Couldn’t save poster — try Share poster instead");
+    }
   };
 
   return (
@@ -212,7 +223,7 @@ export function ShareMovieSheet({
           <Button
             variant="secondary"
             className="gap-2"
-            onClick={handleDownload}
+            onClick={() => void handleDownload()}
             disabled={!cardBlob || rendering}
           >
             <Download className="w-4 h-4" />

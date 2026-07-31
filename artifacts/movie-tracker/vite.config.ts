@@ -50,12 +50,29 @@ if (!basePath) {
   );
 }
 
+/**
+ * Clerk token refresh / FAPI calls can fail transiently on Replit preview
+ * hosts (mobile Safari "Load failed"). Those must not block the app behind
+ * the runtime-error overlay — Save poster / share still work without Clerk.
+ */
+function shouldShowRuntimeError(error: Error): boolean {
+  const msg = String(error?.message ?? error ?? '');
+  if (/ClerkJS:\s*Network error/i.test(msg)) return false;
+  if (
+    /clerk\.accounts\.dev/i.test(msg) &&
+    /Load failed|Failed to fetch|NetworkError|network error/i.test(msg)
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export default defineConfig({
   base: basePath,
   plugins: [
     react(),
     tailwindcss({ optimize: false }),
-    runtimeErrorOverlay(),
+    runtimeErrorOverlay({ filter: shouldShowRuntimeError }),
     ...(process.env.NODE_ENV !== 'production' &&
     process.env.REPL_ID !== undefined
       ? [
