@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth, useClerk } from "@clerk/react";
 import {
   setClerkTokenGetter,
@@ -20,6 +20,7 @@ export function ClerkAuthTokenBridge({ children }: { children?: ReactNode }) {
   const { getToken, isSignedIn, isLoaded } = useAuth();
   const clerk = useClerk();
   const [phase, setPhase] = useState<"loading" | "ready" | "no-token">("loading");
+  const readyOnce = useRef(false);
 
   useLayoutEffect(() => {
     let cancelled = false;
@@ -42,18 +43,21 @@ export function ClerkAuthTokenBridge({ children }: { children?: ReactNode }) {
 
     async function sync() {
       if (!isLoaded) {
-        if (!cancelled) setPhase("loading");
+        if (!cancelled && !readyOnce.current) setPhase("loading");
         return;
       }
 
       if (!isSignedIn) {
         setClerkTokenGetter(null);
         clearAppSession();
+        readyOnce.current = true;
         if (!cancelled) setPhase("ready");
         return;
       }
 
-      if (!cancelled) setPhase("loading");
+      // Keep the app mounted while refreshing tokens — flipping back to
+      // "loading" unmounted Swipe and raced preferences into Session expired.
+      if (!cancelled && !readyOnce.current) setPhase("loading");
 
       setClerkTokenGetter(async () => {
         try {
@@ -71,10 +75,9 @@ export function ClerkAuthTokenBridge({ children }: { children?: ReactNode }) {
       if (cancelled) return;
 
       if (!token) {
-        // Existing first-party session can still unlock the app after reload
-        // even if Clerk getToken is temporarily unavailable.
         const existing = localStorage.getItem("cinevault:app-token");
         if (existing) {
+          readyOnce.current = true;
           setPhase("ready");
           return;
         }
@@ -97,17 +100,19 @@ export function ClerkAuthTokenBridge({ children }: { children?: ReactNode }) {
         }
       });
 
-      // Mint first-party session so API auth doesn't depend on Clerk cookies.
       await establishAppSession(token);
       if (cancelled) return;
 
+      readyOnce.current = true;
       setPhase("ready");
     }
 
     void sync();
     return () => {
       cancelled = true;
-      setClerkTokenGetter(null);
+      // Do not clear the token getter here. Effect re-runs (Clerk identity
+      // changes) used to null it briefly and preferences/Swipe treated that
+      // as "Session expired" while the user was still signed in.
     };
   }, [getToken, isSignedIn, isLoaded, clerk]);
 

@@ -1,5 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getAuthHeaders, isDemoMode, hasClerkTokenGetter, refreshGuestSession } from "./demo-auth";
+import {
+  authFetch,
+  ensureClerkApiSession,
+  getAuthHeaders,
+  hasClerkTokenGetter,
+  isDemoMode,
+  refreshGuestSession,
+} from "./demo-auth";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -50,6 +57,16 @@ function canCallPreferencesApi(): boolean {
   return false;
 }
 
+/** Wait briefly for Clerk bridge / app token before treating as signed-out. */
+async function waitForPreferencesAuth(maxMs = 2500): Promise<boolean> {
+  const started = Date.now();
+  while (Date.now() - started < maxMs) {
+    if (canCallPreferencesApi()) return true;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return canCallPreferencesApi();
+}
+
 function normalizePrefs(data: Partial<UserPreferences>): UserPreferences {
   const cert = data.maxCertification;
   const maxCertification =
@@ -65,23 +82,18 @@ function normalizePrefs(data: Partial<UserPreferences>): UserPreferences {
 }
 
 async function fetchPreferences(): Promise<UserPreferences> {
-  // Avoid firing unauthenticated preference reads that get cached as "empty".
-  if (!canCallPreferencesApi()) {
+  if (!(await waitForPreferencesAuth())) {
     throw new PreferencesAuthError();
   }
 
-  const doGet = async () =>
-    fetch(`${API_BASE}/api/preferences`, {
-      credentials: "include",
-      headers: await getAuthHeaders(),
-    });
+  await ensureClerkApiSession();
 
-  let res = await doGet();
+  let res = await authFetch(`${API_BASE}/api/preferences`);
 
   // Demo/guest tokens go stale when SESSION_SECRET changes (e.g. local restarts).
   if (res.status === 401 && isDemoMode()) {
     await refreshGuestSession();
-    res = await doGet();
+    res = await authFetch(`${API_BASE}/api/preferences`);
   }
 
   if (res.status === 401) throw new PreferencesAuthError();
@@ -90,9 +102,20 @@ async function fetchPreferences(): Promise<UserPreferences> {
 }
 
 async function savePreferences(prefs: PreferencesInput): Promise<UserPreferences> {
-  if (!canCallPreferencesApi()) {
+  if (!(await waitForPreferencesAuth())) {
     throw new PreferencesAuthError();
   }
+
+  await ensureClerkApiSession();
+
+  const body = JSON.stringify({
+    preferredLanguages: prefs.preferredLanguages,
+    preferredGenres: prefs.preferredGenres,
+    preferredProviders: prefs.preferredProviders ?? [],
+    watchRegion: prefs.watchRegion ?? "IN",
+    maxCertification: prefs.maxCertification ?? null,
+    mutedGenres: prefs.mutedGenres ?? [],
+  });
 
   const doPut = async () => {
     const headers = await getAuthHeaders({ "Content-Type": "application/json" });
@@ -103,18 +126,10 @@ async function savePreferences(prefs: PreferencesInput): Promise<UserPreferences
     ) {
       throw new PreferencesAuthError();
     }
-    return fetch(`${API_BASE}/api/preferences`, {
+    return authFetch(`${API_BASE}/api/preferences`, {
       method: "PUT",
-      credentials: "include",
-      headers,
-      body: JSON.stringify({
-        preferredLanguages: prefs.preferredLanguages,
-        preferredGenres: prefs.preferredGenres,
-        preferredProviders: prefs.preferredProviders ?? [],
-        watchRegion: prefs.watchRegion ?? "IN",
-        maxCertification: prefs.maxCertification ?? null,
-        mutedGenres: prefs.mutedGenres ?? [],
-      }),
+      headers: { "Content-Type": "application/json" },
+      body,
     });
   };
 
@@ -135,10 +150,12 @@ export function usePreferences() {
     queryKey: ["preferences"],
     queryFn: fetchPreferences,
     staleTime: 5 * 60 * 1000,
+    // Auth can race the Clerk token bridge briefly — retry a couple times.
     retry: (count, err) => {
-      if (err instanceof PreferencesAuthError) return false;
+      if (err instanceof PreferencesAuthError) return count < 2;
       return count < 2;
     },
+    retryDelay: (n) => 300 * (n + 1),
   });
 }
 
