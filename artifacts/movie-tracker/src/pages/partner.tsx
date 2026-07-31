@@ -3,7 +3,7 @@ import { Link, useLocation, useParams } from "wouter";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getAuthHeaders, isDemoMode } from "@/lib/demo-auth";
+import { getAuthHeaders, isDemoMode, exitDemoToSignIn } from "@/lib/demo-auth";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -245,6 +245,23 @@ export default function PartnerPage() {
           )}
         </div>
 
+        {isDemoMode() && (
+          <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 space-y-2">
+            <p className="text-sm text-sky-50">
+              Demo session — you can try the invite and swipe ritual here. Sign in on both devices
+              for a real movie night with friends.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs"
+              onClick={() => exitDemoToSignIn()}
+            >
+              Sign in instead
+            </Button>
+          </div>
+        )}
+
         {partner ? (
           <section className="space-y-5">
             <div className="rounded-2xl border-2 border-primary/40 bg-primary/10 p-5 space-y-4">
@@ -348,20 +365,6 @@ export default function PartnerPage() {
           </section>
         ) : (
           <>
-            {isDemoMode() && (
-              <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 space-y-2">
-                <p className="text-sm text-sky-50">
-                  Demo session — you can try the invite and swipe ritual here. Sign in on both
-                  devices for a real movie night with friends.
-                </p>
-                <Link href="/sign-in">
-                  <Button size="sm" variant="outline" className="h-8 text-xs">
-                    Sign in instead
-                  </Button>
-                </Link>
-              </div>
-            )}
-
             <ol className="grid gap-3 text-sm text-muted-foreground">
               <li className="flex gap-2">
                 <span className="font-mono text-foreground/80">1.</span>
