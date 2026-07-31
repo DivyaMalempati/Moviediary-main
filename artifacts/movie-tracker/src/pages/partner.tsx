@@ -227,7 +227,7 @@ export default function PartnerPage() {
 
   return (
     <Layout>
-      <div className="max-w-lg mx-auto px-4 py-8 space-y-8">
+      <div className="max-w-lg mx-auto px-4 py-8 space-y-8 pb-28">
         <div>
           <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground mb-2">
             Together
@@ -236,37 +236,14 @@ export default function PartnerPage() {
             <Users className="w-6 h-6 text-primary" />
             Movie night ritual
           </h1>
-          <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-            Before Friday night — or whenever friends meet up — share a link and swipe the same
-            deck. Each of you keeps your own genres and languages in Preferences. You don&apos;t
-            type what they like. You both swipe, and mutual likes become tonight&apos;s shortlist.
-          </p>
+          {!partner && (
+            <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+              Before Friday night — or whenever friends meet up — share a link and swipe the same
+              deck. Each of you keeps your own genres and languages in Preferences. You don&apos;t
+              type what they like. You both swipe, and mutual likes become tonight&apos;s shortlist.
+            </p>
+          )}
         </div>
-
-        <ol className="grid gap-3 text-sm text-muted-foreground">
-          <li className="flex gap-2">
-            <span className="font-mono text-foreground/80">1.</span>
-            <span>
-              Each person sets their own genres &amp; languages in{" "}
-              <Link href="/profile" className="text-foreground underline-offset-2 hover:underline">
-                Preferences
-              </Link>
-              {" "}— never fill in for each other
-            </span>
-          </li>
-          <li className="flex gap-2">
-            <span className="font-mono text-foreground/80">2.</span>
-            Share an invite so they join this movie night
-          </li>
-          <li className="flex gap-2">
-            <span className="font-mono text-foreground/80">3.</span>
-            Start the deck (built from both of your tastes) and swipe together
-          </li>
-          <li className="flex gap-2">
-            <span className="font-mono text-foreground/80">4.</span>
-            When you both like a film, it&apos;s a match — pick from those for tonight
-          </li>
-        </ol>
 
         {isDemoMode() && (
           <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 space-y-2">
@@ -287,34 +264,68 @@ export default function PartnerPage() {
 
         {partner ? (
           <section className="space-y-5">
-            <div className="rounded-xl border border-border bg-secondary/40 p-4 space-y-2">
-              <p className="text-xs uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
-                <Heart className="w-3.5 h-3.5" /> Ready for tonight
-              </p>
-              <p className="text-sm">
-                You&apos;re paired. Start a deck whenever you want to decide what to watch.
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Paired {new Date(partner.createdAt).toLocaleDateString("en-IN")}
+            <div className="rounded-2xl border-2 border-primary/40 bg-primary/10 p-5 space-y-4">
+              <div className="space-y-1.5">
+                <p className="text-xs uppercase tracking-widest text-primary flex items-center gap-1.5 font-semibold">
+                  <Heart className="w-3.5 h-3.5" /> You&apos;re paired — ready to swipe
+                </p>
+                <p className="text-sm text-foreground/90 leading-relaxed">
+                  Tap the button below. That opens the shared movie deck. Swipe there —{" "}
+                  <span className="font-medium">not</span> the bottom &quot;Swipe&quot; tab (that one
+                  is solo only).
+                </p>
+              </div>
+              <Button
+                size="lg"
+                onClick={startMatch}
+                disabled={busy}
+                className="w-full h-12 text-base gap-2 bg-white text-black hover:bg-white/90"
+              >
+                {busy ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Play className="w-5 h-5" />
+                )}
+                Start movie night &amp; swipe
+              </Button>
+              <p className="text-[11px] text-muted-foreground text-center">
+                After it opens, send your friend the session link so you both swipe the same films.
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={startMatch} disabled={busy} className="gap-2">
-                <Play className="w-4 h-4" />
-                Start movie night
-              </Button>
-              <Button variant="outline" asChild className="gap-2">
-                <Link href="/profile">
-                  <Settings className="w-4 h-4" />
-                  My preferences
-                </Link>
-              </Button>
-              <Button variant="outline" onClick={unlink} disabled={busy} className="gap-2">
-                <Unlink className="w-4 h-4" />
-                Clear pair
-              </Button>
-            </div>
+            {sessions.length > 0 && (
+              <div className="space-y-3">
+                <h2 className="text-sm font-semibold">Or reopen a movie night</h2>
+                <ul className="space-y-2">
+                  {sessions.map((s) => (
+                    <li
+                      key={s.id}
+                      className="flex items-center gap-2 rounded-lg border border-border bg-secondary/30 px-3 py-2"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">Deck · {s.deckSize} films</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Started {new Date(s.createdAt).toLocaleString("en-IN")}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => copySession(s.path)}
+                        className="gap-1"
+                      >
+                        <Copy className="w-3 h-3" />
+                        Share
+                      </Button>
+                      <Button size="sm" onClick={() => setLocation(s.path)} className="gap-1">
+                        <Shuffle className="w-3 h-3" />
+                        Swipe
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {sessionShareUrl && (
               <div className="rounded-xl border border-border bg-card p-4 space-y-2">
@@ -339,93 +350,103 @@ export default function PartnerPage() {
               </div>
             )}
 
-            {sessions.length > 0 && (
-              <div className="space-y-3">
-                <h2 className="text-sm font-semibold">Open movie nights</h2>
-                <ul className="space-y-2">
-                  {sessions.map((s) => (
-                    <li
-                      key={s.id}
-                      className="flex items-center gap-2 rounded-lg border border-border bg-secondary/30 px-3 py-2"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">Deck · {s.deckSize} films</p>
-                        <p className="text-[11px] text-muted-foreground">
-                          Started {new Date(s.createdAt).toLocaleString("en-IN")}
-                        </p>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => copySession(s.path)}
-                        className="gap-1"
-                      >
-                        <Copy className="w-3 h-3" />
-                        Share
-                      </Button>
-                      <Button size="sm" onClick={() => setLocation(s.path)} className="gap-1">
-                        <Shuffle className="w-3 h-3" />
-                        Open
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" asChild className="gap-2">
+                <Link href="/profile">
+                  <Settings className="w-4 h-4" />
+                  My preferences
+                </Link>
+              </Button>
+              <Button variant="outline" onClick={unlink} disabled={busy} className="gap-2">
+                <Unlink className="w-4 h-4" />
+                Clear pair
+              </Button>
+            </div>
           </section>
         ) : (
-          <section className="space-y-6">
-            <div className="space-y-3">
-              <h2 className="text-sm font-semibold flex items-center gap-2">
-                <Link2 className="w-4 h-4" /> Invite someone
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                They open the link, sign in with their own account (and their own Preferences), and
-                you&apos;re ready to swipe.
-              </p>
-              <Button onClick={createInvite} disabled={busy}>
-                Create invite link
-              </Button>
-              {invite && (
-                <div className="rounded-xl border border-border bg-secondary/40 p-4 space-y-3">
-                  <p className="font-mono text-lg tracking-wide">{invite.code}</p>
-                  <p className="text-xs text-muted-foreground break-all">
-                    {typeof window !== "undefined" ? inviteUrl(invite.path) : invite.path}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    Expires {new Date(invite.expiresAt).toLocaleDateString("en-IN")}
-                  </p>
-                  <Button size="sm" variant="secondary" onClick={copyInvite} className="gap-2">
-                    <Copy className="w-3.5 h-3.5" />
-                    Copy invite link
+          <>
+            <ol className="grid gap-3 text-sm text-muted-foreground">
+              <li className="flex gap-2">
+                <span className="font-mono text-foreground/80">1.</span>
+                <span>
+                  Each person sets their own genres &amp; languages in{" "}
+                  <Link
+                    href="/profile"
+                    className="text-foreground underline-offset-2 hover:underline"
+                  >
+                    Preferences
+                  </Link>
+                  {" "}— never fill in for each other
+                </span>
+              </li>
+              <li className="flex gap-2">
+                <span className="font-mono text-foreground/80">2.</span>
+                Share an invite so they join this movie night
+              </li>
+              <li className="flex gap-2">
+                <span className="font-mono text-foreground/80">3.</span>
+                Tap <span className="text-foreground">Start movie night &amp; swipe</span> — that
+                page is where you swipe together
+              </li>
+              <li className="flex gap-2">
+                <span className="font-mono text-foreground/80">4.</span>
+                When you both like a film, it&apos;s a match — pick from those for tonight
+              </li>
+            </ol>
+
+            <section className="space-y-6">
+              <div className="space-y-3">
+                <h2 className="text-sm font-semibold flex items-center gap-2">
+                  <Link2 className="w-4 h-4" /> Invite someone
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  They open the link, sign in with their own account (and their own Preferences),
+                  and you&apos;re ready to swipe.
+                </p>
+                <Button onClick={createInvite} disabled={busy}>
+                  Create invite link
+                </Button>
+                {invite && (
+                  <div className="rounded-xl border border-border bg-secondary/40 p-4 space-y-3">
+                    <p className="font-mono text-lg tracking-wide">{invite.code}</p>
+                    <p className="text-xs text-muted-foreground break-all">
+                      {typeof window !== "undefined" ? inviteUrl(invite.path) : invite.path}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Expires {new Date(invite.expiresAt).toLocaleDateString("en-IN")}
+                    </p>
+                    <Button size="sm" variant="secondary" onClick={copyInvite} className="gap-2">
+                      <Copy className="w-3.5 h-3.5" />
+                      Copy invite link
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <h2 className="text-sm font-semibold">Or enter their invite code</h2>
+                <div className="flex gap-2">
+                  <Input
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value)}
+                    placeholder="reel-a1b2c3d4"
+                    className="font-mono"
+                  />
+                  <Button onClick={() => join()} disabled={busy || !joinCode.trim()}>
+                    Join
                   </Button>
                 </div>
-              )}
-            </div>
-
-            <div className="space-y-3">
-              <h2 className="text-sm font-semibold">Or enter their invite code</h2>
-              <div className="flex gap-2">
-                <Input
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value)}
-                  placeholder="reel-a1b2c3d4"
-                  className="font-mono"
-                />
-                <Button onClick={() => join()} disabled={busy || !joinCode.trim()}>
-                  Join
-                </Button>
               </div>
-            </div>
-          </section>
-        )}
+            </section>
 
-        <Link
-          href="/swipe"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          Solo swipe instead <ArrowRight className="w-3.5 h-3.5" />
-        </Link>
+            <Link
+              href="/swipe"
+              className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+            >
+              Solo swipe instead <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </>
+        )}
       </div>
     </Layout>
   );
