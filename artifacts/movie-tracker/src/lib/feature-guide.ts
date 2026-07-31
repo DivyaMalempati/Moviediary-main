@@ -127,7 +127,7 @@ export const FEATURE_GUIDE_SECTIONS: Array<{
         title: "Together",
         summary: "Shared movie-night ritual.",
         detail:
-          "1) Preferences (each person, own account) · 2) Create invite link · 3) Start movie night & swipe · 4) Mutual likes = tonight’s shortlist. Share the /match/… link so you swipe the same deck.",
+          "1) Preferences (each person, own account) · 2) Create invite link · 3) After you’re paired, Together shows a big Start movie night & swipe button · 4) Mutual likes = tonight’s shortlist. Share the /match/… link so you swipe the same deck.",
         href: "/partner",
         cta: "Open Together",
         icon: Users,

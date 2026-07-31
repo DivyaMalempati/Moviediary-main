@@ -220,6 +220,7 @@ export default function WatchedPage() {
                     timesSeen: times,
                     isRewatch: true,
                     releaseYear: movie.releaseYear,
+                    posterPath: movie.posterPath,
                   });
                   setShareOpen(true);
                 },

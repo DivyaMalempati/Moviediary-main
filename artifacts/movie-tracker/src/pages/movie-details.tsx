@@ -196,6 +196,7 @@ export default function MovieDetailsPage() {
                       timesSeen: 1,
                       isRewatch: false,
                       releaseYear: movie.releaseYear,
+                      posterPath: movie.posterPath,
                     });
                     setShareOpen(true);
                   },
@@ -253,6 +254,7 @@ export default function MovieDetailsPage() {
                     timesSeen: times,
                     isRewatch: true,
                     releaseYear: updated.releaseYear,
+                    posterPath: updated.posterPath ?? movie?.posterPath,
                   });
                   setShareOpen(true);
                 },
@@ -463,6 +465,7 @@ export default function MovieDetailsPage() {
                     timesSeen: 1 + (movie.rewatchCount ?? 0),
                     isRewatch: (movie.rewatchCount ?? 0) > 0,
                     releaseYear: movie.releaseYear,
+                    posterPath: movie.posterPath,
                   }}
                 />
               )}
@@ -707,6 +710,7 @@ export default function MovieDetailsPage() {
                     timesSeen: 1 + (movie.rewatchCount ?? 0),
                     isRewatch: (movie.rewatchCount ?? 0) > 0,
                     releaseYear: movie.releaseYear,
+                    posterPath: movie.posterPath,
                   }}
                   trigger={
                     <Button variant="secondary" className="gap-2 w-full sm:w-auto">
