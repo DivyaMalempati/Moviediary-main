@@ -160,4 +160,37 @@ router.get("/tmdb/movie/:tmdbId", async (req, res): Promise<void> => {
   }
 });
 
+/**
+ * GET /tmdb/poster-image?path=/abc.jpg&size=w780
+ * Same-origin proxy so the share-card canvas can draw posters without
+ * CORS-tainting on Replit / Safari (direct image.tmdb.org often fails).
+ */
+router.get("/tmdb/poster-image", async (req, res): Promise<void> => {
+  const pathRaw = typeof req.query.path === "string" ? req.query.path : "";
+  // TMDB paths look like "/abc123.jpg" — reject anything else.
+  if (!/^\/[A-Za-z0-9_./-]+\.(jpg|jpeg|png|webp)$/i.test(pathRaw) || pathRaw.includes("..")) {
+    res.status(400).json({ error: "Invalid poster path" });
+    return;
+  }
+  const sizeRaw = typeof req.query.size === "string" ? req.query.size : "w780";
+  const size = ["w185", "w342", "w500", "w780", "original"].includes(sizeRaw)
+    ? sizeRaw
+    : "w780";
+
+  try {
+    const upstream = await fetch(`https://image.tmdb.org/t/p/${size}${pathRaw}`);
+    if (!upstream.ok) {
+      res.status(502).json({ error: "Failed to fetch poster" });
+      return;
+    }
+    const contentType = upstream.headers.get("content-type") || "image/jpeg";
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Cache-Control", "public, max-age=86400, immutable");
+    res.send(buf);
+  } catch {
+    res.status(502).json({ error: "Failed to fetch poster" });
+  }
+});
+
 export default router;
