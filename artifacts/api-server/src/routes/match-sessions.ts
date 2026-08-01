@@ -188,6 +188,8 @@ router.post("/match-sessions", requireAuth, async (req: any, res): Promise<void>
     fallbackLanguages: WORLD_CINEMA_DEFAULT,
     page: 1,
     excludeIds,
+    // Recent underrated titles in shared genres first (not popular safe hits).
+    mode: "together",
   });
 
   const [session] = await db
