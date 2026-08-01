@@ -12,7 +12,7 @@ import {
 import { isFeatureEnabled } from "@/lib/features";
 
 /** Bump when the tour content changes so returning users see the new version once. */
-export const FEATURE_TOUR_VERSION = 3;
+export const FEATURE_TOUR_VERSION = 4;
 export const FEATURE_TOUR_STORAGE_KEY = `cinevault:feature-tour:v${FEATURE_TOUR_VERSION}`;
 
 export type FeatureGuideItem = {
@@ -27,60 +27,57 @@ export type FeatureGuideItem = {
   feature?: Parameters<typeof isFeatureEnabled>[0];
 };
 
+export type FeatureTourStep = {
+  id: string;
+  title: string;
+  /** One short line shown in the coach-mark bubble. */
+  tip: string;
+  href: string;
+  /** Matches `data-tour` on the nav / UI control to spotlight. */
+  target: string;
+  cta?: string;
+};
+
 /**
- * First-visit walkthrough — MVP only.
- * Each step explains the page and the main buttons.
+ * Spotlight walkthrough — points at real bottom-nav / sidebar icons.
+ * Keep tips short; the highlight does the explaining.
  */
-export const FEATURE_TOUR_STEPS: FeatureGuideItem[] = [
+export const FEATURE_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: "watched",
     title: "Watched",
-    summary: "Your diary of films you’ve already seen.",
-    detail:
-      "Open any poster for rating, notes, and details. Use filters/search to find a title. This is home after you sign in.",
+    tip: "Your diary — films you’ve already seen. Tap a poster to rate or add notes.",
     href: "/watched",
-    cta: "Open Watched",
-    icon: Eye,
+    target: "nav-watched",
   },
   {
     id: "watchlist",
     title: "Watchlist",
-    summary: "Films you’re saving for later.",
-    detail:
-      "From a poster, mark Watched (with a rating) when you finish it. Bottom nav → Watchlist.",
+    tip: "Saved for later. Mark Watched when you finish one.",
     href: "/watchlist",
-    cta: "Open Watchlist",
-    icon: Bookmark,
+    target: "nav-watchlist",
   },
   {
     id: "swipe",
     title: "Swipe",
-    summary: "A short deck mixed for your taste — not endless scroll.",
-    detail:
-      "First visit: set your own genres & languages. Then swipe — left skips, right saves to Watchlist, up logs as Watched. Solo only (not movie night).",
+    tip: "Solo deck for you. Left skips · right saves · up logs as Watched.",
     href: "/swipe",
-    cta: "Open Swipe",
-    icon: Shuffle,
+    target: "nav-swipe",
   },
   {
     id: "together",
     title: "Together",
-    summary: "Movie night with a friend — shared deck, mutual likes.",
-    detail:
-      "Create invite link → they join → tap Start movie night & swipe. That opens /match/… where you both swipe. Bottom-nav Swipe stays solo.",
+    tip: "Movie night with a friend. Invite → Start movie night → swipe the same deck.",
     href: "/partner",
-    cta: "Open Together",
-    icon: Users,
+    target: "nav-together",
   },
   {
-    id: "add-profile",
-    title: "Add & Profile",
-    summary: "Search to add titles; Preferences shape every deck.",
-    detail:
-      "Add: search TMDB and save to Watched or Watchlist. Profile: Preferences (genres, languages, streaming), export, sign out, and this guide.",
-    href: "/add",
-    cta: "Add a film",
-    icon: PlusCircle,
+    id: "profile",
+    title: "Profile",
+    tip: "Preferences, export, and this guide. Add films from the sidebar (or Profile → Add).",
+    href: "/profile",
+    target: "nav-profile",
+    cta: "Got it",
   },
 ];
 
@@ -211,5 +208,27 @@ export function resetFeatureTour(): void {
     localStorage.removeItem(FEATURE_TOUR_STORAGE_KEY);
   } catch {
     /* ignore */
+  }
+}
+
+/** Map nav href → data-tour id used by the spotlight. */
+export function tourTargetForHref(href: string): string | undefined {
+  switch (href) {
+    case "/watched":
+      return "nav-watched";
+    case "/watchlist":
+      return "nav-watchlist";
+    case "/swipe":
+      return "nav-swipe";
+    case "/partner":
+      return "nav-together";
+    case "/profile":
+      return "nav-profile";
+    case "/add":
+      return "nav-add";
+    case "/guide":
+      return "nav-guide";
+    default:
+      return undefined;
   }
 }

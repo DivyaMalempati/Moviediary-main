@@ -6,7 +6,7 @@ import { useReplayFeatureTour } from "@/components/feature-walkthrough";
 import { ArrowRight, BookOpen, Play } from "lucide-react";
 
 export default function GuidePage() {
-  const { replay, dialog } = useReplayFeatureTour();
+  const { replay } = useReplayFeatureTour();
   const sections = visibleGuideSections();
 
   return (
@@ -21,8 +21,8 @@ export default function GuidePage() {
             What each page &amp; button does
           </h1>
           <p className="text-muted-foreground text-base max-w-xl leading-relaxed">
-            A short map of the stable app: vault, solo swipe, movie night, add,
-            and profile. Extra surfaces stay off until they&apos;re solid.
+            Prefer the spotlight tour — it points at the real icons in the app.
+            This page is a written backup.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -31,7 +31,7 @@ export default function GuidePage() {
               onClick={replay}
             >
               <Play className="w-3.5 h-3.5" />
-              Replay walkthrough
+              Start spotlight walkthrough
             </Button>
             <Button size="sm" variant="outline" asChild>
               <Link href="/swipe">Go to Swipe</Link>
@@ -78,7 +78,6 @@ export default function GuidePage() {
           </section>
         ))}
       </div>
-      {dialog}
     </Layout>
   );
 }

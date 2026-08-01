@@ -19,9 +19,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isDemoMode, exitDemoToSignIn } from "@/lib/demo-auth";
-import { FeatureWalkthroughHost } from "@/components/feature-walkthrough";
 import { ClerkBoundary } from "@/components/clerk-boundary";
 import { BOTTOM_NAV, SIDEBAR_NAV, enabledNav } from "@/lib/features";
+import { tourTargetForHref } from "@/lib/feature-guide";
 
 interface LayoutProps {
   children: ReactNode;
@@ -66,7 +66,11 @@ function ClerkUserSection() {
     "?";
 
   return (
-    <Link href="/profile" className="flex items-center gap-3 group hover:opacity-80 transition-opacity cursor-pointer">
+    <Link
+      href="/profile"
+      data-tour="nav-profile"
+      className="flex items-center gap-3 group hover:opacity-80 transition-opacity cursor-pointer"
+    >
       {user?.imageUrl ? (
         <img src={user.imageUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
       ) : (
@@ -89,7 +93,11 @@ function ClerkUserSection() {
 
 function DemoUserSection() {
   return (
-    <Link href="/profile" className="flex items-center gap-3 group hover:opacity-80 transition-opacity cursor-pointer">
+    <Link
+      href="/profile"
+      data-tour="nav-profile"
+      className="flex items-center gap-3 group hover:opacity-80 transition-opacity cursor-pointer"
+    >
       <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-xs font-bold">
         D
       </div>
@@ -139,10 +147,12 @@ export function Layout({ children }: LayoutProps) {
           {sidebarItems.map(({ href, label }) => {
             const Icon = iconForHref(href);
             const isActive = location === href || location.startsWith(`${href}/`);
+            const tourId = tourTargetForHref(href);
             return (
               <Link
                 key={href}
                 href={href}
+                data-tour={tourId}
                 className={cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
                   isActive
@@ -172,10 +182,12 @@ export function Layout({ children }: LayoutProps) {
         {bottomItems.map(({ href, label }) => {
           const Icon = iconForHref(href);
           const isActive = location === href || (href !== "/" && location.startsWith(`${href}/`));
+          const tourId = tourTargetForHref(href);
           return (
             <Link
               key={href}
               href={href}
+              data-tour={tourId}
               className={cn(
                 "flex flex-col items-center gap-1 p-2 min-w-[4rem] rounded-xl transition-colors",
                 isActive ? "text-primary" : "text-muted-foreground hover:text-foreground",
@@ -187,7 +199,6 @@ export function Layout({ children }: LayoutProps) {
           );
         })}
       </nav>
-      <FeatureWalkthroughHost />
     </div>
   );
 }
