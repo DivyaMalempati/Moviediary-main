@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { getPosterUrl } from "@/lib/movie-utils";
-import { getAuthHeaders } from "@/lib/demo-auth";
+import { authFetch, ensureClerkApiSession } from "@/lib/demo-auth";
 import { RatingPickerDialog } from "@/components/rating-picker-dialog";
 import { MatchCelebrationBurst } from "@/components/match-celebration-burst";
 import { toast } from "sonner";
@@ -63,10 +63,8 @@ export default function MatchSessionPage() {
   const refresh = useCallback(async () => {
     if (!sessionId) return;
     try {
-      const res = await fetch(`${BASE}/api/match-sessions/${sessionId}`, {
-        headers: await getAuthHeaders(),
-        credentials: "include",
-      });
+      await ensureClerkApiSession();
+      const res = await authFetch(`${BASE}/api/match-sessions/${sessionId}`);
       if (!res.ok) throw new Error("load failed");
       const data = (await res.json()) as SessionPayload;
       setSession(data);
@@ -104,14 +102,22 @@ export default function MatchSessionPage() {
     const film = current;
     setActed((prev) => new Set(prev).add(film.tmdbId));
     try {
-      const res = await fetch(`${BASE}/api/match-sessions/${sessionId}/swipes`, {
+      await ensureClerkApiSession();
+      const res = await authFetch(`${BASE}/api/match-sessions/${sessionId}/swipes`, {
         method: "POST",
-        headers: await getAuthHeaders({ "Content-Type": "application/json" }),
-        credentials: "include",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tmdbId: film.tmdbId, direction }),
       });
       if (!res.ok) throw new Error("swipe failed");
-      const data = (await res.json()) as { matched: boolean; film: DeckFilm | null };
+      const data = (await res.json()) as {
+        matched: boolean;
+        film: DeckFilm | null;
+        addedToWatchlist?: boolean;
+      };
+      if (direction === "like" && data.addedToWatchlist) {
+        queryClient.invalidateQueries({ queryKey: getListMoviesQueryKey({ status: "watchlist" }) });
+        queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
+      }
       if (data.matched && data.film) {
         setCelebration(data.film);
       }
@@ -133,10 +139,10 @@ export default function MatchSessionPage() {
     const film = logFilm;
     setLogFilm(null);
     try {
-      const res = await fetch(`${BASE}/api/match-sessions/${sessionId}/log-match`, {
+      await ensureClerkApiSession();
+      const res = await authFetch(`${BASE}/api/match-sessions/${sessionId}/log-match`, {
         method: "POST",
-        headers: await getAuthHeaders({ "Content-Type": "application/json" }),
-        credentials: "include",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tmdbId: film.tmdbId, rating }),
       });
       if (!res.ok) {
@@ -146,6 +152,7 @@ export default function MatchSessionPage() {
       }
       toast.success(`Logged to both diaries · ${film.title}`);
       queryClient.invalidateQueries({ queryKey: getListMoviesQueryKey({ status: "watched" }) });
+      queryClient.invalidateQueries({ queryKey: getListMoviesQueryKey({ status: "watchlist" }) });
       queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
       setCelebration(null);
       await refresh();
