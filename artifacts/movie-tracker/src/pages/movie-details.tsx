@@ -456,20 +456,6 @@ export default function MovieDetailsPage() {
                 </Button>
               )}
 
-              {movie.status === "watched" && (
-                <ShareMovieSheet
-                  movie={{
-                    title: movie.title,
-                    rating: rating || movie.rating,
-                    notes: notes || movie.notes,
-                    timesSeen: 1 + (movie.rewatchCount ?? 0),
-                    isRewatch: (movie.rewatchCount ?? 0) > 0,
-                    releaseYear: movie.releaseYear,
-                    posterPath: movie.posterPath,
-                  }}
-                />
-              )}
-              
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="destructive" size="icon" className="bg-red-500/20 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/30">
