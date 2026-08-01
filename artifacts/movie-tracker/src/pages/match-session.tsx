@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { getPosterUrl } from "@/lib/movie-utils";
-import { authFetch, ensureClerkApiSession } from "@/lib/demo-auth";
+import { authFetch } from "@/lib/demo-auth";
+import { invalidateLibrary } from "@/lib/queryClient";
 import { RatingPickerDialog } from "@/components/rating-picker-dialog";
 import { MatchCelebrationBurst } from "@/components/match-celebration-burst";
 import { toast } from "sonner";
@@ -18,8 +18,7 @@ import {
   Copy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useQueryClient } from "@tanstack/react-query";
-import { getListMoviesQueryKey } from "@workspace/api-client-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -50,47 +49,50 @@ type SessionPayload = {
   partnerSwipeCount: number;
 };
 
+async function fetchMatchSession(sessionId: number): Promise<SessionPayload> {
+  const res = await authFetch(`${BASE}/api/match-sessions/${sessionId}`);
+  if (!res.ok) throw new Error("load failed");
+  return (await res.json()) as SessionPayload;
+}
+
 export default function MatchSessionPage() {
   const params = useParams();
   const sessionId = parseInt(params.id || "0", 10);
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
-  const [session, setSession] = useState<SessionPayload | null>(null);
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [celebration, setCelebration] = useState<DeckFilm | null>(null);
   const [logFilm, setLogFilm] = useState<DeckFilm | null>(null);
   const [acted, setActed] = useState<Set<number>>(new Set());
 
-  const refresh = useCallback(async () => {
-    if (!sessionId) return;
-    try {
-      await ensureClerkApiSession();
-      const res = await authFetch(`${BASE}/api/match-sessions/${sessionId}`);
-      if (!res.ok) throw new Error("load failed");
-      const data = (await res.json()) as SessionPayload;
-      setSession(data);
-      if (data.meUserId) {
-        setActed(
-          new Set(
-            data.swipes.filter((s) => s.userId === data.meUserId).map((s) => s.tmdbId),
-          ),
-        );
-      }
-    } catch {
-      toast.error("Couldn’t load watch-together session");
-      setSession(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [sessionId]);
+  const {
+    data: session,
+    isLoading: loading,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: ["match-session", sessionId],
+    queryFn: () => fetchMatchSession(sessionId),
+    enabled: sessionId > 0,
+    refetchInterval: 4000,
+    staleTime: 2000,
+  });
 
   useEffect(() => {
-    void refresh();
-    const t = setInterval(() => void refresh(), 4000);
-    return () => clearInterval(t);
-  }, [refresh]);
+    if (!session?.meUserId) return;
+    setActed(
+      new Set(
+        session.swipes
+          .filter((s) => s.userId === session.meUserId)
+          .map((s) => s.tmdbId),
+      ),
+    );
+  }, [session]);
+
+  useEffect(() => {
+    if (isError) toast.error("Couldn’t load watch-together session");
+  }, [isError]);
 
   // Auto-dismiss the compact match cue so swiping stays uninterrupted.
   useEffect(() => {
@@ -106,50 +108,69 @@ export default function MatchSessionPage() {
 
   const current = remaining[0] ?? null;
 
-  const swipe = async (direction: "like" | "pass") => {
+  const swipe = useCallback(
+    async (direction: "like" | "pass") => {
+      if (!current || busy || !sessionId) return;
+      setBusy(true);
+      const film = current;
+      setActed((prev) => new Set(prev).add(film.tmdbId));
+      try {
+        const res = await authFetch(`${BASE}/api/match-sessions/${sessionId}/swipes`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tmdbId: film.tmdbId, direction }),
+        });
+        if (!res.ok) throw new Error("swipe failed");
+        const data = (await res.json()) as {
+          matched: boolean;
+          film: DeckFilm | null;
+          addedToWatchlist?: boolean;
+        };
+        if (direction === "like" && data.addedToWatchlist) {
+          void invalidateLibrary(queryClient);
+        }
+        if (data.matched && data.film) {
+          setCelebration(data.film);
+        }
+        await refetch();
+      } catch {
+        toast.error("Swipe didn’t save — try again");
+        setActed((prev) => {
+          const next = new Set(prev);
+          next.delete(film.tmdbId);
+          return next;
+        });
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy, current, queryClient, refetch, sessionId],
+  );
+
+  // Keyboard: ← pass, → like (parity with solo Swipe).
+  useEffect(() => {
     if (!current || busy) return;
-    setBusy(true);
-    const film = current;
-    setActed((prev) => new Set(prev).add(film.tmdbId));
-    try {
-      await ensureClerkApiSession();
-      const res = await authFetch(`${BASE}/api/match-sessions/${sessionId}/swipes`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tmdbId: film.tmdbId, direction }),
-      });
-      if (!res.ok) throw new Error("swipe failed");
-      const data = (await res.json()) as {
-        matched: boolean;
-        film: DeckFilm | null;
-        addedToWatchlist?: boolean;
-      };
-      if (direction === "like" && data.addedToWatchlist) {
-        queryClient.invalidateQueries({ queryKey: getListMoviesQueryKey({ status: "watchlist" }) });
-        queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
       }
-      if (data.matched && data.film) {
-        setCelebration(data.film);
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        void swipe("pass");
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        void swipe("like");
       }
-      await refresh();
-    } catch {
-      toast.error("Swipe didn’t save — try again");
-      setActed((prev) => {
-        const next = new Set(prev);
-        next.delete(film.tmdbId);
-        return next;
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [busy, current, swipe]);
 
   const logMatch = async (rating: string | null) => {
     if (!logFilm) return;
     const film = logFilm;
     setLogFilm(null);
     try {
-      await ensureClerkApiSession();
       const res = await authFetch(`${BASE}/api/match-sessions/${sessionId}/log-match`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -160,12 +181,10 @@ export default function MatchSessionPage() {
         toast.error((err as { error?: string }).error ?? "Couldn’t log match");
         return;
       }
-      toast.success(`Logged to both diaries · ${film.title}`);
-      queryClient.invalidateQueries({ queryKey: getListMoviesQueryKey({ status: "watched" }) });
-      queryClient.invalidateQueries({ queryKey: getListMoviesQueryKey({ status: "watchlist" }) });
-      queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
+      toast.success(`Logged to your diary · ${film.title}`);
+      void invalidateLibrary(queryClient);
       setCelebration(null);
-      await refresh();
+      await refetch();
     } catch {
       toast.error("Couldn’t log match");
     }
@@ -173,31 +192,27 @@ export default function MatchSessionPage() {
 
   if (loading) {
     return (
-      <Layout>
-        <div className="flex h-[60vh] items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        </div>
-      </Layout>
+      <div className="flex h-[60vh] items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
     );
   }
 
   if (!session) {
     return (
-      <Layout>
-        <div className="p-8 text-center space-y-4">
-          <p>Match session not found.</p>
-          <Button variant="outline" onClick={() => setLocation("/partner")}>
-            Back to Together
-          </Button>
-        </div>
-      </Layout>
+      <div className="p-8 text-center space-y-4">
+        <p>Match session not found.</p>
+        <Button variant="outline" onClick={() => setLocation("/partner")}>
+          Back to Together
+        </Button>
+      </div>
     );
   }
 
   const posterUrl = current ? getPosterUrl(current.posterPath, "w780") : null;
 
   return (
-    <Layout>
+    <>
       <div className="max-w-md mx-auto px-4 py-6 space-y-4">
         <div className="flex items-center justify-between gap-2">
           <Button variant="ghost" size="sm" asChild>
@@ -235,7 +250,7 @@ export default function MatchSessionPage() {
               <h2 className="text-xl font-semibold">Your matches</h2>
               <p className="text-sm text-muted-foreground">
                 {session.matches.length > 0
-                  ? `${session.matches.length} film${session.matches.length === 1 ? "" : "s"} you both liked — pick what to log.`
+                  ? `${session.matches.length} film${session.matches.length === 1 ? "" : "s"} you both liked — log what you’ve watched to your diary.`
                   : "No mutual likes yet — start another deck when you’re ready."}
               </p>
             </div>
@@ -268,7 +283,7 @@ export default function MatchSessionPage() {
                         className="h-7 text-[11px] w-full mt-auto"
                         onClick={() => setLogFilm(m)}
                       >
-                        Log both
+                        Log mine
                       </Button>
                     </div>
                   </li>
@@ -304,27 +319,28 @@ export default function MatchSessionPage() {
                 variant="outline"
                 className="rounded-full w-14 h-14"
                 disabled={busy}
-                onClick={() => swipe("pass")}
+                aria-label={`Pass on ${current.title}`}
+                onClick={() => void swipe("pass")}
               >
-                <X className="w-6 h-6" />
+                <X className="w-6 h-6" aria-hidden />
               </Button>
               <Button
                 size="lg"
                 className={cn("rounded-full w-14 h-14 bg-primary text-primary-foreground")}
                 disabled={busy}
-                onClick={() => swipe("like")}
+                aria-label={`Like ${current.title}`}
+                onClick={() => void swipe("like")}
               >
-                <Heart className="w-6 h-6" />
+                <Heart className="w-6 h-6" aria-hidden />
               </Button>
             </div>
             <p className="text-center text-xs text-muted-foreground">
-              {remaining.length} left · matches shown at the end
+              {remaining.length} left · ← pass · → like · matches at the end
             </p>
           </div>
         )}
       </div>
 
-      {/* Compact match cue — does not block the deck; full list is at the end */}
       <AnimatePresence>
         {celebration && current && (
           <motion.div
@@ -366,7 +382,6 @@ export default function MatchSessionPage() {
         )}
       </AnimatePresence>
 
-      {/* If the last card was a match, cue still shows over the end screen briefly */}
       <AnimatePresence>
         {celebration && !current && (
           <motion.div
@@ -388,10 +403,10 @@ export default function MatchSessionPage() {
         open={!!logFilm}
         movieTitle={logFilm?.title ?? ""}
         confirmOnSelect
-        skipLabel="Skip rating · still log for both"
+        skipLabel="Skip rating · still log for me"
         onConfirm={logMatch}
         onCancel={() => setLogFilm(null)}
       />
-    </Layout>
+    </>
   );
 }

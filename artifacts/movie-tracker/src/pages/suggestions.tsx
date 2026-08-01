@@ -1,5 +1,4 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { Layout } from "@/components/layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { LanguageBadge } from "@/components/language-badge";
@@ -447,7 +446,7 @@ export default function SuggestionsPage() {
   const dismissedCount = dismissed.size;
 
   return (
-    <Layout>
+    <>
       <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-6">
         <section className="flex items-start justify-between gap-4">
           <div>
@@ -631,6 +630,6 @@ export default function SuggestionsPage() {
           if (movie) doAdd(movie, "watched", rating);
         }}
       />
-    </Layout>
+    </>
   );
 }

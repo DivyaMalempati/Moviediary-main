@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, isNotNull, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, or } from "drizzle-orm";
 import {
   db,
   moviesTable,
@@ -16,18 +16,14 @@ import {
   type ExplicitPreferences,
   type SwipeCandidate,
 } from "../lib/personalization.js";
+import { INDIA_COLD_START_LANGUAGES } from "../lib/languageDefaults.js";
 import { logger } from "../lib/logger.js";
 
 const router: IRouter = Router();
 
-const WORLD_CINEMA_DEFAULT = [
-  "hi", "te", "ta", "ml", "kn", "bn", "mr",
-  "ko", "ja", "fr", "de", "it", "es", "zh", "fa", "tr",
-];
-
 function requireRegistered(req: any, res: any): boolean {
   const userId = req.userId as string;
-  if (!userId) {
+  if (!userId || userId.startsWith("guest_")) {
     res.status(401).json({ error: "Sign in to use match sessions" });
     return false;
   }
@@ -220,22 +216,55 @@ router.post("/match-sessions", requireAuth, async (req: any, res): Promise<void>
       .where(and(eq(moviesTable.userId, partnerUserId), isNotNull(moviesTable.tmdbId))),
   ]);
 
-  const { profile, explicitPrefs } = intersectTasteProfiles(
+  const { profile, explicitPrefs, overlap } = intersectTasteProfiles(
     profileA,
     profileB,
     prefsA,
     prefsB,
   );
 
+  // Both picked genres but share none — don't pretend Horror∪Documentary is "shared".
+  if (
+    !overlap.genres &&
+    prefsA.genres.length > 0 &&
+    prefsB.genres.length > 0
+  ) {
+    res.status(409).json({
+      error:
+        "No overlapping genres — pick some of the same genres in Preferences, then try again",
+      tasteOverlap: overlap,
+    });
+    return;
+  }
+
   const excludeIds = new Set<number>([
     ...libA.map((m) => m.tmdbId).filter((id): id is number => !!id),
     ...libB.map((m) => m.tmdbId).filter((id): id is number => !!id),
   ]);
 
+  // Exclude prior Together passes for this pair so the same skips don't resurface.
+  const priorSessions = await db
+    .select({ id: matchSessionsTable.id })
+    .from(matchSessionsTable)
+    .where(eq(matchSessionsTable.partnerLinkId, link.id));
+  const priorSessionIds = priorSessions.map((s) => s.id);
+  if (priorSessionIds.length > 0) {
+    const priorPasses = await db
+      .select({ tmdbId: matchSessionSwipesTable.tmdbId })
+      .from(matchSessionSwipesTable)
+      .where(
+        and(
+          inArray(matchSessionSwipesTable.sessionId, priorSessionIds),
+          eq(matchSessionSwipesTable.direction, "pass"),
+        ),
+      );
+    for (const row of priorPasses) excludeIds.add(row.tmdbId);
+  }
+
   const deck = await getPersonalizedSwipePool({
     profile,
     explicitPrefs,
-    fallbackLanguages: WORLD_CINEMA_DEFAULT,
+    fallbackLanguages: [...INDIA_COLD_START_LANGUAGES],
     page: 1,
     excludeIds,
     // Recent underrated titles in shared genres first (not popular safe hits).
@@ -258,6 +287,7 @@ router.post("/match-sessions", requireAuth, async (req: any, res): Promise<void>
     partnerUserId,
     status: session.status,
     deck,
+    tasteOverlap: overlap,
     createdAt: session.createdAt.toISOString(),
   });
 });
@@ -394,7 +424,8 @@ router.post("/match-sessions/:id/swipes", requireAuth, async (req: any, res): Pr
 
 /**
  * POST /match-sessions/:id/log-match  { tmdbId, rating? }
- * 1-click: add the matched film to BOTH partners' Watched diaries.
+ * Opt-in diary write for the requesting user only (partner logs separately).
+ * Mutual likes already land on each person's watchlist via /swipes.
  */
 router.post("/match-sessions/:id/log-match", requireAuth, async (req: any, res): Promise<void> => {
   if (!requireRegistered(req, res)) return;
@@ -430,30 +461,30 @@ router.post("/match-sessions/:id/log-match", requireAuth, async (req: any, res):
     return;
   }
 
-  const users = [req.userId, partnerUserId];
-  const logged: string[] = [];
-  for (const userId of users) {
-    const existing = await db
-      .select()
-      .from(moviesTable)
-      .where(and(eq(moviesTable.userId, userId), eq(moviesTable.tmdbId, tmdbId)))
-      .limit(1);
+  const userId = req.userId as string;
+  const existing = await db
+    .select()
+    .from(moviesTable)
+    .where(and(eq(moviesTable.userId, userId), eq(moviesTable.tmdbId, tmdbId)))
+    .limit(1);
 
-    if (existing[0]) {
-      if (existing[0].status !== "watched") {
-        await db
-          .update(moviesTable)
-          .set({
-            status: "watched",
-            watchedAt: new Date(),
-            ...(rating ? { rating: rating as any } : {}),
-          })
-          .where(eq(moviesTable.id, existing[0].id));
-      }
-      logged.push(userId);
-      continue;
+  if (existing[0]) {
+    if (existing[0].status !== "watched") {
+      await db
+        .update(moviesTable)
+        .set({
+          status: "watched",
+          watchedAt: new Date(),
+          ...(rating ? { rating: rating as any } : {}),
+        })
+        .where(eq(moviesTable.id, existing[0].id));
+    } else if (rating) {
+      await db
+        .update(moviesTable)
+        .set({ rating: rating as any })
+        .where(eq(moviesTable.id, existing[0].id));
     }
-
+  } else {
     await db.insert(moviesTable).values({
       userId,
       title: film.title,
@@ -468,10 +499,9 @@ router.post("/match-sessions/:id/log-match", requireAuth, async (req: any, res):
       watchedAt: new Date(),
       ...(rating ? { rating: rating as any } : {}),
     });
-    logged.push(userId);
   }
 
-  res.json({ ok: true, loggedFor: logged, film });
+  res.json({ ok: true, loggedFor: [userId], film });
 });
 
 export default router;

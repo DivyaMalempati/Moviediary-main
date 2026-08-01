@@ -16,10 +16,10 @@ function canonicalPair(a: string, b: string): [string, string] {
   return a < b ? [a, b] : [b, a];
 }
 
-/** Guests can try Together in local/demo; durable links still work for signed-in users. */
+/** Together pairs are durable — guests must sign in (no guest_* ritual links). */
 function requireRegistered(req: any, res: any): boolean {
   const userId = req.userId as string;
-  if (!userId) {
+  if (!userId || userId.startsWith("guest_")) {
     res.status(401).json({ error: "Sign in to link a partner" });
     return false;
   }

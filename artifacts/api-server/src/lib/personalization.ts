@@ -542,9 +542,15 @@ export async function getPersonalizedSwipePool(opts: {
   return batch;
 }
 
+export type TasteOverlap = {
+  genres: boolean;
+  languages: boolean;
+  providers: boolean;
+};
+
 /**
- * Intersect two taste profiles for partner match decks:
- * multiply shared genre weights, prefer shared languages & OTT platforms.
+ * Intersect two taste profiles for partner match decks.
+ * Shared genres / languages / OTT only — no silent union that pretends overlap.
  */
 export function intersectTasteProfiles(
   a: TasteProfile,
@@ -554,6 +560,7 @@ export function intersectTasteProfiles(
 ): {
   profile: TasteProfile;
   explicitPrefs: ExplicitPreferences;
+  overlap: TasteOverlap;
 } {
   const sharedGenreWeights: Record<string, number> = {};
   for (const [genre, wA] of Object.entries(a.genreWeights)) {
@@ -562,14 +569,10 @@ export function intersectTasteProfiles(
       sharedGenreWeights[genre] = wA * wB;
     }
   }
-  // Fall back to union of top genres when intersection is empty.
-  let topGenres = Object.entries(sharedGenreWeights)
+  const topGenres = Object.entries(sharedGenreWeights)
     .sort((x, y) => y[1] - x[1])
     .slice(0, 4)
     .map(([name]) => name);
-  if (topGenres.length === 0) {
-    topGenres = mergeRanked(a.topGenres, b.topGenres, 4);
-  }
 
   const langIntersect = a.topLanguages.filter((l) => b.topLanguages.includes(l));
   const explicitLangIntersect = prefsA.languages.filter((l) => prefsB.languages.includes(l));
@@ -578,14 +581,15 @@ export function intersectTasteProfiles(
       ? explicitLangIntersect
       : langIntersect.length > 0
         ? langIntersect
-        : mergeRanked(prefsA.languages, prefsB.languages, 6);
+        : [];
 
   const providerIntersect = (prefsA.providerIds ?? []).filter((id) =>
     (prefsB.providerIds ?? []).includes(id),
   );
-  const providerUnion = [
-    ...new Set([...(prefsA.providerIds ?? []), ...(prefsB.providerIds ?? [])]),
-  ];
+
+  const sharedExplicitGenres = prefsA.genres.filter((g) => prefsB.genres.includes(g)).slice(0, 4);
+  // Prefer Preferences intersection; else shared implicit weights.
+  const genres = sharedExplicitGenres.length > 0 ? sharedExplicitGenres : topGenres;
 
   const seedMovies = [...a.seedMovies, ...b.seedMovies]
     .sort((x, y) => y.weight - x.weight)
@@ -602,28 +606,31 @@ export function intersectTasteProfiles(
       ? prefsA.maxCertification ?? prefsB.maxCertification ?? null
       : prefsB.maxCertification ?? prefsA.maxCertification ?? null;
 
+  const bothChoseGenres = prefsA.genres.length > 0 && prefsB.genres.length > 0;
+  const bothChoseProviders =
+    (prefsA.providerIds?.length ?? 0) > 0 && (prefsB.providerIds?.length ?? 0) > 0;
+
   return {
     profile: {
       hasImplicitData: a.hasImplicitData || b.hasImplicitData,
-      topGenres,
-      topLanguages: langIntersect.length > 0 ? langIntersect : mergeRanked(a.topLanguages, b.topLanguages, 5),
+      topGenres: genres,
+      topLanguages: languages.length > 0 ? languages : langIntersect,
       genreWeights: sharedGenreWeights,
       seedMovies,
     },
     explicitPrefs: {
       languages,
-      // Prefer genres both people already chose in Preferences (not typed in for each other).
-      // Fall back to a blended union so the ritual deck isn't empty.
-      genres: (() => {
-        const shared = prefsA.genres.filter((g) => prefsB.genres.includes(g));
-        if (shared.length > 0) return shared.slice(0, 4);
-        return mergeRanked(prefsA.genres, prefsB.genres, 4);
-      })(),
-      // Prefer shared OTT; fall back to union so the pair has something to watch.
-      providerIds: providerIntersect.length > 0 ? providerIntersect : providerUnion,
+      genres,
+      // Streaming bucket = intersection only (never a silent union).
+      providerIds: providerIntersect,
       watchRegion: prefsA.watchRegion || prefsB.watchRegion || "IN",
       mutedGenres,
       maxCertification,
+    },
+    overlap: {
+      genres: genres.length > 0 || !bothChoseGenres,
+      languages: languages.length > 0,
+      providers: providerIntersect.length > 0 || !bothChoseProviders,
     },
   };
 }

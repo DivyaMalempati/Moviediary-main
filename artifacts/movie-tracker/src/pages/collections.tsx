@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
-import { Layout } from "@/components/layout";
 import { MoviePosterCard } from "@/components/movie-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -465,7 +464,7 @@ function CollectionList() {
   };
 
   return (
-    <Layout>
+    <>
       <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8">
         {/* Header */}
         <section className="flex items-center justify-between gap-4">
@@ -571,7 +570,7 @@ function CollectionList() {
           onClose={() => setEditingCollection(null)}
         />
       )}
-    </Layout>
+    </>
   );
 }
 
@@ -586,7 +585,7 @@ function CollectionDetail({ id }: { id: number }) {
   const isSmart = Array.isArray(collection?.rules) && (collection?.rules?.length ?? 0) > 0;
 
   return (
-    <Layout>
+    <>
       <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => setLocation("/collections")} className="gap-2 text-muted-foreground">
@@ -681,7 +680,7 @@ function CollectionDetail({ id }: { id: number }) {
           onClose={() => setEditingCollection(null)}
         />
       )}
-    </Layout>
+    </>
   );
 }
 

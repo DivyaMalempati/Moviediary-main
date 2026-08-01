@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
-import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -95,6 +94,10 @@ export default function PartnerPage() {
   }, [refresh]);
 
   const createInvite = async () => {
+    if (isDemoMode()) {
+      exitDemoToSignIn();
+      return;
+    }
     setBusy(true);
     try {
       await ensureClerkApiSession();
@@ -103,7 +106,7 @@ export default function PartnerPage() {
         headers: { "Content-Type": "application/json" },
       });
       if (res.status === 401 || res.status === 403) {
-        toast.error("Session expired — sign out and sign back in, then try again");
+        toast.error("Sign in to invite someone for movie night");
         return;
       }
       if (!res.ok) throw new Error("invite failed");
@@ -118,6 +121,10 @@ export default function PartnerPage() {
   };
 
   const join = async (code?: string) => {
+    if (isDemoMode()) {
+      exitDemoToSignIn();
+      return;
+    }
     const raw = (code ?? joinCode).trim();
     if (!raw) return;
     setBusy(true);
@@ -161,6 +168,10 @@ export default function PartnerPage() {
   };
 
   const startMatch = async () => {
+    if (isDemoMode()) {
+      exitDemoToSignIn();
+      return;
+    }
     setBusy(true);
     try {
       await ensureClerkApiSession();
@@ -213,16 +224,16 @@ export default function PartnerPage() {
 
   if (loading) {
     return (
-      <Layout>
+      <>
         <div className="flex h-[60vh] items-center justify-center">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
-      </Layout>
+      </>
     );
   }
 
   return (
-    <Layout>
+    <>
       <div className="max-w-lg mx-auto px-4 py-8 space-y-8 pb-28">
         <div>
           <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground mb-2">
@@ -244,8 +255,8 @@ export default function PartnerPage() {
         {isDemoMode() && (
           <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 space-y-2">
             <p className="text-sm text-sky-50">
-              Demo session — you can try the invite and swipe ritual here. Sign in on both devices
-              for a real movie night with friends.
+              Movie night needs a signed-in account on both devices — guest sessions can&apos;t form
+              durable pairs.
             </p>
             <Button
               size="sm"
@@ -253,7 +264,7 @@ export default function PartnerPage() {
               className="h-8 text-xs"
               onClick={() => exitDemoToSignIn()}
             >
-              Sign in instead
+              Sign in to use Together
             </Button>
           </div>
         )}
@@ -445,7 +456,7 @@ export default function PartnerPage() {
           </>
         )}
       </div>
-    </Layout>
+    </>
   );
 }
 
@@ -461,6 +472,11 @@ export function PairInvitePage() {
     if (!code) {
       setStatus("error");
       setMessage("Missing invite code");
+      return;
+    }
+    if (isDemoMode()) {
+      setStatus("error");
+      setMessage("Sign in to join a movie-night invite");
       return;
     }
     let cancelled = false;
@@ -495,16 +511,21 @@ export function PairInvitePage() {
   }, [code, setLocation]);
 
   return (
-    <Layout>
+    <>
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3 px-4 text-center">
         {status === "joining" && <Loader2 className="w-8 h-8 animate-spin text-primary" />}
         <p className="text-sm text-muted-foreground">{message}</p>
         {status === "error" && (
-          <Button variant="outline" onClick={() => setLocation("/partner")}>
-            Open Together
-          </Button>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {isDemoMode() && (
+              <Button onClick={() => exitDemoToSignIn()}>Sign in</Button>
+            )}
+            <Button variant="outline" onClick={() => setLocation("/partner")}>
+              Open Together
+            </Button>
+          </div>
         )}
       </div>
-    </Layout>
+    </>
   );
 }

@@ -1,6 +1,5 @@
 import { useState, useMemo } from "react";
 import { Link } from "wouter";
-import { Layout } from "@/components/layout";
 import { MoviePosterCard } from "@/components/movie-card";
 import { LanguageBadge } from "@/components/language-badge";
 import { Input } from "@/components/ui/input";
@@ -38,6 +37,7 @@ import {
   getPendingClaimGuestToken,
   clearPendingClaimGuestToken,
 } from "@/lib/demo-auth";
+import { invalidateLibrary } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -90,8 +90,7 @@ function useClaimOrphaned() {
       clearPendingClaimGuestToken();
       toast.success(`${data.claimed} movies added to your library`);
       qc.invalidateQueries({ queryKey: ["orphaned-count"] });
-      qc.invalidateQueries({ queryKey: ["movies"] });
-      qc.invalidateQueries({ queryKey: ["movie-stats"] });
+      void invalidateLibrary(qc);
     },
     onError: (err) => toast.error(String(err)),
   });
@@ -355,7 +354,7 @@ export default function WatchedPage() {
   const sortedMovies = useMemo(() => useSections ? [] : sortMovies(filtered, sort), [filtered, sort, useSections]);
 
   return (
-    <Layout>
+    <>
       <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
 
         {/* Claim-orphaned banner */}
@@ -672,6 +671,6 @@ export default function WatchedPage() {
         )}
 
       </div>
-    </Layout>
+    </>
   );
 }

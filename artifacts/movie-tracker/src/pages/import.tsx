@@ -1,5 +1,4 @@
 import { useState, useRef, useCallback } from "react";
-import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -272,7 +271,7 @@ export default function ImportPage() {
   };
 
   return (
-    <Layout>
+    <>
       <div className="p-4 md:p-8 max-w-3xl mx-auto space-y-8">
         {/* Header */}
         <div>
@@ -441,6 +440,6 @@ Oppenheimer`}
           </div>
         )}
       </div>
-    </Layout>
+    </>
   );
 }

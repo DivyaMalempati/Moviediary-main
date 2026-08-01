@@ -3,14 +3,10 @@ import { db, moviesTable, userPreferencesTable } from "@workspace/db";
 import { eq, and, isNotNull } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { buildTasteProfile, getPersonalizedSwipePool } from "../lib/personalization.js";
+import { INDIA_COLD_START_LANGUAGES } from "../lib/languageDefaults.js";
 import { tropeBySlug } from "../lib/tropes.js";
 
 const router: IRouter = Router();
-
-const WORLD_CINEMA_DEFAULT = [
-  "hi", "te", "ta", "ml", "kn", "bn", "mr",
-  "ko", "ja", "fr", "de", "it", "es", "zh", "fa", "tr",
-];
 
 /**
  * GET /discover/swipe?page=1&genreId=28&excludeIds=603,680&onMyServices=1&keywordId=10051&trope=heist
@@ -76,7 +72,7 @@ router.get("/discover/swipe", requireAuth, async (req: any, res): Promise<void> 
   const pool = await getPersonalizedSwipePool({
     profile,
     explicitPrefs,
-    fallbackLanguages: WORLD_CINEMA_DEFAULT,
+    fallbackLanguages: [...INDIA_COLD_START_LANGUAGES],
     page,
     genreIdFilter,
     keywordId,

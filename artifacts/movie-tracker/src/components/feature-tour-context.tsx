@@ -19,7 +19,7 @@ const FeatureTourContext = createContext<FeatureTourContextValue | null>(null);
 
 /**
  * App-level tour state so navigating between pages during the spotlight
- * walkthrough does not remount / reset the open step (Layout is per-page).
+ * walkthrough does not remount / reset the open step across navigations.
  */
 export function FeatureTourProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);

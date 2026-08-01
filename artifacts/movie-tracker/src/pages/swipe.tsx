@@ -7,11 +7,19 @@ import {
   type PanInfo,
 } from "framer-motion";
 import { useQueryClient } from "@tanstack/react-query";
-import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { getPosterUrl, RATING_LABELS } from "@/lib/movie-utils";
 import { authFetch, ensureClerkApiSession, getAuthHeaders } from "@/lib/demo-auth";
 import { usePreferences, PreferencesAuthError } from "@/lib/preferences";
+import { invalidateLibrary } from "@/lib/queryClient";
+import {
+  dequeueOffline,
+  enqueueOffline,
+  getOfflineQueue,
+  getSeenToday,
+  markSeenToday,
+  unmarkSeenToday,
+} from "@/lib/swipe-offline";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -126,58 +134,6 @@ function formatRuntime(minutes: number | null | undefined): string | null {
   if (h <= 0) return `${m}m`;
   if (m <= 0) return `${h}h`;
   return `${h}h ${m}m`;
-}
-
-// ── LocalStorage seen-today helpers ────────────────────────────────────────────
-const todayKey = () => new Date().toISOString().split("T")[0];
-const lsSeenKey = () => `cinevault:swipe:seen:${todayKey()}`;
-
-function getSeenToday(): Set<number> {
-  try {
-    const raw = localStorage.getItem(lsSeenKey()) ?? "";
-    return new Set(raw.split(",").filter(Boolean).map(Number));
-  } catch { return new Set(); }
-}
-function markSeenToday(id: number) {
-  try {
-    const s = getSeenToday(); s.add(id);
-    localStorage.setItem(lsSeenKey(), [...s].join(","));
-  } catch {}
-}
-function unmarkSeenToday(id: number) {
-  try {
-    const s = getSeenToday(); s.delete(id);
-    localStorage.setItem(lsSeenKey(), [...s].join(","));
-  } catch {}
-}
-
-// ── Offline save queue helpers ─────────────────────────────────────────────────
-const LS_QUEUE_KEY = "cinevault:swipe:offline-queue-v2";
-type QueueItem = { film: SwipeFilm; status: "watchlist" | "watched"; rating?: string | null };
-
-function getOfflineQueue(): QueueItem[] {
-  try {
-    const raw = localStorage.getItem(LS_QUEUE_KEY);
-    return raw ? (JSON.parse(raw) as QueueItem[]) : [];
-  } catch { return []; }
-}
-
-function writeOfflineQueue(items: QueueItem[]) {
-  try {
-    if (items.length === 0) localStorage.removeItem(LS_QUEUE_KEY);
-    else localStorage.setItem(LS_QUEUE_KEY, JSON.stringify(items));
-  } catch {}
-}
-
-function enqueueOffline(film: SwipeFilm, status: "watchlist" | "watched", rating?: string | null) {
-  const q = getOfflineQueue();
-  if (!q.find((i) => i.film.tmdbId === film.tmdbId)) {
-    writeOfflineQueue([...q, { film, status, rating }]);
-  }
-}
-
-function dequeueOffline(tmdbId: number) {
-  writeOfflineQueue(getOfflineQueue().filter((i) => i.film.tmdbId !== tmdbId));
 }
 
 // ── Online status hook ─────────────────────────────────────────────────────────
@@ -812,7 +768,7 @@ function FinishLineScreen({
   const weekFull = saved.length >= WEEKLY_WATCHLIST_SOFT_CAP;
 
   return (
-    <Layout>
+    <>
       <div className="max-w-lg mx-auto px-4 py-10 space-y-8">
         <div className="text-center space-y-2">
           <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
@@ -870,7 +826,7 @@ function FinishLineScreen({
           )}
         </div>
       </div>
-    </Layout>
+    </>
   );
 }
 
@@ -972,7 +928,7 @@ function SwipeDeck() {
       }
       setIsRetrying(false);
       if (synced > 0) {
-        qc.invalidateQueries({ queryKey: ["movies"] });
+        void invalidateLibrary(qc);
         toast.success(`${synced} film${synced === 1 ? "" : "s"} synced`, { duration: 4000 });
       }
     };
@@ -1038,7 +994,7 @@ function SwipeDeck() {
     if (ok) {
       setSavedFilms((s) => [...s, film]);
       pushUndo({ film, action: "watchlist", movieId: id ?? null });
-      qc.invalidateQueries({ queryKey: ["movies"] });
+      void invalidateLibrary(qc);
       if (savedFilms.length + 1 === WEEKLY_WATCHLIST_SOFT_CAP) {
         toast.message("Week’s watchlist is filling up", {
           description: "Aim for a few strong picks — not an endless list.",
@@ -1073,7 +1029,7 @@ function SwipeDeck() {
     if (ok) {
       setWatchedFilms((w) => [...w, film]);
       pushUndo({ film, action: "watched", movieId: id ?? null });
-      qc.invalidateQueries({ queryKey: ["movies"] });
+      void invalidateLibrary(qc);
     } else {
       enqueueOffline(film, "watched", safeRating);
       setPendingCount(getOfflineQueue().length);
@@ -1118,13 +1074,13 @@ function SwipeDeck() {
       setSavedFilms((s) => s.filter((f) => f.tmdbId !== item.film.tmdbId));
       dequeueOffline(item.film.tmdbId);
       if (item.movieId) await deleteMovie(item.movieId);
-      qc.invalidateQueries({ queryKey: ["movies"] });
+      void invalidateLibrary(qc);
     }
     if (item.action === "watched") {
       setWatchedFilms((w) => w.filter((f) => f.tmdbId !== item.film.tmdbId));
       dequeueOffline(item.film.tmdbId);
       if (item.movieId) await deleteMovie(item.movieId);
-      qc.invalidateQueries({ queryKey: ["movies"] });
+      void invalidateLibrary(qc);
     }
 
     toast.message("Undone", { duration: 1500 });
@@ -1189,7 +1145,7 @@ function SwipeDeck() {
             };
 
   return (
-    <Layout>
+    <>
       <div className="flex flex-col items-center px-4 pt-4 pb-6 min-h-[calc(100dvh-4rem)]">
 
         {!isOnline && (
@@ -1428,7 +1384,7 @@ function SwipeDeck() {
           void resolveWatchedRating(rating);
         }}
       />
-    </Layout>
+    </>
   );
 }
 
@@ -1437,18 +1393,18 @@ export default function SwipePage() {
 
   if (isLoading) {
     return (
-      <Layout>
+      <>
         <div className="flex items-center justify-center py-24 text-muted-foreground">
           <Loader2 className="w-6 h-6 animate-spin" />
         </div>
-      </Layout>
+      </>
     );
   }
 
   if (isError) {
     const authFailed = error instanceof PreferencesAuthError;
     return (
-      <Layout>
+      <>
         <div className="flex flex-col items-center justify-center gap-3 py-24 px-6 text-center">
           <p className="text-sm text-muted-foreground max-w-sm">
             {authFailed
@@ -1472,7 +1428,7 @@ export default function SwipePage() {
             </button>
           )}
         </div>
-      </Layout>
+      </>
     );
   }
 
