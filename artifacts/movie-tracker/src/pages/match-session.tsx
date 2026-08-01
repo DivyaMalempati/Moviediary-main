@@ -23,6 +23,9 @@ import { getListMoviesQueryKey } from "@workspace/api-client-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+/** Brief cue on each mutual like — full match list lives at deck end. */
+const MATCH_TOAST_MS = 2200;
+
 type DeckFilm = {
   tmdbId: number;
   title: string;
@@ -88,6 +91,13 @@ export default function MatchSessionPage() {
     const t = setInterval(() => void refresh(), 4000);
     return () => clearInterval(t);
   }, [refresh]);
+
+  // Auto-dismiss the compact match cue so swiping stays uninterrupted.
+  useEffect(() => {
+    if (!celebration) return;
+    const t = window.setTimeout(() => setCelebration(null), MATCH_TOAST_MS);
+    return () => window.clearTimeout(t);
+  }, [celebration]);
 
   const remaining = useMemo(() => {
     if (!session) return [];
@@ -219,35 +229,48 @@ export default function MatchSessionPage() {
         </div>
 
         {!current ? (
-          <div className="rounded-2xl border border-border bg-secondary/30 p-8 text-center space-y-4">
-            <Check className="w-10 h-10 mx-auto text-primary" />
-            <h2 className="text-xl font-semibold">Deck complete</h2>
-            <p className="text-sm text-muted-foreground">
-              {session.matches.length > 0
-                ? `You matched on ${session.matches.length} film${session.matches.length === 1 ? "" : "s"}.`
-                : "No mutual likes yet — start another deck when you’re ready."}
-            </p>
+          <div className="rounded-2xl border border-border bg-secondary/30 p-6 text-center space-y-5">
+            <div className="space-y-2">
+              <Check className="w-9 h-9 mx-auto text-primary" />
+              <h2 className="text-xl font-semibold">Your matches</h2>
+              <p className="text-sm text-muted-foreground">
+                {session.matches.length > 0
+                  ? `${session.matches.length} film${session.matches.length === 1 ? "" : "s"} you both liked — pick what to log.`
+                  : "No mutual likes yet — start another deck when you’re ready."}
+              </p>
+            </div>
+
             {session.matches.length > 0 && (
-              <ul className="space-y-2 text-left">
+              <ul className="grid grid-cols-3 gap-2.5 text-left">
                 {session.matches.map((m) => (
                   <li
                     key={m.tmdbId}
-                    className="flex items-center gap-3 rounded-lg bg-background/60 border border-border px-3 py-2"
+                    className="rounded-xl border border-border bg-background/70 overflow-hidden flex flex-col"
                   >
-                    {m.posterPath && (
-                      <img
-                        src={getPosterUrl(m.posterPath) ?? ""}
-                        alt=""
-                        className="w-10 h-14 object-cover rounded"
-                      />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{m.title}</p>
-                      <p className="text-xs text-muted-foreground">{m.releaseYear}</p>
+                    <div className="aspect-[2/3] bg-secondary">
+                      {m.posterPath ? (
+                        <img
+                          src={getPosterUrl(m.posterPath, "w500") ?? ""}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground p-1 text-center">
+                          {m.title}
+                        </div>
+                      )}
                     </div>
-                    <Button size="sm" onClick={() => setLogFilm(m)}>
-                      Log both
-                    </Button>
+                    <div className="p-1.5 space-y-1.5 flex-1 flex flex-col">
+                      <p className="text-[11px] font-medium leading-tight line-clamp-2">{m.title}</p>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="h-7 text-[11px] w-full mt-auto"
+                        onClick={() => setLogFilm(m)}
+                      >
+                        Log both
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -295,60 +318,68 @@ export default function MatchSessionPage() {
               </Button>
             </div>
             <p className="text-center text-xs text-muted-foreground">
-              {remaining.length} left in this shared deck
+              {remaining.length} left · matches shown at the end
             </p>
           </div>
         )}
       </div>
 
-      {/* IT'S A MATCH overlay + popcorn / confetti burst */}
+      {/* Compact match cue — does not block the deck; full list is at the end */}
       <AnimatePresence>
-        {celebration && (
+        {celebration && current && (
           <motion.div
-            className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-6"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            className="fixed inset-x-0 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-[80] flex justify-center px-4 pointer-events-none"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            transition={{ type: "spring", stiffness: 420, damping: 28 }}
+          >
+            <MatchCelebrationBurst active compact />
+            <div className="pointer-events-auto relative z-[91] flex items-center gap-2.5 max-w-sm w-full rounded-2xl border border-amber-400/35 bg-background/95 backdrop-blur-md px-3 py-2.5 shadow-xl">
+              {celebration.posterPath ? (
+                <img
+                  src={getPosterUrl(celebration.posterPath, "w500") ?? ""}
+                  alt=""
+                  className="w-9 h-[3.25rem] object-cover rounded-md shrink-0"
+                />
+              ) : (
+                <div className="w-9 h-[3.25rem] rounded-md bg-secondary shrink-0 flex items-center justify-center">
+                  <Popcorn className="w-4 h-4 text-amber-300" />
+                </div>
+              )}
+              <div className="min-w-0 flex-1 text-left">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-200/90">
+                  Match
+                </p>
+                <p className="text-sm font-medium truncate">{celebration.title}</p>
+                <p className="text-[11px] text-muted-foreground">See all at the end of the deck</p>
+              </div>
+              <button
+                type="button"
+                className="text-xs text-muted-foreground hover:text-foreground shrink-0 px-1"
+                onClick={() => setCelebration(null)}
+              >
+                OK
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* If the last card was a match, cue still shows over the end screen briefly */}
+      <AnimatePresence>
+        {celebration && !current && (
+          <motion.div
+            className="fixed inset-x-0 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-[80] flex justify-center px-4"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
           >
-            <MatchCelebrationBurst active />
-            <motion.div
-              className="relative z-[91] max-w-sm w-full rounded-2xl border border-primary/40 bg-background p-6 text-center space-y-4 shadow-2xl"
-              initial={{ scale: 0.7, opacity: 0, y: 24 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 380, damping: 22 }}
-            >
-              <motion.div
-                initial={{ rotate: -12, scale: 0.5 }}
-                animate={{ rotate: [0, -8, 8, 0], scale: 1 }}
-                transition={{ duration: 0.7 }}
-              >
-                <Popcorn className="w-12 h-12 mx-auto text-amber-300" />
-              </motion.div>
-              <h2 className="text-2xl font-bold tracking-tight">IT&apos;S A MATCH!</h2>
-              <p className="text-sm text-muted-foreground">
-                You both liked{" "}
-                <span className="text-foreground font-medium">{celebration.title}</span>
-              </p>
-              {celebration.posterPath && (
-                <motion.img
-                  src={getPosterUrl(celebration.posterPath, "w500") ?? ""}
-                  alt={celebration.title}
-                  className="mx-auto w-32 rounded-lg shadow-lg"
-                  initial={{ y: 16, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ delay: 0.12 }}
-                />
-              )}
-              <div className="flex flex-col gap-2">
-                <Button onClick={() => setLogFilm(celebration)}>
-                  Log to both Watched diaries
-                </Button>
-                <Button variant="ghost" onClick={() => setCelebration(null)}>
-                  Keep swiping
-                </Button>
-              </div>
-            </motion.div>
+            <div className="flex items-center gap-2 rounded-full border border-amber-400/30 bg-background/95 px-3 py-1.5 text-xs shadow-lg">
+              <Popcorn className="w-3.5 h-3.5 text-amber-300" />
+              <span className="font-medium truncate max-w-[14rem]">{celebration.title}</span>
+              <span className="text-muted-foreground">matched</span>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
