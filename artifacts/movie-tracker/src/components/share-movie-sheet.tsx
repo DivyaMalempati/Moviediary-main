@@ -1,12 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import {
-  Share2,
-  Copy,
-  ExternalLink,
-  MessageCircle,
-  Download,
-  Loader2,
-} from "lucide-react";
+import { Share2, Copy, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -21,11 +14,8 @@ import {
   buildMovieShareText,
   copyShareText,
   downloadShareCard,
-  facebookShareUrl,
   nativeShareMovie,
   renderMovieShareCard,
-  twitterShareUrl,
-  whatsappShareUrl,
   type ShareMovieInput,
 } from "@/lib/share-movie";
 import { cn } from "@/lib/utils";
@@ -63,6 +53,8 @@ export function ShareMovieSheet({
     let objectUrl: string | null = null;
 
     setRendering(true);
+    setCardBlob(null);
+    setCardUrl(null);
     void renderMovieShareCard(movie)
       .then((blob) => {
         if (cancelled) return;
@@ -84,11 +76,6 @@ export function ShareMovieSheet({
     };
   }, [open, movie]);
 
-  const openExternal = (url: string) => {
-    window.open(url, "_blank", "noopener,noreferrer");
-    setOpen(false);
-  };
-
   const handleNative = async () => {
     const result = await nativeShareMovie(text, movie.title, cardBlob);
     if (result === "shared") {
@@ -97,13 +84,13 @@ export function ShareMovieSheet({
       return;
     }
     if (result === "cancelled") return;
-    toast.message("Save the poster below, or copy the caption");
+    toast.message("Save the poster, or copy the caption");
   };
 
   const handleCopy = async () => {
     const ok = await copyShareText(text);
     if (ok) {
-      toast.success("Caption copied — attach the poster when you post");
+      toast.success("Caption copied");
     } else {
       toast.error("Couldn’t copy caption");
     }
@@ -121,7 +108,7 @@ export function ShareMovieSheet({
       } else if (result === "opened") {
         toast.success("Poster opened — long-press to save");
       } else {
-        toast.success("Poster saved — share it with your caption");
+        toast.success("Poster saved");
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
@@ -153,12 +140,12 @@ export function ShareMovieSheet({
             {movie.isRewatch ? "Share rewatch" : "Share watched"}
           </SheetTitle>
           <SheetDescription>
-            Preview is the exact image WhatsApp will get — poster, rating, and review.
+            This preview is the exact image WhatsApp will get.
           </SheetDescription>
         </SheetHeader>
 
-        {/* WYSIWYG: same JPEG/PNG blob that Share poster sends */}
-        <div className="mt-4 mx-auto w-full max-w-[260px] rounded-2xl overflow-hidden border border-white/10 bg-[#121214] shadow-lg aspect-[4/5]">
+        {/* WYSIWYG: same JPEG blob that Share poster sends */}
+        <div className="mt-4 mx-auto w-full max-w-[240px] rounded-2xl overflow-hidden border border-white/10 bg-[#121214] shadow-lg aspect-[4/5]">
           {cardUrl ? (
             <img src={cardUrl} alt="" className="w-full h-full object-cover" />
           ) : (
@@ -174,61 +161,31 @@ export function ShareMovieSheet({
           </p>
         )}
 
-        <div className="mt-5 grid grid-cols-2 gap-2">
+        <div className="mt-5 space-y-2">
           <Button
-            className="gap-2 col-span-2 bg-white text-black hover:bg-white/90"
+            className="gap-2 w-full bg-white text-black hover:bg-white/90"
             onClick={() => void handleNative()}
-            disabled={rendering}
+            disabled={rendering || !cardBlob}
           >
             <Share2 className="w-4 h-4" />
             Share poster
           </Button>
-          <Button
-            variant="secondary"
-            className="gap-2"
-            onClick={() => void handleDownload()}
-            disabled={!cardBlob || rendering}
-          >
-            <Download className="w-4 h-4" />
-            Save image
-          </Button>
-          <Button variant="secondary" className="gap-2" onClick={() => void handleCopy()}>
-            <Copy className="w-4 h-4" />
-            Copy caption
-          </Button>
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => openExternal(whatsappShareUrl(text))}
-          >
-            <MessageCircle className="w-4 h-4" />
-            WhatsApp text
-          </Button>
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => openExternal(twitterShareUrl(text))}
-          >
-            <ExternalLink className="w-4 h-4" />
-            X caption
-          </Button>
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant="secondary"
+              className="gap-2"
+              onClick={() => void handleDownload()}
+              disabled={!cardBlob || rendering}
+            >
+              <Download className="w-4 h-4" />
+              Save image
+            </Button>
+            <Button variant="secondary" className="gap-2" onClick={() => void handleCopy()}>
+              <Copy className="w-4 h-4" />
+              Copy caption
+            </Button>
+          </div>
         </div>
-
-        {cardUrl && (
-          <p className="mt-3 text-[11px] text-muted-foreground text-center">
-            Tip: on phone, <span className="text-foreground">Share poster</span> sends the image.
-            On desktop, save the image then attach it.
-          </p>
-        )}
-
-        {/* Keep Facebook as secondary text path */}
-        <button
-          type="button"
-          className="mt-2 w-full text-center text-[11px] text-muted-foreground underline"
-          onClick={() => openExternal(facebookShareUrl(text))}
-        >
-          Open Facebook with caption
-        </button>
       </SheetContent>
     </Sheet>
   );

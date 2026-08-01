@@ -93,7 +93,6 @@ async function loadPosterForCanvas(
     const res = await fetch(proxyUrl, { credentials: "same-origin" });
     if (!res.ok) throw new Error(`proxy ${res.status}`);
     const blob = await res.blob();
-    // Some proxies omit Content-Type; still try to decode as an image.
     if (blob.type && !blob.type.startsWith("image/")) throw new Error("not an image");
 
     if (typeof createImageBitmap === "function") {
@@ -119,7 +118,6 @@ async function loadPosterForCanvas(
       throw err;
     }
   } catch {
-    // Last resort: direct TMDB (may fail CORS on some hosts)
     const direct = getPosterUrl(path, "w780");
     if (!direct) throw new Error("no poster url");
     const img = await loadImageFromUrl(direct, true);
@@ -149,7 +147,6 @@ function wrapText(
       cy += lineHeight;
       lines += 1;
       if (lines >= maxLines - 1) {
-        // Last line — ellipsis if leftover
         let rest = words.slice(i).join(" ");
         while (ctx.measureText(`${rest}…`).width > maxWidth && rest.length > 1) {
           rest = rest.slice(0, -1);
@@ -173,25 +170,43 @@ async function ensureShareFonts(): Promise<void> {
   try {
     await Promise.race([
       Promise.all([
-        document.fonts.load("600 28px Outfit"),
+        document.fonts.load("600 26px Outfit"),
         document.fonts.load("700 48px Outfit"),
-        document.fonts.load("500 30px Outfit"),
+        document.fonts.load("500 28px Outfit"),
         document.fonts.ready,
       ]),
       new Promise((r) => setTimeout(r, 800)),
     ]);
   } catch {
-    /* use system fallbacks */
+    /* system fallbacks */
   }
 }
 
+function drawCoverImage(
+  ctx: CanvasRenderingContext2D,
+  img: CanvasImageSource,
+  W: number,
+  H: number,
+) {
+  const iw =
+    "naturalWidth" in img && (img as HTMLImageElement).naturalWidth
+      ? (img as HTMLImageElement).naturalWidth
+      : (img as ImageBitmap).width;
+  const ih =
+    "naturalHeight" in img && (img as HTMLImageElement).naturalHeight
+      ? (img as HTMLImageElement).naturalHeight
+      : (img as ImageBitmap).height;
+  const scale = Math.max(W / iw, H / ih);
+  const dw = iw * scale;
+  const dh = ih * scale;
+  ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+}
+
 /**
- * Render a WhatsApp-friendly “social post” card (4:5).
- * In-app HTML previews used to look nicer than the export — this layout is
- * tuned for chat bubbles: large poster, tight text, JPEG for compression.
+ * Full-bleed 4:5 share card: poster fills the frame; title/meta/quote sit in a
+ * padded bottom gradient band (no floating inset poster, no empty black void).
  */
 export async function renderMovieShareCard(input: ShareMovieInput): Promise<Blob | null> {
-  // 4:5 reads larger in WhatsApp than a tall 2:3 poster with empty footer.
   const W = 1080;
   const H = 1350;
   const canvas = document.createElement("canvas");
@@ -202,133 +217,146 @@ export async function renderMovieShareCard(input: ShareMovieInput): Promise<Blob
 
   await ensureShareFonts();
 
-  // Slightly lifted dark background — pure black compresses to muddy blotches on WA.
-  const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, "#1c1c1e");
-  bg.addColorStop(1, "#121214");
-  ctx.fillStyle = bg;
+  // Fallback fill if poster missing
+  ctx.fillStyle = "#1a1a1c";
   ctx.fillRect(0, 0, W, H);
 
-  const pad = 56;
-  let y = 48;
-
-  // Brand
-  ctx.fillStyle = "rgba(255,255,255,0.5)";
-  ctx.font = "600 26px Outfit, system-ui, sans-serif";
-  ctx.fillText("CINEVAULT", pad, y);
-  y += 32;
-
-  // Poster dominates — WhatsApp shrinks images in chat, so keep it large.
-  const posterW = 700;
-  const posterH = 900;
-  const posterX = (W - posterW) / 2;
-  const posterY = y;
-
-  ctx.fillStyle = "#2a2a2e";
-  roundRect(ctx, posterX - 6, posterY - 6, posterW + 12, posterH + 12, 24);
-  ctx.fill();
-
+  let revoke: (() => void) | undefined;
   if (input.posterPath) {
-    let revoke: (() => void) | undefined;
     try {
       const loaded = await loadPosterForCanvas(input.posterPath);
       revoke = loaded.revoke;
-      const { img } = loaded;
-      const iw =
-        "naturalWidth" in img && (img as HTMLImageElement).naturalWidth
-          ? (img as HTMLImageElement).naturalWidth
-          : (img as ImageBitmap).width;
-      const ih =
-        "naturalHeight" in img && (img as HTMLImageElement).naturalHeight
-          ? (img as HTMLImageElement).naturalHeight
-          : (img as ImageBitmap).height;
-      ctx.save();
-      roundRect(ctx, posterX, posterY, posterW, posterH, 18);
-      ctx.clip();
-      const scale = Math.max(posterW / iw, posterH / ih);
-      const dw = iw * scale;
-      const dh = ih * scale;
-      ctx.drawImage(img, posterX + (posterW - dw) / 2, posterY + (posterH - dh) / 2, dw, dh);
-      ctx.restore();
+      drawCoverImage(ctx, loaded.img, W, H);
     } catch {
-      drawPosterPlaceholder(ctx, posterX, posterY, posterW, posterH, input.title);
+      ctx.fillStyle = "#2a2a2e";
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = "rgba(255,255,255,0.45)";
+      ctx.font = "600 40px Outfit, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      wrapText(ctx, input.title, W / 2, H * 0.35, W - 160, 48, 3);
+      ctx.textAlign = "left";
     } finally {
       revoke?.();
     }
   } else {
-    drawPosterPlaceholder(ctx, posterX, posterY, posterW, posterH, input.title);
+    ctx.fillStyle = "#2a2a2e";
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "rgba(255,255,255,0.45)";
+    ctx.font = "600 40px Outfit, system-ui, sans-serif";
+    ctx.textAlign = "center";
+    wrapText(ctx, input.title, W / 2, H * 0.35, W - 160, 48, 3);
+    ctx.textAlign = "left";
   }
 
-  y = posterY + posterH + 36;
+  // Soft top vignette for brand readability
+  const topFade = ctx.createLinearGradient(0, 0, 0, 160);
+  topFade.addColorStop(0, "rgba(0,0,0,0.45)");
+  topFade.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = topFade;
+  ctx.fillRect(0, 0, W, 160);
+
+  // Bottom gradient band (~38% of height)
+  const bandTop = Math.round(H * 0.62);
+  const bottomFade = ctx.createLinearGradient(0, bandTop, 0, H);
+  bottomFade.addColorStop(0, "rgba(0,0,0,0)");
+  bottomFade.addColorStop(0.28, "rgba(0,0,0,0.55)");
+  bottomFade.addColorStop(0.55, "rgba(0,0,0,0.82)");
+  bottomFade.addColorStop(1, "rgba(0,0,0,0.94)");
+  ctx.fillStyle = bottomFade;
+  ctx.fillRect(0, bandTop, W, H - bandTop);
+
+  // Brand mark
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  ctx.font = "600 26px Outfit, system-ui, sans-serif";
+  ctx.fillText("CINEVAULT", 40, 52);
+
+  // Text band padding per plan
+  const padX = 56;
+  const padTopInBand = 48;
+  const padBottom = 40;
+  const maxTextWidth = W - padX * 2;
 
   const year = input.releaseYear ? ` (${input.releaseYear})` : "";
-  ctx.fillStyle = "#f5f5f5";
-  ctx.font = "700 44px Outfit, system-ui, sans-serif";
-  y = wrapText(ctx, `${input.title}${year}`, pad, y, W - pad * 2, 52, 2) + 6;
-
+  const title = `${input.title}${year}`;
   const ratingLabel =
     input.rating && RATING_LABELS[input.rating] ? RATING_LABELS[input.rating] : null;
   const bits: string[] = [];
   bits.push(input.isRewatch ? "Rewatch" : "Watched");
   if (input.isRewatch && input.timesSeen && input.timesSeen > 1) bits.push(`×${input.timesSeen}`);
   if (ratingLabel) bits.push(ratingLabel);
+  const meta = bits.join("  ·  ");
+  const review = input.notes?.trim() ?? "";
 
+  // Measure block height so short content sits higher (still fills the band visually)
+  ctx.font = "700 48px Outfit, system-ui, sans-serif";
+  const titleLines = measureWrappedLines(ctx, title, maxTextWidth, 2);
+  ctx.font = "500 28px Outfit, system-ui, sans-serif";
+  const metaH = 28;
+  ctx.font = "italic 30px Georgia, 'Times New Roman', serif";
+  const reviewLines = review ? measureWrappedLines(ctx, `“${review}”`, maxTextWidth, 3) : 0;
+  const reviewH = reviewLines * 38;
+  const footerH = 22;
+
+  const titleBlockH = titleLines * 56;
+  const gaps =
+    16 + // title → meta
+    (review ? 20 : 0) + // meta → review
+    24; // review/meta → footer
+  const contentH = titleBlockH + metaH + reviewH + footerH + gaps;
+  const bandInnerH = H - bandTop - padTopInBand - padBottom;
+  // Start near top of band; if content is short, keep padTop (filled look via gradient)
+  let y = bandTop + padTopInBand + Math.max(0, (bandInnerH - contentH) * 0.15);
+
+  // Title baseline roughly at font size; wrapText uses y as baseline
+  ctx.fillStyle = "#f5f5f5";
+  ctx.font = "700 48px Outfit, system-ui, sans-serif";
+  y = wrapText(ctx, title, padX, y + 48, maxTextWidth, 56, 2);
+
+  y += 16;
   ctx.fillStyle = "rgba(255,255,255,0.72)";
   ctx.font = "500 28px Outfit, system-ui, sans-serif";
-  ctx.fillText(bits.join("  ·  "), pad, y);
-  y += 38;
+  ctx.fillText(meta, padX, y);
+  y += metaH;
 
-  const review = input.notes?.trim();
   if (review) {
+    y += 20;
     ctx.fillStyle = "rgba(255,255,255,0.92)";
     ctx.font = "italic 30px Georgia, 'Times New Roman', serif";
-    wrapText(ctx, `“${review}”`, pad, y, W - pad * 2, 38, 2);
+    y = wrapText(ctx, `“${review}”`, padX, y + 30, maxTextWidth, 38, 3);
   }
 
+  y += 24;
   ctx.fillStyle = "rgba(255,255,255,0.4)";
   ctx.font = "500 22px Outfit, system-ui, sans-serif";
-  ctx.fillText("Logged on Cinevault", pad, H - 36);
+  // Keep footer inside bottom pad
+  const footerY = Math.min(y + 22, H - padBottom);
+  ctx.fillText("Logged on Cinevault", padX, footerY);
 
-  // JPEG survives WhatsApp compression better than a huge PNG of dark UI.
   return new Promise((resolve) => {
     canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.92);
   });
 }
 
-function roundRect(
+function measureWrappedLines(
   ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-) {
-  const radius = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.arcTo(x + w, y, x + w, y + h, radius);
-  ctx.arcTo(x + w, y + h, x, y + h, radius);
-  ctx.arcTo(x, y + h, x, y, radius);
-  ctx.arcTo(x, y, x + w, y, radius);
-  ctx.closePath();
-}
-
-function drawPosterPlaceholder(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  title: string,
-) {
-  ctx.fillStyle = "#222";
-  roundRect(ctx, x, y, w, h, 20);
-  ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,0.5)";
-  ctx.font = "600 36px Outfit, system-ui, sans-serif";
-  ctx.textAlign = "center";
-  wrapText(ctx, title, x + w / 2, y + h / 2, w - 80, 44, 3);
-  ctx.textAlign = "left";
+  text: string,
+  maxWidth: number,
+  maxLines: number,
+): number {
+  const words = text.split(/\s+/);
+  let line = "";
+  let lines = 1;
+  for (let i = 0; i < words.length; i++) {
+    const test = line ? `${line} ${words[i]}` : words[i];
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines += 1;
+      line = words[i];
+      if (lines >= maxLines) return maxLines;
+    } else {
+      line = test;
+    }
+  }
+  return lines;
 }
 
 function shareImageFilename(title: string, blob: Blob): string {
@@ -401,12 +429,10 @@ export async function downloadShareCard(
       if (err instanceof DOMException && err.name === "AbortError") {
         throw err;
       }
-      // Fall through to open-in-tab.
     }
   }
 
   const url = URL.createObjectURL(blob);
-  // Keep the blob URL alive long enough for download / new-tab load.
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 
   if (isAppleTouchDevice()) {
