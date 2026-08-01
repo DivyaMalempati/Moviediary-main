@@ -14,7 +14,22 @@ export type ShareMovieInput = {
   releaseYear?: number | null;
   /** TMDB poster path (`/abc.jpg`) for the visual share card. */
   posterPath?: string | null;
+  /** Where it’s streaming (e.g. "Zee5", "Netflix, Prime Video"). */
+  streamingOn?: string | null;
 };
+
+/** Format flatrate provider names for share captions. */
+export function formatStreamingServices(
+  providers?: Array<{ name?: string | null }> | null,
+): string | null {
+  const names = (providers ?? [])
+    .map((p) => p.name?.trim())
+    .filter((n): n is string => Boolean(n));
+  if (names.length === 0) return null;
+  if (names.length === 1) return names[0]!;
+  if (names.length === 2) return `${names[0]} & ${names[1]}`;
+  return `${names.slice(0, 2).join(", ")} +${names.length - 2} more`;
+}
 
 /** Build plain-text caption to accompany the poster card (WhatsApp / share sheet). */
 export function buildMovieShareText(input: ShareMovieInput): string {
@@ -23,26 +38,28 @@ export function buildMovieShareText(input: ShareMovieInput): string {
     input.rating && RATING_LABELS[input.rating]
       ? RATING_LABELS[input.rating]
       : null;
+  const streaming = input.streamingOn?.trim() || null;
+  const review = input.notes?.trim() || null;
 
-  const lines = [
-    `I recommend this movie for you to watch: ${input.title}${year}`,
-  ];
+  // WhatsApp *bold* markers — ignored as plain text elsewhere.
+  const lines = [`I'd recommend *${input.title}*${year} — worth a watch.`];
 
-  const meta: string[] = [];
   if (input.isRewatch) {
-    meta.push(
+    lines.push(
       input.timesSeen && input.timesSeen > 1
-        ? `Rewatch ×${input.timesSeen}`
-        : "Rewatch",
+        ? `(A rewatch for me · seen ${input.timesSeen}×)`
+        : "(A rewatch for me)",
     );
   }
-  if (ratingLabel) meta.push(ratingLabel);
-  if (meta.length) lines.push(meta.join(" · "));
 
-  const review = input.notes?.trim();
-  if (review) {
+  const details: string[] = [];
+  if (streaming) details.push(`*Streaming:* ${streaming}`);
+  if (ratingLabel) details.push(`*Rating:* ${ratingLabel}`);
+  if (review) details.push(`*Review:* “${review}”`);
+
+  if (details.length) {
     lines.push("");
-    lines.push(`“${review}”`);
+    lines.push(...details);
   }
 
   lines.push("");
@@ -287,29 +304,39 @@ export async function renderMovieShareCard(input: ShareMovieInput): Promise<Blob
   const title = `${input.title}${year}`;
   const ratingLabel =
     input.rating && RATING_LABELS[input.rating] ? RATING_LABELS[input.rating] : null;
-  const bits: string[] = [];
-  bits.push(input.isRewatch ? "Rewatch" : "Watched");
-  if (input.isRewatch && input.timesSeen && input.timesSeen > 1) bits.push(`×${input.timesSeen}`);
-  if (ratingLabel) bits.push(ratingLabel);
-  const meta = bits.join("  ·  ");
+  const streaming = input.streamingOn?.trim() || null;
   const review = input.notes?.trim() ?? "";
+
+  const detailLines: string[] = [];
+  if (streaming) detailLines.push(`Streaming: ${streaming}`);
+  if (ratingLabel) detailLines.push(`Rating: ${ratingLabel}`);
+  if (input.isRewatch) {
+    detailLines.push(
+      input.timesSeen && input.timesSeen > 1
+        ? `Rewatch ×${input.timesSeen}`
+        : "Rewatch",
+    );
+  }
 
   // Measure block height so short content sits higher (still fills the band visually)
   ctx.font = "700 48px Outfit, system-ui, sans-serif";
   const titleLines = measureWrappedLines(ctx, title, maxTextWidth, 2);
-  ctx.font = "500 28px Outfit, system-ui, sans-serif";
-  const metaH = 28;
+  const detailLineH = 32;
+  const detailsH = detailLines.length * detailLineH;
   ctx.font = "italic 30px Georgia, 'Times New Roman', serif";
-  const reviewLines = review ? measureWrappedLines(ctx, `“${review}”`, maxTextWidth, 3) : 0;
+  const reviewPrefix = review ? `Review: “${review}”` : "";
+  const reviewLines = reviewPrefix
+    ? measureWrappedLines(ctx, reviewPrefix, maxTextWidth, 3)
+    : 0;
   const reviewH = reviewLines * 38;
   const footerH = 22;
 
   const titleBlockH = titleLines * 56;
   const gaps =
-    16 + // title → meta
-    (review ? 20 : 0) + // meta → review
-    24; // review/meta → footer
-  const contentH = titleBlockH + metaH + reviewH + footerH + gaps;
+    16 + // title → details
+    (review ? 20 : 0) + // details → review
+    24; // review/details → footer
+  const contentH = titleBlockH + detailsH + reviewH + footerH + gaps;
   const bandInnerH = H - bandTop - padTopInBand - padBottom;
   // Start near top of band; if content is short, keep padTop (filled look via gradient)
   let y = bandTop + padTopInBand + Math.max(0, (bandInnerH - contentH) * 0.15);
@@ -319,17 +346,21 @@ export async function renderMovieShareCard(input: ShareMovieInput): Promise<Blob
   ctx.font = "700 48px Outfit, system-ui, sans-serif";
   y = wrapText(ctx, title, padX, y + 48, maxTextWidth, 56, 2);
 
-  y += 16;
-  ctx.fillStyle = "rgba(255,255,255,0.72)";
-  ctx.font = "500 28px Outfit, system-ui, sans-serif";
-  ctx.fillText(meta, padX, y);
-  y += metaH;
+  if (detailLines.length) {
+    y += 16;
+    ctx.fillStyle = "rgba(255,255,255,0.72)";
+    ctx.font = "500 26px Outfit, system-ui, sans-serif";
+    for (const line of detailLines) {
+      ctx.fillText(line, padX, y);
+      y += detailLineH;
+    }
+  }
 
-  if (review) {
+  if (reviewPrefix) {
     y += 20;
     ctx.fillStyle = "rgba(255,255,255,0.92)";
     ctx.font = "italic 30px Georgia, 'Times New Roman', serif";
-    y = wrapText(ctx, `“${review}”`, padX, y + 30, maxTextWidth, 38, 3);
+    y = wrapText(ctx, reviewPrefix, padX, y + 30, maxTextWidth, 38, 3);
   }
 
   y += 24;
@@ -337,7 +368,7 @@ export async function renderMovieShareCard(input: ShareMovieInput): Promise<Blob
   ctx.font = "500 22px Outfit, system-ui, sans-serif";
   // Keep footer inside bottom pad
   const footerY = Math.min(y + 22, H - padBottom);
-  ctx.fillText("Logged on Cinevault", padX, footerY);
+  ctx.fillText("Shared from Cinevault", padX, footerY);
 
   return new Promise((resolve) => {
     canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.92);
@@ -381,7 +412,7 @@ export async function nativeShareMovie(
   }
   try {
     // WhatsApp often surfaces `title` as the message when an image is attached.
-    const shareTitle = `I recommend watching ${title}`;
+    const shareTitle = `I'd recommend ${title} — worth a watch`;
     const files: File[] = [];
     if (image) {
       const file = new File([image], shareImageFilename(title, image), {
@@ -434,8 +465,8 @@ export async function downloadShareCard(
     try {
       await navigator.share({
         files: [file],
-        title: `I recommend watching ${title}`,
-        text: `I recommend this movie for you to watch: ${title}`,
+        title: `I'd recommend ${title} — worth a watch`,
+        text: `I'd recommend ${title} — worth a watch.`,
       });
       return "shared";
     } catch (err) {

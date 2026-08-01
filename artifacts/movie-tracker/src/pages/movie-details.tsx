@@ -28,7 +28,7 @@ import { Star, Heart, Bookmark, Check, Trash2, ArrowLeft, Loader2, Calendar, Cla
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks/use-debounce";
 import { ShareMovieSheet } from "@/components/share-movie-sheet";
-import type { ShareMovieInput } from "@/lib/share-movie";
+import { formatStreamingServices, type ShareMovieInput } from "@/lib/share-movie";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -197,6 +197,7 @@ export default function MovieDetailsPage() {
                       isRewatch: false,
                       releaseYear: movie.releaseYear,
                       posterPath: movie.posterPath,
+                      streamingOn: formatStreamingServices(watchProviders?.flatrate),
                     });
                     setShareOpen(true);
                   },
@@ -255,6 +256,7 @@ export default function MovieDetailsPage() {
                     isRewatch: true,
                     releaseYear: updated.releaseYear,
                     posterPath: updated.posterPath ?? movie?.posterPath,
+                    streamingOn: formatStreamingServices(watchProviders?.flatrate),
                   });
                   setShareOpen(true);
                 },
@@ -697,6 +699,7 @@ export default function MovieDetailsPage() {
                     isRewatch: (movie.rewatchCount ?? 0) > 0,
                     releaseYear: movie.releaseYear,
                     posterPath: movie.posterPath,
+                    streamingOn: formatStreamingServices(watchProviders?.flatrate),
                   }}
                   trigger={
                     <Button variant="secondary" className="gap-2 w-full sm:w-auto">
