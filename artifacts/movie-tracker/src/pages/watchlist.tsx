@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { useListMovies, useUpdateMovie, getListMoviesQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Bookmark, Download, Loader2, Search, Star, X } from "lucide-react";
+import { isFeatureEnabled } from "@/lib/features";
 
 // ── CSV export ────────────────────────────────────────────────────────────────
 function exportCSV(movies: any[], filename: string) {
@@ -79,9 +80,11 @@ export default function WatchlistPage() {
               Watchlist
             </h1>
             <p className="text-muted-foreground">Films you want to explore.</p>
-            <Link href="/upcoming" className="text-xs text-primary hover:underline w-fit">
-              Looking for theatrical dates? Open Upcoming →
-            </Link>
+            {isFeatureEnabled("upcoming") && (
+              <Link href="/upcoming" className="text-xs text-primary hover:underline w-fit">
+                Looking for theatrical dates? Open Upcoming →
+              </Link>
+            )}
           </div>
           <Button
             variant="outline" size="sm"
