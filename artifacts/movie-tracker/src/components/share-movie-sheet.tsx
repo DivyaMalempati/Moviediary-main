@@ -6,7 +6,6 @@ import {
   MessageCircle,
   Download,
   Loader2,
-  ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,7 +28,6 @@ import {
   whatsappShareUrl,
   type ShareMovieInput,
 } from "@/lib/share-movie";
-import { RATING_LABELS, getPosterUrl } from "@/lib/movie-utils";
 import { cn } from "@/lib/utils";
 
 type ShareMovieSheetProps = {
@@ -54,9 +52,6 @@ export function ShareMovieSheet({
   const setOpen = onOpenChange ?? setUncontrolledOpen;
 
   const text = useMemo(() => buildMovieShareText(movie), [movie]);
-  const posterUrl = getPosterUrl(movie.posterPath, "w500");
-  const ratingLabel =
-    movie.rating && RATING_LABELS[movie.rating] ? RATING_LABELS[movie.rating] : null;
 
   const [cardBlob, setCardBlob] = useState<Blob | null>(null);
   const [cardUrl, setCardUrl] = useState<string | null>(null);
@@ -158,51 +153,19 @@ export function ShareMovieSheet({
             {movie.isRewatch ? "Share rewatch" : "Share watched"}
           </SheetTitle>
           <SheetDescription>
-            A small post card with the poster and your review — share the image to WhatsApp,
-            Instagram, or Messages.
+            Preview is the exact image WhatsApp will get — poster, rating, and review.
           </SheetDescription>
         </SheetHeader>
 
-        {/* Live preview of the social post */}
-        <div className="mt-4 mx-auto w-full max-w-[280px] rounded-2xl overflow-hidden border border-white/10 bg-[#121212] shadow-lg">
-          <div className="px-3 pt-3 pb-1 text-[10px] uppercase tracking-[0.2em] text-white/45">
-            Cinevault
-          </div>
-          <div className="px-3">
-            <div className="aspect-[2/3] rounded-xl overflow-hidden bg-secondary/60">
-              {posterUrl ? (
-                <img src={posterUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                  <ImageIcon className="w-8 h-8" />
-                </div>
-              )}
+        {/* WYSIWYG: same JPEG/PNG blob that Share poster sends */}
+        <div className="mt-4 mx-auto w-full max-w-[260px] rounded-2xl overflow-hidden border border-white/10 bg-[#121214] shadow-lg aspect-[4/5]">
+          {cardUrl ? (
+            <img src={cardUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin" />
             </div>
-          </div>
-          <div className="px-3 py-3 space-y-1.5">
-            <p className="text-sm font-semibold text-white leading-snug">
-              {movie.title}
-              {movie.releaseYear ? (
-                <span className="text-white/50 font-normal"> ({movie.releaseYear})</span>
-              ) : null}
-            </p>
-            <p className="text-[11px] text-white/65">
-              {[
-                movie.isRewatch ? "Rewatch" : "Watched",
-                movie.isRewatch && movie.timesSeen && movie.timesSeen > 1
-                  ? `×${movie.timesSeen}`
-                  : null,
-                ratingLabel,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </p>
-            {movie.notes?.trim() ? (
-              <p className="text-xs text-white/85 italic leading-relaxed pt-1">
-                “{movie.notes.trim()}”
-              </p>
-            ) : null}
-          </div>
+          )}
         </div>
 
         {rendering && (
