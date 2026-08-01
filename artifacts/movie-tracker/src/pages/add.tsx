@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from "react";
-import { Layout } from "@/components/layout";
 import { TmdbMovieCard } from "@/components/tmdb-movie-card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -196,7 +195,7 @@ export default function AddPage() {
   };
 
   return (
-    <Layout>
+    <>
       <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
         <section className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold">Search</h1>
@@ -335,6 +334,6 @@ export default function AddPage() {
         }}
         onCancel={() => setPendingWatched(null)}
       />
-    </Layout>
+    </>
   );
 }

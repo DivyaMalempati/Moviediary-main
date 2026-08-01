@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { useAuth, useClerk, useUser } from "@clerk/react";
-import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { PreferencesModal } from "@/components/preferences-modal";
 import { ClerkBoundary } from "@/components/clerk-boundary";
@@ -66,7 +65,7 @@ function ProfileShell({
   const { replay } = useReplayFeatureTour();
 
   return (
-    <Layout>
+    <>
       <div className="max-w-md mx-auto px-4 py-10 space-y-8">
         <div className="flex items-center gap-3">
           {avatar}
@@ -179,7 +178,7 @@ function ProfileShell({
           </Button>
         </div>
       </div>
-    </Layout>
+    </>
   );
 }
 
@@ -203,18 +202,18 @@ function DemoProfile() {
 
 function ProfileLoading() {
   return (
-    <Layout>
+    <>
       <div className="flex h-[40vh] items-center justify-center text-muted-foreground text-sm gap-2">
         <Loader2 className="w-4 h-4 animate-spin" />
         Loading account…
       </div>
-    </Layout>
+    </>
   );
 }
 
 function ProfileClerkFallback() {
   return (
-    <Layout>
+    <>
       <div className="max-w-md mx-auto px-4 py-10 space-y-4">
         <h1 className="text-lg font-semibold">Account unavailable</h1>
         <p className="text-sm text-muted-foreground">
@@ -224,7 +223,7 @@ function ProfileClerkFallback() {
           <Button>Sign in</Button>
         </Link>
       </div>
-    </Layout>
+    </>
   );
 }
 

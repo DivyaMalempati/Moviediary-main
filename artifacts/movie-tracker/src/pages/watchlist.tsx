@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Layout } from "@/components/layout";
 import { MoviePosterCard } from "@/components/movie-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,7 +69,7 @@ export default function WatchlistPage() {
   };
 
   return (
-    <Layout>
+    <>
       <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
 
         <section className="flex items-start justify-between gap-4">
@@ -169,6 +168,6 @@ export default function WatchlistPage() {
           onCancel={() => setPendingId(null)}
         />
       </div>
-    </Layout>
+    </>
   );
 }

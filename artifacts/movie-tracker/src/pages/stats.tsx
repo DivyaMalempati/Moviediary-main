@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { Layout } from "@/components/layout";
 import { useGetMovieStats } from "@workspace/api-client-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -173,11 +172,11 @@ export default function StatsPage() {
 
   if (isLoading) {
     return (
-      <Layout>
+      <>
         <div className="flex items-center justify-center min-h-[60vh]">
           <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
         </div>
-      </Layout>
+      </>
     );
   }
 
@@ -193,7 +192,7 @@ export default function StatsPage() {
     : "";
 
   return (
-    <Layout>
+    <>
       <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-10">
         <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-white/[0.06] via-transparent to-transparent p-6 md:p-8">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.08),transparent_55%)] pointer-events-none" />
@@ -460,6 +459,6 @@ export default function StatsPage() {
           </>
         )}
       </div>
-    </Layout>
+    </>
   );
 }

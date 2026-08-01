@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
-import { Layout } from "@/components/layout";
 import { LanguageBadge } from "@/components/language-badge";
 import { Button } from "@/components/ui/button";
 import { getPosterUrl } from "@/lib/movie-utils";
@@ -183,7 +182,7 @@ export default function UpcomingPage() {
   };
 
   return (
-    <Layout>
+    <>
       <div className="mx-auto max-w-7xl space-y-8 p-4 md:p-8">
         <section className="flex flex-col gap-2">
           <h1 className="flex items-center gap-3 text-3xl font-bold">
@@ -337,6 +336,6 @@ export default function UpcomingPage() {
           )}
         </section>
       </div>
-    </Layout>
+    </>
   );
 }

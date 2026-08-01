@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
-import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -333,31 +332,31 @@ export default function MovieDetailsPage() {
 
   if (isLoading) {
     return (
-      <Layout>
+      <>
         <div className="flex h-screen items-center justify-center">
           <Loader2 className="w-10 h-10 animate-spin text-primary" />
         </div>
-      </Layout>
+      </>
     );
   }
 
   if (isError || !movie) {
     return (
-      <Layout>
+      <>
         <div className="p-8 text-center">
           <h2 className="text-2xl font-bold">Movie not found</h2>
           <Button variant="link" onClick={() => setLocation("/")} className="mt-4">
             <ArrowLeft className="w-4 h-4 mr-2" /> Back to Vault
           </Button>
         </div>
-      </Layout>
+      </>
     );
   }
 
   const posterUrl = getPosterUrl(movie.posterPath, "w780");
 
   return (
-    <Layout>
+    <>
       {/* Back button */}
       <div className="sticky top-0 z-40 px-4 md:px-8 py-3 bg-background/80 backdrop-blur-md border-b border-border/40">
         <Button
@@ -903,6 +902,6 @@ export default function MovieDetailsPage() {
         currentTmdbId={movie.tmdbId}
         libraryTmdbIds={libraryTmdbIds}
       />
-    </Layout>
+    </>
   );
 }

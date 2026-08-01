@@ -29,6 +29,7 @@ import NotFound from "@/pages/not-found";
 import { FeatureGate } from "@/components/feature-gate";
 import { FeatureTourProvider } from "@/components/feature-tour-context";
 import { FeatureWalkthroughHost } from "@/components/feature-walkthrough";
+import { Layout } from "@/components/layout";
 
 // Initialise demo mode header injection before any render
 initDemoMode();
@@ -126,27 +127,30 @@ function gated(feature: Parameters<typeof FeatureGate>[0]["feature"], component:
 }
 
 // ── Shared app pages (used in both demo and Clerk mode) ─────────────────────
+// Persistent Layout stays mounted across in-app navigations (catch-all shell).
 function AppPages() {
   return (
-    <Switch>
-      <Route path="/watched" component={WatchedPage} />
-      <Route path="/watchlist" component={WatchlistPage} />
-      <Route path="/upcoming" component={gated("upcoming", UpcomingPage)} />
-      <Route path="/add" component={AddPage} />
-      <Route path="/suggestions" component={gated("discover", SuggestionsPage)} />
-      <Route path="/swipe" component={SwipePage} />
-      <Route path="/partner" component={PartnerPage} />
-      <Route path="/pair/:code" component={PairInvitePage} />
-      <Route path="/match/:id" component={MatchSessionPage} />
-      <Route path="/guide" component={GuidePage} />
-      <Route path="/movie/:id" component={MovieDetailsPage} />
-      <Route path="/import" component={gated("import", ImportPage)} />
-      <Route path="/profile" component={ProfilePage} />
-      <Route path="/collections" component={gated("collections", CollectionsPage)} />
-      <Route path="/collections/:id" component={gated("collections", CollectionsPage)} />
-      <Route path="/stats" component={gated("stats", StatsPage)} />
-      <Route component={NotFound} />
-    </Switch>
+    <Layout>
+      <Switch>
+        <Route path="/watched" component={WatchedPage} />
+        <Route path="/watchlist" component={WatchlistPage} />
+        <Route path="/upcoming" component={gated("upcoming", UpcomingPage)} />
+        <Route path="/add" component={AddPage} />
+        <Route path="/suggestions" component={gated("discover", SuggestionsPage)} />
+        <Route path="/swipe" component={SwipePage} />
+        <Route path="/partner" component={PartnerPage} />
+        <Route path="/pair/:code" component={PairInvitePage} />
+        <Route path="/match/:id" component={MatchSessionPage} />
+        <Route path="/guide" component={GuidePage} />
+        <Route path="/movie/:id" component={MovieDetailsPage} />
+        <Route path="/import" component={gated("import", ImportPage)} />
+        <Route path="/profile" component={ProfilePage} />
+        <Route path="/collections" component={gated("collections", CollectionsPage)} />
+        <Route path="/collections/:id" component={gated("collections", CollectionsPage)} />
+        <Route path="/stats" component={gated("stats", StatsPage)} />
+        <Route component={NotFound} />
+      </Switch>
+    </Layout>
   );
 }
 
@@ -184,7 +188,8 @@ function DemoRouter() {
       <Route path="/sign-in/*?" component={() => <AuthUnavailablePage mode="sign-in" />} />
       <Route path="/sign-up/*?" component={() => <AuthUnavailablePage mode="sign-up" />} />
       <Route path="/onboarding" component={() => <Redirect to="/swipe" />} />
-      <AppPages />
+      {/* Catch-all keeps Layout mounted across in-app navigations */}
+      <Route component={AppPages} />
     </Switch>
   );
 }
@@ -346,6 +351,32 @@ function protect(feature: Parameters<typeof FeatureGate>[0]["feature"] | null, c
   return () => <ProtectedRoute component={Page} />;
 }
 
+function ClerkAppPages() {
+  return (
+    <Layout>
+      <Switch>
+        <Route path="/watched" component={protect(null, WatchedPage)} />
+        <Route path="/watchlist" component={protect(null, WatchlistPage)} />
+        <Route path="/upcoming" component={protect("upcoming", UpcomingPage)} />
+        <Route path="/add" component={protect(null, AddPage)} />
+        <Route path="/suggestions" component={protect("discover", SuggestionsPage)} />
+        <Route path="/swipe" component={protect(null, SwipePage)} />
+        <Route path="/partner" component={protect(null, PartnerPage)} />
+        <Route path="/pair/:code" component={protect(null, PairInvitePage)} />
+        <Route path="/match/:id" component={protect(null, MatchSessionPage)} />
+        <Route path="/guide" component={protect(null, GuidePage)} />
+        <Route path="/movie/:id" component={protect(null, MovieDetailsPage)} />
+        <Route path="/import" component={protect("import", ImportPage)} />
+        <Route path="/profile" component={protect(null, ProfilePage)} />
+        <Route path="/collections" component={protect("collections", CollectionsPage)} />
+        <Route path="/collections/:id" component={protect("collections", CollectionsPage)} />
+        <Route path="/stats" component={protect("stats", StatsPage)} />
+        <Route component={NotFound} />
+      </Switch>
+    </Layout>
+  );
+}
+
 function ClerkRouter() {
   return (
     <Switch>
@@ -353,23 +384,8 @@ function ClerkRouter() {
       <Route path="/sign-in/*?" component={SignInPage} />
       <Route path="/sign-up/*?" component={SignUpPage} />
       <Route path="/onboarding" component={() => <Redirect to="/swipe" />} />
-      <Route path="/watched" component={protect(null, WatchedPage)} />
-      <Route path="/watchlist" component={protect(null, WatchlistPage)} />
-      <Route path="/upcoming" component={protect("upcoming", UpcomingPage)} />
-      <Route path="/add" component={protect(null, AddPage)} />
-      <Route path="/suggestions" component={protect("discover", SuggestionsPage)} />
-      <Route path="/swipe" component={protect(null, SwipePage)} />
-      <Route path="/partner" component={protect(null, PartnerPage)} />
-      <Route path="/pair/:code" component={protect(null, PairInvitePage)} />
-      <Route path="/match/:id" component={protect(null, MatchSessionPage)} />
-      <Route path="/guide" component={protect(null, GuidePage)} />
-      <Route path="/movie/:id" component={protect(null, MovieDetailsPage)} />
-      <Route path="/import" component={protect("import", ImportPage)} />
-      <Route path="/profile" component={protect(null, ProfilePage)} />
-      <Route path="/collections" component={protect("collections", CollectionsPage)} />
-      <Route path="/collections/:id" component={protect("collections", CollectionsPage)} />
-      <Route path="/stats" component={protect("stats", StatsPage)} />
-      <Route component={NotFound} />
+      {/* Catch-all keeps Layout mounted across in-app navigations */}
+      <Route component={ClerkAppPages} />
     </Switch>
   );
 }

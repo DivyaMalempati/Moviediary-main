@@ -1,9 +1,8 @@
-import { Layout } from "@/components/layout";
 import { Link } from "wouter";
 
 export default function NotFound() {
   return (
-    <Layout>
+    <>
       <div className="min-h-[80vh] flex flex-col items-center justify-center p-4 text-center">
         <div className="w-24 h-24 rounded-full bg-secondary flex items-center justify-center mb-6">
           <span className="text-4xl font-mono text-primary font-bold">404</span>
@@ -16,6 +15,6 @@ export default function NotFound() {
           Return to Vault
         </Link>
       </div>
-    </Layout>
+    </>
   );
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -87,6 +87,62 @@ export function FeatureWalkthrough() {
   );
 
   const skip = () => finish();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const previouslyFocused = useRef<HTMLElement | null>(null);
+
+  // Escape closes; Tab stays inside the coach-mark panel.
+  useEffect(() => {
+    if (!open) return;
+    previouslyFocused.current = document.activeElement as HTMLElement | null;
+    const focusFirst = () => {
+      const root = panelRef.current;
+      if (!root) return;
+      const focusable = root.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      (focusable[0] ?? root).focus();
+    };
+    const t = window.setTimeout(focusFirst, 0);
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        skip();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const root = panelRef.current;
+      if (!root) return;
+      const focusable = [
+        ...root.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      ].filter((el) => !el.hasAttribute("disabled"));
+      if (focusable.length === 0) {
+        e.preventDefault();
+        root.focus();
+        return;
+      }
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener("keydown", onKeyDown);
+      previouslyFocused.current?.focus?.();
+    };
+    // skip/finish are stable enough for tour lifetime
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // Tooltip placement: above bottom-nav targets, otherwise below/right of hole.
   const viewportH = typeof window !== "undefined" ? window.innerHeight : 800;
@@ -105,12 +161,8 @@ export function FeatureWalkthrough() {
 
   return (
     <div className="fixed inset-0 z-[200]" role="dialog" aria-modal="true" aria-label="App walkthrough">
-      {/* Dim overlay with spotlight cutout via box-shadow */}
-      <div
-        className="absolute inset-0"
-        onClick={skip}
-        aria-hidden
-      >
+      {/* Dim overlay — click does not skip the whole tour (use Skip / Escape). */}
+      <div className="absolute inset-0" aria-hidden>
         {hole ? (
           <motion.div
             className="absolute rounded-2xl"
@@ -160,8 +212,10 @@ export function FeatureWalkthrough() {
       <AnimatePresence mode="wait">
         <motion.div
           key={current.id}
+          ref={panelRef}
+          tabIndex={-1}
           className={cn(
-            "absolute z-[210] w-[min(20.5rem,calc(100vw-2rem))] rounded-2xl border border-white/15 bg-background px-4 py-3.5 shadow-2xl",
+            "absolute z-[210] w-[min(20.5rem,calc(100vw-2rem))] rounded-2xl border border-white/15 bg-background px-4 py-3.5 shadow-2xl outline-none",
             !hole && "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2",
           )}
           style={
@@ -253,7 +307,7 @@ export function FeatureWalkthrough() {
 
 /**
  * Auto-opens the spotlight walkthrough once after taste onboarding.
- * Mount once at App root (not inside per-page Layout).
+ * Mount once at App root (outside Layout) so overlays cover the full viewport.
  */
 export function FeatureWalkthroughHost() {
   const { data: prefs, isLoading } = usePreferences();

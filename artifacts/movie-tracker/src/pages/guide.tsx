@@ -1,5 +1,4 @@
 import { Link } from "wouter";
-import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { visibleGuideSections } from "@/lib/feature-guide";
 import { useReplayFeatureTour } from "@/components/feature-walkthrough";
@@ -10,7 +9,7 @@ export default function GuidePage() {
   const sections = visibleGuideSections();
 
   return (
-    <Layout>
+    <>
       <div className="max-w-3xl mx-auto px-4 py-8 md:py-12 space-y-10">
         <header className="space-y-4">
           <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2">
@@ -78,6 +77,6 @@ export default function GuidePage() {
           </section>
         ))}
       </div>
-    </Layout>
+    </>
   );
 }
