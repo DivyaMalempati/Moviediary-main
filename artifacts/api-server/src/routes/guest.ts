@@ -4,37 +4,75 @@ import { getAuth } from "@clerk/express";
 
 const router = Router();
 
-const SECRET = process.env.SESSION_SECRET ?? "dev-secret-change-me";
 const GUEST_PREFIX = "guest_";
+/** App / guest session lifetime (30 days). */
+export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
 
-/** Sign an opaque id → "id.hmac_hex" */
-function signId(id: string): string {
-  const sig = createHmac("sha256", SECRET).update(id).digest("hex");
-  return `${id}.${sig}`;
+function getSessionSecret(): string {
+  const secret = process.env.SESSION_SECRET?.trim();
+  if (secret) return secret;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("SESSION_SECRET is required in production");
+  }
+  return "dev-secret-change-me";
 }
 
-function verifySignedId(token: string): string | null {
-  const dot = token.lastIndexOf(".");
-  if (dot === -1) return null;
-  const id = token.slice(0, dot);
-  const sig = token.slice(dot + 1);
-  if (!id || !sig) return null;
-
-  const expected = createHmac("sha256", SECRET).update(id).digest("hex");
+function safeEqualHex(a: string, b: string): boolean {
   try {
-    const a = Buffer.from(sig, "hex");
-    const b = Buffer.from(expected, "hex");
-    if (a.length !== b.length) return null;
-    if (!timingSafeEqual(a, b)) return null;
+    const ba = Buffer.from(a, "hex");
+    const bb = Buffer.from(b, "hex");
+    if (ba.length !== bb.length) return false;
+    return timingSafeEqual(ba, bb);
   } catch {
-    return null;
+    return false;
   }
-  return id;
+}
+
+/**
+ * Sign an opaque id → "id.exp.hmac_hex" (exp = unix seconds).
+ */
+function signId(id: string): string {
+  const exp = Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS;
+  const payload = `${id}.${exp}`;
+  const sig = createHmac("sha256", getSessionSecret()).update(payload).digest("hex");
+  return `${payload}.${sig}`;
+}
+
+/**
+ * Verify signed session token. Accepts:
+ *   - current: id.exp.hmac (rejects when past exp)
+ *   - legacy:  id.hmac (no expiry — until clients remint)
+ */
+function verifySignedId(token: string): string | null {
+  if (!token || typeof token !== "string") return null;
+  const parts = token.split(".");
+
+  if (parts.length === 3) {
+    const [id, expStr, sig] = parts;
+    const exp = Number(expStr);
+    if (!id || !sig || !Number.isFinite(exp)) return null;
+    if (exp < Math.floor(Date.now() / 1000)) return null;
+    const expected = createHmac("sha256", getSessionSecret())
+      .update(`${id}.${expStr}`)
+      .digest("hex");
+    if (!safeEqualHex(sig, expected)) return null;
+    return id;
+  }
+
+  if (parts.length === 2) {
+    const [id, sig] = parts;
+    if (!id || !sig) return null;
+    const expected = createHmac("sha256", getSessionSecret()).update(id).digest("hex");
+    if (!safeEqualHex(sig, expected)) return null;
+    return id;
+  }
+
+  return null;
 }
 
 /**
  * Verify a guest token and return the full userId ("guest_<uuid>"),
- * or null if the signature is invalid or malformed.
+ * or null if the signature is invalid, expired, or malformed.
  */
 export function verifyGuestToken(token: string): string | null {
   const id = verifySignedId(token);

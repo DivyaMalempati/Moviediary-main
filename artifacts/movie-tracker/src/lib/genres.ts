@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { getSyncSessionHeaders } from "@/lib/demo-auth";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -32,7 +33,10 @@ export const FALLBACK_GENRES: TmdbGenre[] = [
 
 async function fetchGenres(): Promise<TmdbGenre[]> {
   try {
-    const res = await fetch(`${API_BASE}/api/tmdb/genres`, { credentials: "include" });
+    const res = await fetch(`${API_BASE}/api/tmdb/genres`, {
+      credentials: "include",
+      headers: getSyncSessionHeaders(),
+    });
     if (!res.ok) throw new Error(`genres fetch failed: ${res.status}`);
     const data: TmdbGenre[] = await res.json();
     if (!Array.isArray(data) || data.length === 0) throw new Error("genres list was empty");

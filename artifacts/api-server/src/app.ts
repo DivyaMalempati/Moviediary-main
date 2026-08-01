@@ -11,6 +11,7 @@ import {
 import { mountSpaFallback } from "./middlewares/spaFallback";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { isOriginAllowed } from "./lib/corsOrigins";
 
 const app: Express = express();
 
@@ -37,7 +38,18 @@ app.use(
 // Clerk proxy must be before body parsers (streams raw bytes)
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
-app.use(cors({ credentials: true, origin: true }));
+app.use(
+  cors({
+    credentials: true,
+    origin(origin, callback) {
+      if (isOriginAllowed(origin)) {
+        callback(null, origin ?? true);
+        return;
+      }
+      callback(new Error(`Not allowed by CORS: ${origin}`));
+    },
+  }),
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

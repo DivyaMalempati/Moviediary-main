@@ -20,8 +20,12 @@ import {
   getUpcomingReleases,
 } from "../lib/tmdb.js";
 import { TROPE_KEYWORDS } from "../lib/tropes.js";
+import { requireAuth } from "../middlewares/requireAuth.js";
 
 const router: IRouter = Router();
+
+// TMDB proxy burns shared quota — require guest or signed-in session.
+router.use(requireAuth);
 
 // GET /tmdb/tropes — curated niche keyword / trope catalog
 router.get("/tmdb/tropes", (_req, res): void => {

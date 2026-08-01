@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
 import { db, moviesTable } from "@workspace/db";
-import { eq, and, isNull, or } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth.js";
+import { verifyGuestToken } from "./guest.js";
 import { searchMovies, getMovieDetails } from "../lib/tmdb.js";
 import { logger } from "../lib/logger.js";
 
@@ -11,25 +12,66 @@ const router: IRouter = Router();
 const VALID_STATUSES = new Set(["watched", "watchlist"]);
 const VALID_RATINGS = new Set(["loved", "great", "very_good", "good", "ok", "avg", "meh"]);
 
+/**
+ * Resolve the guest userId that may be claimed into the signed-in account.
+ * Requires a verified guest session token (body.guestToken or x-claim-guest-token).
+ * Never claims null/empty user_id rows across the whole DB.
+ */
+function resolveClaimGuestId(req: any): string | null {
+  const raw =
+    (typeof req.body?.guestToken === "string" && req.body.guestToken) ||
+    (typeof req.headers["x-claim-guest-token"] === "string" &&
+      req.headers["x-claim-guest-token"]) ||
+    "";
+  if (!raw) return null;
+  const guestId = verifyGuestToken(raw);
+  if (!guestId || !guestId.startsWith("guest_")) return null;
+  return guestId;
+}
+
 // POST /movies/claim-orphaned
-// Assigns all null-user_id movies to the current user
+// Reassigns movies owned by a verified guest session to the signed-in user.
 router.post("/movies/claim-orphaned", requireAuth, async (req: any, res): Promise<void> => {
+  const userId = req.userId as string;
+  if (userId.startsWith("guest_")) {
+    res.status(400).json({
+      error: "Sign in to claim guest movies",
+      claimed: 0,
+    });
+    return;
+  }
+
+  const guestId = resolveClaimGuestId(req);
+  if (!guestId) {
+    res.status(400).json({
+      error: "A valid guest session token is required to claim movies",
+      claimed: 0,
+    });
+    return;
+  }
+
   const result = await db
     .update(moviesTable)
-    .set({ userId: req.userId })
-    .where(or(isNull(moviesTable.userId), eq(moviesTable.userId, "")))
+    .set({ userId })
+    .where(eq(moviesTable.userId, guestId))
     .returning({ id: moviesTable.id });
 
   res.json({ claimed: result.length });
 });
 
 // GET /movies/orphaned-count
-// Returns how many unclaimed movies exist (for the banner)
+// Count movies belonging to the pending guest session (scoped — not global nulls).
 router.get("/movies/orphaned-count", requireAuth, async (req: any, res): Promise<void> => {
+  const guestId = resolveClaimGuestId(req);
+  if (!guestId) {
+    res.json({ count: 0 });
+    return;
+  }
+
   const [{ count }] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(moviesTable)
-    .where(or(isNull(moviesTable.userId), eq(moviesTable.userId, "")));
+    .where(eq(moviesTable.userId, guestId));
 
   res.json({ count: Number(count) });
 });
@@ -307,13 +349,18 @@ router.get("/movies/export", requireAuth, async (req: any, res): Promise<void> =
   res.send(csv);
 });
 
-// GET /movies/export-orphaned  — export the pre-auth movies with no user_id
-// Only works when the current user has an empty library (safety guard)
+// GET /movies/export-orphaned — CSV for the pending guest session only
 router.get("/movies/export-orphaned", requireAuth, async (req: any, res): Promise<void> => {
+  const guestId = resolveClaimGuestId(req);
+  if (!guestId) {
+    res.status(400).json({ error: "A valid guest session token is required to export" });
+    return;
+  }
+
   const movies = await db
     .select()
     .from(moviesTable)
-    .where(or(isNull(moviesTable.userId), eq(moviesTable.userId, "")))
+    .where(eq(moviesTable.userId, guestId))
     .orderBy(moviesTable.createdAt);
 
   const header = "title,status,rating,year,language";

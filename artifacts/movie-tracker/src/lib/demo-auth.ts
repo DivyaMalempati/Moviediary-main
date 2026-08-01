@@ -1,9 +1,11 @@
 import { setExtraHeaders, clearExtraHeaders, setAuthTokenGetter } from "@workspace/api-client-react";
 
-const DEMO_KEY        = "cinevault:demo";
-const GUEST_TOKEN_KEY = "cinevault:guest-token";
-const APP_TOKEN_KEY   = "cinevault:app-token";
-const BASE            = import.meta.env.BASE_URL.replace(/\/$/, "");
+const DEMO_KEY            = "cinevault:demo";
+const GUEST_TOKEN_KEY     = "cinevault:guest-token";
+const APP_TOKEN_KEY       = "cinevault:app-token";
+/** Preserved across demo → Clerk sign-in so claim-orphaned can scope to this guest. */
+const PENDING_CLAIM_KEY   = "cinevault:pending-claim-guest";
+const BASE                = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 type TokenGetter = () => Promise<string | null> | string | null;
 
@@ -46,9 +48,36 @@ function syncExtraAuthHeaders(): void {
   }
 }
 
+/** Stash guest token so signed-in claim-orphaned can scope to that session only. */
+function stashPendingClaimFromGuest(): void {
+  const guest = localStorage.getItem(GUEST_TOKEN_KEY);
+  if (guest) localStorage.setItem(PENDING_CLAIM_KEY, guest);
+}
+
+export function getPendingClaimGuestToken(): string | null {
+  return localStorage.getItem(PENDING_CLAIM_KEY);
+}
+
+export function clearPendingClaimGuestToken(): void {
+  localStorage.removeItem(PENDING_CLAIM_KEY);
+}
+
+/**
+ * Sync session headers from localStorage only — never awaits Clerk getToken.
+ * Use for TMDB/proxy calls that must not hang on Replit hydration.
+ */
+export function getSyncSessionHeaders(): Record<string, string> {
+  if (isDemoMode()) {
+    const guest = localStorage.getItem(GUEST_TOKEN_KEY);
+    return guest ? { "x-guest-token": guest } : {};
+  }
+  const app = localStorage.getItem(APP_TOKEN_KEY);
+  return app ? { "x-cinevault-token": app } : {};
+}
+
 /**
  * Exchange a Clerk Bearer JWT for a first-party app session token.
- * Call once after sign-in when getToken() succeeds.
+ * Call once after sign-in when getToken() succeeds — not on every poll.
  */
 export async function establishAppSession(clerkJwt: string): Promise<boolean> {
   try {
@@ -118,6 +147,7 @@ export async function getAuthHeaders(
   if (token) {
     // Signed-in path: Bearer + optional first-party app session. No guest.
     if (isDemoMode()) {
+      stashPendingClaimFromGuest();
       localStorage.removeItem(DEMO_KEY);
       localStorage.removeItem(GUEST_TOKEN_KEY);
       syncExtraAuthHeaders();
@@ -133,14 +163,21 @@ export async function getAuthHeaders(
 
 /**
  * Ensure we have a usable API session for a signed-in Clerk user.
- * Always remints x-cinevault-token from the current Clerk JWT so a dead
- * token after SESSION_SECRET rotation can't block Together invites.
+ * Remints only when no app token is stored — Match polls must not hit
+ * /clerk-session every few seconds. authFetch remints on 401.
  */
 export async function ensureClerkApiSession(): Promise<boolean> {
+  const existing = localStorage.getItem(APP_TOKEN_KEY);
+  if (existing && !isDemoMode()) {
+    syncExtraAuthHeaders();
+    return true;
+  }
+
   const token = await resolveClerkToken();
-  if (!token) return Boolean(localStorage.getItem(APP_TOKEN_KEY));
+  if (!token) return Boolean(existing);
 
   if (isDemoMode()) {
+    stashPendingClaimFromGuest();
     localStorage.removeItem(DEMO_KEY);
     localStorage.removeItem(GUEST_TOKEN_KEY);
   }
@@ -179,7 +216,22 @@ export async function authFetch(
   if (res.status !== 401) return res;
 
   const clerkJwt = await resolveClerkToken();
-  if (!clerkJwt) return res;
+  if (!clerkJwt) {
+    // Demo path: remint guest once
+    if (isDemoMode()) {
+      try {
+        await refreshGuestSession();
+        res = await fetch(input, {
+          ...init,
+          credentials: init?.credentials ?? "include",
+          headers: await mergeHeaders(),
+        });
+      } catch {
+        /* keep original 401 */
+      }
+    }
+    return res;
+  }
 
   clearAppSession();
   localStorage.removeItem(GUEST_TOKEN_KEY);
@@ -259,10 +311,10 @@ export function disableDemoMode(): void {
 
 /**
  * Leave demo/guest mode and hard-navigate to Clerk sign-in.
- * Always use this (not a soft Link) so demo headers/tokens can't stick around
- * and block Google sign-in on Replit preview hosts.
+ * Preserves the guest token for scoped claim-orphaned after sign-in.
  */
 export function exitDemoToSignIn(): void {
+  stashPendingClaimFromGuest();
   disableDemoMode();
   clearAppSession();
   localStorage.removeItem(GUEST_TOKEN_KEY);
@@ -273,6 +325,7 @@ export function exitDemoToSignIn(): void {
 
 /** Same as exitDemoToSignIn but for the sign-up route. */
 export function exitDemoToSignUp(): void {
+  stashPendingClaimFromGuest();
   disableDemoMode();
   clearAppSession();
   localStorage.removeItem(GUEST_TOKEN_KEY);
@@ -289,6 +342,7 @@ export function initDemoMode(): void {
     localStorage.removeItem(APP_TOKEN_KEY);
   } else {
     // Avoid a stale guest token hijacking Clerk-authenticated API calls.
+    // Pending claim token is kept separately for post-sign-in claim.
     localStorage.removeItem(GUEST_TOKEN_KEY);
     syncExtraAuthHeaders();
   }
