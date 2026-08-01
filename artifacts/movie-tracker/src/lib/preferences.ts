@@ -3,6 +3,7 @@ import {
   authFetch,
   ensureClerkApiSession,
   getAuthHeaders,
+  getSyncSessionHeaders,
   hasClerkTokenGetter,
   isDemoMode,
   refreshGuestSession,
@@ -220,10 +221,10 @@ export async function fetchWatchProviderCatalog(
   watchRegion = "IN",
 ): Promise<WatchProviderCatalogItem[]> {
   try {
-    // Public TMDB proxy — do not await Clerk headers (that hung Preferences on Replit).
+    // Sync session headers only — do not await Clerk getToken (hangs on Replit).
     const res = await fetch(
       `${API_BASE}/api/tmdb/watch-provider-catalog?watchRegion=${encodeURIComponent(watchRegion)}`,
-      { credentials: "include" },
+      { credentials: "include", headers: getSyncSessionHeaders() },
     );
     if (!res.ok) throw new Error(`catalog ${res.status}`);
     const data = (await res.json()) as WatchProviderCatalogItem[];

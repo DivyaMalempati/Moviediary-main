@@ -33,18 +33,29 @@ import {
 import { RATING_LABELS, formatWatchDate } from "@/lib/movie-utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { getAuthHeaders } from "@/lib/demo-auth";
+import {
+  getAuthHeaders,
+  getPendingClaimGuestToken,
+  clearPendingClaimGuestToken,
+} from "@/lib/demo-auth";
 import { cn } from "@/lib/utils";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const CURRENT_YEAR = new Date().getFullYear();
 
+function claimGuestHeaders(): Record<string, string> {
+  const token = getPendingClaimGuestToken();
+  return token ? { "x-claim-guest-token": token } : {};
+}
+
 // ── Orphaned helpers ──────────────────────────────────────────────────────────
 function useOrphanedCount() {
+  const pending = getPendingClaimGuestToken();
   return useQuery({
-    queryKey: ["orphaned-count"],
+    queryKey: ["orphaned-count", pending ?? "none"],
+    enabled: Boolean(pending),
     queryFn: async () => {
-      const headers = await getAuthHeaders();
+      const headers = await getAuthHeaders(claimGuestHeaders());
       const res = await fetch(`${BASE}/api/movies/orphaned-count`, { headers, credentials: "include" });
       if (!res.ok) return { count: 0 };
       return res.json() as Promise<{ count: number }>;
@@ -57,8 +68,18 @@ function useClaimOrphaned() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async () => {
-      const headers = await getAuthHeaders({ "Content-Type": "application/json" });
-      const res = await fetch(`${BASE}/api/movies/claim-orphaned`, { method: "POST", headers, credentials: "include" });
+      const guestToken = getPendingClaimGuestToken();
+      if (!guestToken) throw new Error("No guest session to claim");
+      const headers = await getAuthHeaders({
+        "Content-Type": "application/json",
+        "x-claim-guest-token": guestToken,
+      });
+      const res = await fetch(`${BASE}/api/movies/claim-orphaned`, {
+        method: "POST",
+        headers,
+        credentials: "include",
+        body: JSON.stringify({ guestToken }),
+      });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error((err as any).error ?? `HTTP ${res.status}`);
@@ -66,6 +87,7 @@ function useClaimOrphaned() {
       return res.json() as Promise<{ claimed: number }>;
     },
     onSuccess: (data) => {
+      clearPendingClaimGuestToken();
       toast.success(`${data.claimed} movies added to your library`);
       qc.invalidateQueries({ queryKey: ["orphaned-count"] });
       qc.invalidateQueries({ queryKey: ["movies"] });
@@ -73,6 +95,31 @@ function useClaimOrphaned() {
     },
     onError: (err) => toast.error(String(err)),
   });
+}
+
+async function downloadOrphanedCsv() {
+  const guestToken = getPendingClaimGuestToken();
+  if (!guestToken) {
+    toast.error("No guest session to export");
+    return;
+  }
+  try {
+    const headers = await getAuthHeaders({ "x-claim-guest-token": guestToken });
+    const res = await fetch(`${BASE}/api/movies/export-orphaned`, {
+      headers,
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "cinevault_orphaned_movies.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch {
+    toast.error("Couldn’t export CSV");
+  }
 }
 
 // ── Sort ──────────────────────────────────────────────────────────────────────
@@ -320,10 +367,13 @@ export default function WatchedPage() {
               <p className="text-xs text-muted-foreground mt-0.5">These were added without an account. Claim them to add them to your library.</p>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <a href={`${BASE}/api/movies/export-orphaned`} download="cinevault_orphaned_movies.csv"
-                className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors">
+              <button
+                type="button"
+                onClick={() => void downloadOrphanedCsv()}
+                className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+              >
                 <Download className="w-3 h-3" /> CSV
-              </a>
+              </button>
               <Button size="sm" className="bg-white text-black hover:bg-white/90 h-7 text-xs gap-1"
                 onClick={() => claim.mutate()} disabled={claim.isPending}>
                 {claim.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : null}

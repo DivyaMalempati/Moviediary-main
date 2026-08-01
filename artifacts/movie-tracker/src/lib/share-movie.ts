@@ -1,4 +1,5 @@
 import { RATING_LABELS, getPosterUrl } from "@/lib/movie-utils";
+import { getSyncSessionHeaders } from "@/lib/demo-auth";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -90,7 +91,10 @@ async function loadPosterForCanvas(
   const proxyUrl = `${BASE}/api/tmdb/poster-image?path=${encodeURIComponent(path)}&size=w780`;
 
   try {
-    const res = await fetch(proxyUrl, { credentials: "same-origin" });
+    const res = await fetch(proxyUrl, {
+      credentials: "same-origin",
+      headers: getSyncSessionHeaders(),
+    });
     if (!res.ok) throw new Error(`proxy ${res.status}`);
     const blob = await res.blob();
     if (blob.type && !blob.type.startsWith("image/")) throw new Error("not an image");

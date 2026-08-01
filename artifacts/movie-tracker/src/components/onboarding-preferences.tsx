@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { LanguagePicker, GenrePicker } from "@/components/taste-picker";
 import { useSavePreferences, PreferencesAuthError } from "@/lib/preferences";
-import { getAuthHeaders } from "@/lib/demo-auth";
+import { getAuthHeaders, getSyncSessionHeaders } from "@/lib/demo-auth";
 import { getPosterUrl } from "@/lib/movie-utils";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -57,10 +57,10 @@ const VALUE_PROPS = [
 
 async function fetchSeedMovies(signal?: AbortSignal): Promise<SeedFilm[]> {
   try {
-    // Public TMDB proxy — do not await Clerk/guest auth headers here.
-    // On Replit preview hosts getToken() can hang and leave the spinner forever.
+    // Sync session headers only — do not await Clerk getToken (hangs on Replit).
     const res = await fetch(`${BASE}/api/tmdb/onboarding-seed`, {
       credentials: "include",
+      headers: getSyncSessionHeaders(),
       signal,
     });
     if (!res.ok) return [];
