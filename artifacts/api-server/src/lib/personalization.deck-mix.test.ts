@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { assembleDeckMix, type SwipeCandidate } from "./personalization.js";
+import {
+  assembleDeckMix,
+  MIX_TOGETHER,
+  type SwipeCandidate,
+} from "./personalization.js";
 
 function film(id: number, source?: SwipeCandidate["source"]): SwipeCandidate {
   return {
@@ -52,5 +56,29 @@ describe("assembleDeckMix 60/20/20", () => {
     });
     expect(deck.length).toBeLessThanOrEqual(3);
     expect(deck.map((d) => d.tmdbId).sort()).toEqual([1, 2, 3]);
+  });
+});
+
+describe("assembleDeckMix Together underrated-first", () => {
+  it("builds a 12-card deck with wildcard as the majority bucket", () => {
+    const pools = {
+      wildcard: Array.from({ length: 20 }, (_, i) => film(200 + i, "wildcard")),
+      streaming: Array.from({ length: 10 }, (_, i) => film(100 + i, "streaming")),
+      safe: Array.from({ length: 20 }, (_, i) => film(i + 1, "safe")),
+    };
+
+    const deck = assembleDeckMix(pools, MIX_TOGETHER, 12, { shuffleResult: false });
+    expect(deck).toHaveLength(12);
+    const counts = deck.reduce(
+      (acc, c) => {
+        acc[c.source ?? "safe"] = (acc[c.source ?? "safe"] ?? 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+    // 12 * 0.55 → 7, 0.2 → 2, 0.25 → 3 (=12)
+    expect(counts.wildcard).toBeGreaterThanOrEqual(6);
+    expect(counts.wildcard).toBeGreaterThan(counts.safe ?? 0);
+    expect((counts.safe ?? 0) + (counts.streaming ?? 0) + (counts.wildcard ?? 0)).toBe(12);
   });
 });

@@ -180,12 +180,19 @@ export interface SwipeCandidate {
 export const TARGET_DECK = 12;
 
 /**
- * 80/20 familiarity mix:
+ * Solo swipe familiarity mix:
  *  - 60% Safe Matches — top genre/keyword (seed + genre-weighted) taste
  *  - 20% Contextual/Streaming — high-rated on the user's OTT apps
  *  - 20% Wildcard/Hidden Gems — vote_average >= 7.2, vote_count <= 3000
  */
 export const MIX_DECK = { safe: 0.6, streaming: 0.2, wildcard: 0.2 };
+
+/**
+ * Together / movie-night: underrated recent films first (selected genres,
+ * last ~10 years, strong rating + modest vote count), then streaming + a
+ * smaller safe backfill so the ritual doesn't flood with already-known hits.
+ */
+export const MIX_TOGETHER = { wildcard: 0.55, streaming: 0.2, safe: 0.25 };
 
 const MIX_GENRE_FILTER = { safe: 0.7, streaming: 0.15, wildcard: 0.15 };
 const MIX_TROPE = { safe: 0.5, streaming: 0.2, wildcard: 0.3 };
@@ -303,11 +310,22 @@ async function fetchSafeMatches(opts: {
   genreIdFilter?: number;
   watch?: WatchFilter;
   certification?: { country?: string; max?: string | null };
+  /** Skip similar/recs from loved seeds (Together — those skew toward already-seen hits). */
+  skipSeeds?: boolean;
 }): Promise<SwipeCandidate[]> {
-  const { profile, effectiveLanguages, page, genreIds, genreIdFilter, watch, certification } = opts;
+  const {
+    profile,
+    effectiveLanguages,
+    page,
+    genreIds,
+    genreIdFilter,
+    watch,
+    certification,
+    skipSeeds,
+  } = opts;
   const safe: SwipeCandidate[] = [];
 
-  if (!watch && profile.seedMovies.length > 0 && !genreIdFilter) {
+  if (!skipSeeds && !watch && profile.seedMovies.length > 0 && !genreIdFilter) {
     const seedResults = await Promise.allSettled(
       profile.seedMovies.map((s) =>
         Promise.all([getSimilarMovies(s.tmdbId), getRecommendations(s.tmdbId)]),
@@ -343,8 +361,30 @@ async function fetchSafeMatches(opts: {
   return tagSource(safe, "safe");
 }
 
+async function fetchUnderratedByGenres(opts: {
+  languages: string[];
+  page: number;
+  genreIds: number[];
+  genreIdFilter?: number;
+  certification?: { country?: string; max?: string | null };
+}): Promise<SwipeCandidate[]> {
+  const { languages, page, genreIds, genreIdFilter, certification } = opts;
+  const gids = genreIdFilter ? [genreIdFilter] : genreIds.slice(0, 3);
+  if (gids.length === 0) {
+    return discoverHiddenGems(languages, page, undefined, undefined, certification).catch(() => []);
+  }
+  const pages = await Promise.all(
+    gids.map((gid, i) =>
+      discoverHiddenGems(languages, page + (i % 2), gid, undefined, certification).catch(() => []),
+    ),
+  );
+  return pages.flat();
+}
+
 /**
- * Builds a personalized 10–12 card swipe deck with the 60/20/20 mix.
+ * Builds a personalized 10–12 card swipe deck.
+ * Solo: 60/20/20 safe/streaming/wildcard.
+ * Together: underrated-first mix in shared genres (last ~10 years).
  */
 export async function getPersonalizedSwipePool(opts: {
   profile: TasteProfile;
@@ -356,6 +396,8 @@ export async function getPersonalizedSwipePool(opts: {
   excludeIds: Set<number>;
   /** Override deck size (default 12). */
   target?: number;
+  /** Together movie-night decks prefer recent underrated titles. */
+  mode?: "solo" | "together";
 }): Promise<SwipeCandidate[]> {
   const {
     profile,
@@ -366,7 +408,9 @@ export async function getPersonalizedSwipePool(opts: {
     keywordId,
     excludeIds,
     target = TARGET_DECK,
+    mode = "solo",
   } = opts;
+  const together = mode === "together";
 
   const languageAllowlist =
     explicitPrefs.languages.length > 0 ? explicitPrefs.languages : null;
@@ -439,6 +483,8 @@ export async function getPersonalizedSwipePool(opts: {
       // Safe matches are NOT locked to OTT — familiarity from taste.
       watch: undefined,
       certification,
+      // Together: skip seed similar/recs — they skew toward already-known hits.
+      skipSeeds: together,
     }),
     streamingWatch
       ? discoverStreamingHighlights(
@@ -449,10 +495,21 @@ export async function getPersonalizedSwipePool(opts: {
           certification,
         ).catch(() => [])
       : Promise.resolve([] as SwipeCandidate[]),
-    discoverHiddenGems(effectiveLanguages, page, mixGenreId, undefined, certification).catch(() => []),
+    // Together: pull underrated titles across top shared genres (last ~10y).
+    together
+      ? fetchUnderratedByGenres({
+          languages: effectiveLanguages,
+          page,
+          genreIds,
+          genreIdFilter,
+          certification,
+        })
+      : discoverHiddenGems(effectiveLanguages, page, mixGenreId, undefined, certification).catch(
+          () => [],
+        ),
   ]);
 
-  // If user has no OTT prefs, fold streaming quota into safe (still 80% familiarity).
+  // If user has no OTT prefs, fold streaming quota into the primary bucket.
   const hasStreaming = streamingRaw.length > 0 && !!streamingWatch;
   const pools = {
     safe: prep(safeRaw, "safe"),
@@ -460,14 +517,22 @@ export async function getPersonalizedSwipePool(opts: {
     wildcard: prep(wildcardRaw, "wildcard"),
   };
 
-  const mix = genreIdFilter
-    ? MIX_GENRE_FILTER
-    : hasStreaming
-      ? MIX_DECK
-      : { safe: 0.8, streaming: 0, wildcard: 0.2 };
+  let mix: Partial<Record<DeckSource, number>>;
+  if (together) {
+    mix = hasStreaming
+      ? MIX_TOGETHER
+      : { wildcard: 0.7, streaming: 0, safe: 0.3 };
+  } else if (genreIdFilter) {
+    mix = MIX_GENRE_FILTER;
+  } else if (hasStreaming) {
+    mix = MIX_DECK;
+  } else {
+    mix = { safe: 0.8, streaming: 0, wildcard: 0.2 };
+  }
 
   const batch = assembleDeckMix(pools, mix, target, {
-    shuffleResult: !genreIdFilter,
+    // Keep underrated cards toward the front of Together decks.
+    shuffleResult: !genreIdFilter && !together,
   });
 
   if (genreIdFilter) {

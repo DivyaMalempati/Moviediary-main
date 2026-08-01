@@ -326,6 +326,12 @@ export async function discoverMovies(
   if (extras?.keywordId != null) {
     params.with_keywords = String(extras.keywordId);
   }
+  if (extras?.primaryReleaseDateGte) {
+    params["primary_release_date.gte"] = extras.primaryReleaseDateGte;
+  }
+  if (extras?.primaryReleaseDateLte) {
+    params["primary_release_date.lte"] = extras.primaryReleaseDateLte;
+  }
   if (languages?.length) {
     params.with_original_language = languages.join("|");
   }
@@ -349,7 +355,27 @@ export type DiscoverExtras = {
   voteAverageGte?: number;
   keywordId?: number;
   certification?: CertificationFilter;
+  /** ISO date `YYYY-MM-DD` — TMDB primary_release_date.gte */
+  primaryReleaseDateGte?: string;
+  /** ISO date `YYYY-MM-DD` — TMDB primary_release_date.lte */
+  primaryReleaseDateLte?: string;
 };
+
+/** Default window for “recent underrated” Together / wildcard picks. */
+export const UNDERRATED_YEARS_BACK = 10;
+
+export function underratedReleaseWindow(yearsBack = UNDERRATED_YEARS_BACK): {
+  primaryReleaseDateGte: string;
+  primaryReleaseDateLte: string;
+} {
+  const end = new Date();
+  const start = new Date(end);
+  start.setFullYear(start.getFullYear() - Math.max(1, yearsBack));
+  return {
+    primaryReleaseDateGte: yyyyMmDd(start),
+    primaryReleaseDateLte: yyyyMmDd(end),
+  };
+}
 
 /** High-rated titles available on the user's OTT apps (streaming bucket). */
 export async function discoverStreamingHighlights(
@@ -367,9 +393,16 @@ export async function discoverStreamingHighlights(
   });
 }
 
+export type HiddenGemsOptions = {
+  /** Prefer titles released in the last N years (default 10). Pass null to disable. */
+  yearsBack?: number | null;
+};
+
 /**
  * Hidden gems / wildcards: strong ratings, low vote count (less mainstream).
  * vote_average >= 7.2 and vote_count <= 3000.
+ * By default limited to the last ~10 years so Together nights surface
+ * recent underrated picks instead of evergreen classics.
  */
 export async function discoverHiddenGems(
   languages?: string[],
@@ -377,13 +410,17 @@ export async function discoverHiddenGems(
   genreId?: number,
   watch?: WatchFilter,
   certification?: CertificationFilter,
+  options?: HiddenGemsOptions,
 ) {
+  const yearsBack = options?.yearsBack === undefined ? UNDERRATED_YEARS_BACK : options.yearsBack;
+  const window = yearsBack != null ? underratedReleaseWindow(yearsBack) : undefined;
   return discoverMovies(languages, undefined, page, genreId, watch, {
     sortBy: "vote_average.desc",
     voteCountGte: 50,
     voteCountLte: 3000,
     voteAverageGte: 7.2,
     certification,
+    ...window,
   });
 }
 
