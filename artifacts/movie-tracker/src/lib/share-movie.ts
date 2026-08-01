@@ -3,6 +3,20 @@ import { getSyncSessionHeaders } from "@/lib/demo-auth";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+/**
+ * Public landing URL for share captions so recipients can try the app.
+ * Prefer VITE_APP_SHARE_URL when set; otherwise the current host + base path
+ * (works for Replit preview / production deploys).
+ */
+export function getAppShareUrl(): string {
+  const fromEnv = (import.meta.env.VITE_APP_SHARE_URL as string | undefined)?.trim();
+  if (fromEnv) return fromEnv.replace(/\/$/, "");
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return `${window.location.origin}${BASE || ""}` || window.location.origin;
+  }
+  return "https://cinevault.app";
+}
+
 export type ShareMovieInput = {
   title: string;
   rating?: string | null;
@@ -64,6 +78,7 @@ export function buildMovieShareText(input: ShareMovieInput): string {
 
   lines.push("");
   lines.push("— Shared from Cinevault");
+  lines.push(`Try the app: ${getAppShareUrl()}`);
   return lines.join("\n");
 }
 
@@ -76,8 +91,7 @@ export function whatsappShareUrl(text: string): string {
 }
 
 export function facebookShareUrl(text: string): string {
-  const site =
-    typeof window !== "undefined" ? window.location.origin : "https://cinevault.app";
+  const site = getAppShareUrl();
   return `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(site)}&quote=${encodeURIComponent(text)}`;
 }
 
