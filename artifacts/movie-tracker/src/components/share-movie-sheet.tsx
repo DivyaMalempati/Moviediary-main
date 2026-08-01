@@ -161,6 +161,13 @@ export function ShareMovieSheet({
           </p>
         )}
 
+        <div className="mt-4 px-0.5">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">
+            Caption
+          </p>
+          <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">{text}</p>
+        </div>
+
         <div className="mt-5 space-y-2">
           <Button
             className="gap-2 w-full bg-white text-black hover:bg-white/90"

@@ -41,22 +41,26 @@ export function buildMovieShareText(input: ShareMovieInput): string {
   const streaming = input.streamingOn?.trim() || null;
   const review = input.notes?.trim() || null;
 
-  const lines = [
-    `I recommend this movie for you to watch: ${input.title}${year}`,
-  ];
+  // WhatsApp *bold* markers — ignored as plain text elsewhere.
+  const lines = [`I'd recommend *${input.title}*${year} — worth a watch.`];
 
   if (input.isRewatch) {
     lines.push(
       input.timesSeen && input.timesSeen > 1
-        ? `Rewatch ×${input.timesSeen}`
-        : "Rewatch",
+        ? `(A rewatch for me · seen ${input.timesSeen}×)`
+        : "(A rewatch for me)",
     );
   }
 
-  lines.push("");
-  if (streaming) lines.push(`Streaming: ${streaming}`);
-  if (ratingLabel) lines.push(`Rating: ${ratingLabel}`);
-  if (review) lines.push(`Review: “${review}”`);
+  const details: string[] = [];
+  if (streaming) details.push(`*Streaming:* ${streaming}`);
+  if (ratingLabel) details.push(`*Rating:* ${ratingLabel}`);
+  if (review) details.push(`*Review:* “${review}”`);
+
+  if (details.length) {
+    lines.push("");
+    lines.push(...details);
+  }
 
   lines.push("");
   lines.push("— Shared from Cinevault");
@@ -408,7 +412,7 @@ export async function nativeShareMovie(
   }
   try {
     // WhatsApp often surfaces `title` as the message when an image is attached.
-    const shareTitle = `I recommend watching ${title}`;
+    const shareTitle = `I'd recommend ${title} — worth a watch`;
     const files: File[] = [];
     if (image) {
       const file = new File([image], shareImageFilename(title, image), {
@@ -461,8 +465,8 @@ export async function downloadShareCard(
     try {
       await navigator.share({
         files: [file],
-        title: `I recommend watching ${title}`,
-        text: `I recommend this movie for you to watch: ${title}`,
+        title: `I'd recommend ${title} — worth a watch`,
+        text: `I'd recommend ${title} — worth a watch.`,
       });
       return "shared";
     } catch (err) {
