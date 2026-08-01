@@ -16,6 +16,7 @@ import {
   type ExplicitPreferences,
   type SwipeCandidate,
 } from "../lib/personalization.js";
+import { logger } from "../lib/logger.js";
 
 const router: IRouter = Router();
 
@@ -48,6 +49,55 @@ async function getActivePartnerLink(userId: string) {
     )
     .limit(1);
   return link ?? null;
+}
+
+/**
+ * Persist a Together "like" to the swiper's personal watchlist.
+ * Swipe votes alone lived only in match_session_swipes — likes never hit /watchlist.
+ * Does not downgrade an existing watched entry.
+ */
+async function ensureWatchlistEntry(userId: string, film: SwipeCandidate): Promise<void> {
+  const existing = await db
+    .select()
+    .from(moviesTable)
+    .where(and(eq(moviesTable.userId, userId), eq(moviesTable.tmdbId, film.tmdbId)))
+    .limit(8);
+
+  const active = existing.find((m) => m.deletedAt == null);
+  if (active) {
+    return;
+  }
+
+  const softDeleted = existing.find((m) => m.deletedAt != null);
+  if (softDeleted) {
+    await db
+      .update(moviesTable)
+      .set({
+        deletedAt: null,
+        status: "watchlist",
+        title: film.title,
+        posterPath: film.posterPath,
+        releaseYear: film.releaseYear,
+        originalLanguage: film.originalLanguage,
+        overview: film.overview,
+        genres: film.genres,
+      })
+      .where(eq(moviesTable.id, softDeleted.id));
+    return;
+  }
+
+  await db.insert(moviesTable).values({
+    userId,
+    title: film.title,
+    status: "watchlist",
+    tmdbId: film.tmdbId,
+    posterPath: film.posterPath,
+    releaseYear: film.releaseYear,
+    releaseDate: (film as { releaseDate?: string | null }).releaseDate ?? null,
+    originalLanguage: film.originalLanguage,
+    overview: film.overview,
+    genres: film.genres,
+  });
 }
 
 function partnerOf(link: typeof partnerLinksTable.$inferSelect, userId: string) {
@@ -313,7 +363,16 @@ router.post("/match-sessions/:id/swipes", requireAuth, async (req: any, res): Pr
     });
 
   let matched = false;
+  let addedToWatchlist = false;
   if (direction === "like") {
+    try {
+      await ensureWatchlistEntry(req.userId, film);
+      addedToWatchlist = true;
+    } catch (err) {
+      // Swipe vote already saved — don't fail the ritual if library write races.
+      logger.warn({ err }, "Together like → watchlist failed");
+    }
+
     const partnerUserId = partnerOf(link, req.userId);
     const [partnerSwipe] = await db
       .select()
@@ -330,7 +389,7 @@ router.post("/match-sessions/:id/swipes", requireAuth, async (req: any, res): Pr
     matched = !!partnerSwipe;
   }
 
-  res.json({ matched, film: matched ? film : null });
+  res.json({ matched, film: matched ? film : null, addedToWatchlist });
 });
 
 /**
