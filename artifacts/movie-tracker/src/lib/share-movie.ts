@@ -16,7 +16,7 @@ export type ShareMovieInput = {
   posterPath?: string | null;
 };
 
-/** Build plain-text caption to accompany the poster card. */
+/** Build plain-text caption to accompany the poster card (WhatsApp / share sheet). */
 export function buildMovieShareText(input: ShareMovieInput): string {
   const year = input.releaseYear ? ` (${input.releaseYear})` : "";
   const ratingLabel =
@@ -24,17 +24,20 @@ export function buildMovieShareText(input: ShareMovieInput): string {
       ? RATING_LABELS[input.rating]
       : null;
 
-  const headline = input.isRewatch
-    ? `Rewatched ${input.title}${year}`
-    : `Watched ${input.title}${year}`;
+  const lines = [
+    `I recommend this movie for you to watch: ${input.title}${year}`,
+  ];
 
   const meta: string[] = [];
-  if (input.isRewatch && input.timesSeen && input.timesSeen > 1) {
-    meta.push(`×${input.timesSeen}`);
+  if (input.isRewatch) {
+    meta.push(
+      input.timesSeen && input.timesSeen > 1
+        ? `Rewatch ×${input.timesSeen}`
+        : "Rewatch",
+    );
   }
   if (ratingLabel) meta.push(ratingLabel);
-
-  const lines = [meta.length ? `${headline} — ${meta.join(" · ")}` : headline];
+  if (meta.length) lines.push(meta.join(" · "));
 
   const review = input.notes?.trim();
   if (review) {
@@ -43,7 +46,7 @@ export function buildMovieShareText(input: ShareMovieInput): string {
   }
 
   lines.push("");
-  lines.push("Logged on Cinevault");
+  lines.push("— Shared from Cinevault");
   return lines.join("\n");
 }
 
@@ -377,6 +380,8 @@ export async function nativeShareMovie(
     return "unsupported";
   }
   try {
+    // WhatsApp often surfaces `title` as the message when an image is attached.
+    const shareTitle = `I recommend watching ${title}`;
     const files: File[] = [];
     if (image) {
       const file = new File([image], shareImageFilename(title, image), {
@@ -390,9 +395,9 @@ export async function nativeShareMovie(
       }
     }
     if (files.length) {
-      await navigator.share({ title, text, files });
+      await navigator.share({ title: shareTitle, text, files });
     } else {
-      await navigator.share({ title, text });
+      await navigator.share({ title: shareTitle, text });
     }
     return "shared";
   } catch (err) {
@@ -427,7 +432,11 @@ export async function downloadShareCard(
     navigator.canShare({ files: [file] })
   ) {
     try {
-      await navigator.share({ files: [file], title: `${title} — Cinevault` });
+      await navigator.share({
+        files: [file],
+        title: `I recommend watching ${title}`,
+        text: `I recommend this movie for you to watch: ${title}`,
+      });
       return "shared";
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
