@@ -27,6 +27,8 @@ import MatchSessionPage from "@/pages/match-session";
 import GuidePage from "@/pages/guide";
 import NotFound from "@/pages/not-found";
 import { FeatureGate } from "@/components/feature-gate";
+import { FeatureTourProvider } from "@/components/feature-tour-context";
+import { FeatureWalkthroughHost } from "@/components/feature-walkthrough";
 
 // Initialise demo mode header injection before any render
 initDemoMode();
@@ -393,7 +395,10 @@ function ClerkProviderWithRoutes() {
       <QueryClientProvider client={queryClient}>
         <ClerkQueryClientCacheInvalidator />
         <ClerkAuthTokenBridge>
-          <ClerkRouter />
+          <FeatureTourProvider>
+            <ClerkRouter />
+            <FeatureWalkthroughHost />
+          </FeatureTourProvider>
         </ClerkAuthTokenBridge>
         <Toaster />
       </QueryClientProvider>
@@ -413,7 +418,10 @@ function App() {
         <ClerkProviderWithRoutes />
       ) : (
         <QueryClientProvider client={queryClient}>
-          <DemoRouter />
+          <FeatureTourProvider>
+            <DemoRouter />
+            <FeatureWalkthroughHost />
+          </FeatureTourProvider>
           <Toaster />
         </QueryClientProvider>
       )}

@@ -1,13 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { usePreferences } from "@/lib/preferences";
 import {
@@ -16,160 +9,274 @@ import {
   markFeatureTourDone,
   resetFeatureTour,
 } from "@/lib/feature-guide";
+import { useFeatureTour } from "@/components/feature-tour-context";
 import { cn } from "@/lib/utils";
 
-type FeatureWalkthroughProps = {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-};
+type Rect = { top: number; left: number; width: number; height: number };
 
-/** Interactive multi-step tour of Cinevault’s main features. */
-export function FeatureWalkthrough({ open, onOpenChange }: FeatureWalkthroughProps) {
+function readTargetRect(target: string): Rect | null {
+  const nodes = document.querySelectorAll(`[data-tour="${target}"]`);
+  for (const el of nodes) {
+    const r = el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) continue;
+    const style = window.getComputedStyle(el);
+    if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") {
+      continue;
+    }
+    return { top: r.top, left: r.left, width: r.width, height: r.height };
+  }
+  return null;
+}
+
+function useSpotlightRect(target: string, active: boolean): Rect | null {
+  const [rect, setRect] = useState<Rect | null>(null);
+
+  useLayoutEffect(() => {
+    if (!active) {
+      setRect(null);
+      return;
+    }
+
+    let cancelled = false;
+    const update = () => {
+      if (cancelled) return;
+      setRect(readTargetRect(target));
+    };
+
+    update();
+    // Nav may paint after route change — retry briefly.
+    const times = [50, 150, 350, 700];
+    const timers = times.map((ms) => window.setTimeout(update, ms));
+
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      cancelled = true;
+      timers.forEach((t) => window.clearTimeout(t));
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [target, active]);
+
+  return rect;
+}
+
+/** Spotlight coach-mark tour that points at real nav icons. */
+export function FeatureWalkthrough() {
   const [, setLocation] = useLocation();
-  const [step, setStep] = useState(0);
+  const { open, step, setStep, closeTour } = useFeatureTour();
   const total = FEATURE_TOUR_STEPS.length;
-  const current = FEATURE_TOUR_STEPS[step];
-  const Icon = current.icon;
-  const isLast = step === total - 1;
+  const current = FEATURE_TOUR_STEPS[Math.min(step, total - 1)];
+  const isLast = step >= total - 1;
+  const rect = useSpotlightRect(current.target, open);
+  const pad = 8;
 
+  // Navigate so the highlighted destination is on screen.
   useEffect(() => {
-    if (open) setStep(0);
-  }, [open]);
+    if (!open) return;
+    setLocation(current.href);
+  }, [open, current.href, setLocation]);
 
   const finish = useCallback(
-    (href?: string) => {
+    (goHref?: string) => {
       markFeatureTourDone();
-      onOpenChange(false);
-      if (href) setLocation(href);
+      closeTour(true);
+      if (goHref) setLocation(goHref);
     },
-    [onOpenChange, setLocation],
+    [closeTour, setLocation],
   );
 
-  const handleOpenChange = (next: boolean) => {
-    if (!next) markFeatureTourDone();
-    onOpenChange(next);
-  };
+  const skip = () => finish();
+
+  // Tooltip placement: above bottom-nav targets, otherwise below/right of hole.
+  const viewportH = typeof window !== "undefined" ? window.innerHeight : 800;
+  const tipAbove = rect ? rect.top + rect.height / 2 > viewportH * 0.55 : true;
+
+  const hole = rect
+    ? {
+        top: Math.max(4, rect.top - pad),
+        left: Math.max(4, rect.left - pad),
+        width: rect.width + pad * 2,
+        height: rect.height + pad * 2,
+      }
+    : null;
+
+  if (!open) return null;
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md bg-background border-border gap-0 overflow-hidden p-0">
-        <div className="relative px-6 pt-6 pb-4">
-          <DialogHeader className="space-y-1 pr-6">
-            <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-              Feature walkthrough · {step + 1}/{total}
-            </p>
-            <DialogTitle className="text-xl font-semibold tracking-tight">
-              Your Cinevault guide
-            </DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground">
-              What each main page and button does — skip anytime; reopen from Profile → Guide.
-            </DialogDescription>
-          </DialogHeader>
+    <div className="fixed inset-0 z-[200]" role="dialog" aria-modal="true" aria-label="App walkthrough">
+      {/* Dim overlay with spotlight cutout via box-shadow */}
+      <div
+        className="absolute inset-0"
+        onClick={skip}
+        aria-hidden
+      >
+        {hole ? (
+          <motion.div
+            className="absolute rounded-2xl"
+            initial={false}
+            animate={{
+              top: hole.top,
+              left: hole.left,
+              width: hole.width,
+              height: hole.height,
+            }}
+            transition={{ type: "spring", stiffness: 380, damping: 32 }}
+            style={{
+              boxShadow: "0 0 0 9999px rgba(0,0,0,0.72)",
+              outline: "2px solid rgba(255,255,255,0.85)",
+              outlineOffset: 2,
+            }}
+          />
+        ) : (
+          <div className="absolute inset-0 bg-black/72" />
+        )}
+      </div>
 
-          <div className="mt-4 flex gap-1.5">
+      {/* Pulse ring on the target */}
+      {hole && (
+        <motion.div
+          className="pointer-events-none absolute rounded-2xl border-2 border-white/70"
+          animate={{
+            top: hole.top - 4,
+            left: hole.left - 4,
+            width: hole.width + 8,
+            height: hole.height + 8,
+            opacity: [0.95, 0.35, 0.95],
+            scale: [1, 1.04, 1],
+          }}
+          transition={{
+            opacity: { duration: 1.4, repeat: Infinity, ease: "easeInOut" },
+            scale: { duration: 1.4, repeat: Infinity, ease: "easeInOut" },
+            top: { type: "spring", stiffness: 380, damping: 32 },
+            left: { type: "spring", stiffness: 380, damping: 32 },
+            width: { type: "spring", stiffness: 380, damping: 32 },
+            height: { type: "spring", stiffness: 380, damping: 32 },
+          }}
+        />
+      )}
+
+      {/* Coach-mark bubble */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={current.id}
+          className={cn(
+            "absolute z-[210] w-[min(20.5rem,calc(100vw-2rem))] rounded-2xl border border-white/15 bg-background px-4 py-3.5 shadow-2xl",
+            !hole && "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2",
+          )}
+          style={
+            hole
+              ? tipAbove
+                ? {
+                    left: Math.min(
+                      Math.max(16, hole.left + hole.width / 2 - 160),
+                      (typeof window !== "undefined" ? window.innerWidth : 400) - 16 - 328,
+                    ),
+                    bottom: viewportH - hole.top + 14,
+                  }
+                : {
+                    left: Math.min(
+                      Math.max(16, hole.left + hole.width / 2 - 160),
+                      (typeof window !== "undefined" ? window.innerWidth : 400) - 16 - 328,
+                    ),
+                    top: hole.top + hole.height + 14,
+                  }
+              : undefined
+          }
+          initial={{ opacity: 0, y: tipAbove ? 10 : -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: tipAbove ? -8 : 8 }}
+          transition={{ duration: 0.2 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            {step + 1} / {total}
+          </p>
+          <h3 className="text-base font-semibold mt-1">{current.title}</h3>
+          <p className="text-sm text-foreground/85 mt-1.5 leading-snug">{current.tip}</p>
+
+          <div className="mt-3 flex items-center gap-1.5">
             {FEATURE_TOUR_STEPS.map((s, i) => (
-              <button
+              <span
                 key={s.id}
-                type="button"
-                aria-label={`Go to step ${i + 1}`}
-                onClick={() => setStep(i)}
                 className={cn(
-                  "h-1 flex-1 rounded-full transition-colors",
+                  "h-1 flex-1 rounded-full",
                   i <= step ? "bg-white" : "bg-white/15",
                 )}
               />
             ))}
           </div>
-        </div>
 
-        <div className="px-6 pb-6 min-h-[220px]">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={current.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.22 }}
-              className="space-y-4"
-            >
-              <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center">
-                <Icon className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold">{current.title}</h3>
-                <p className="text-sm text-foreground/80 mt-1">{current.summary}</p>
-                <p className="text-sm text-muted-foreground mt-3 leading-relaxed">
-                  {current.detail}
-                </p>
-              </div>
-            </motion.div>
-          </AnimatePresence>
-        </div>
-
-        <div className="flex items-center gap-2 px-6 py-4 border-t border-border bg-secondary/20">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground"
-            onClick={() => finish()}
-          >
-            Skip
-          </Button>
-          <div className="flex-1" />
-          {step > 0 && (
-            <Button variant="outline" size="sm" onClick={() => setStep((s) => s - 1)}>
-              Back
-            </Button>
-          )}
-          {!isLast ? (
-            <Button size="sm" className="bg-white text-black hover:bg-white/90" onClick={() => setStep((s) => s + 1)}>
-              Next
-            </Button>
-          ) : (
+          <div className="mt-3.5 flex items-center gap-2">
             <Button
+              variant="ghost"
               size="sm"
-              className="bg-white text-black hover:bg-white/90"
-              onClick={() => finish(current.href)}
+              className="text-muted-foreground h-8 px-2"
+              onClick={skip}
             >
-              {current.cta}
+              Skip
             </Button>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+            <div className="flex-1" />
+            {step > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                onClick={() => setStep(step - 1)}
+              >
+                Back
+              </Button>
+            )}
+            {!isLast ? (
+              <Button
+                size="sm"
+                className="h-8 bg-white text-black hover:bg-white/90"
+                onClick={() => setStep(step + 1)}
+              >
+                Next
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                className="h-8 bg-white text-black hover:bg-white/90"
+                onClick={() => finish(current.href)}
+              >
+                {current.cta ?? "Done"}
+              </Button>
+            )}
+          </div>
+        </motion.div>
+      </AnimatePresence>
+    </div>
   );
 }
 
 /**
- * Auto-opens the walkthrough once after taste onboarding is complete.
- * Mount inside Layout so it works on any authenticated page.
+ * Auto-opens the spotlight walkthrough once after taste onboarding.
+ * Mount once at App root (not inside per-page Layout).
  */
 export function FeatureWalkthroughHost() {
   const { data: prefs, isLoading } = usePreferences();
-  const [open, setOpen] = useState(false);
+  const { open, openTour } = useFeatureTour();
 
   useEffect(() => {
     if (isLoading) return;
     if (!prefs?.onboardingCompletedAt) return;
     if (isFeatureTourDone()) return;
-    const t = window.setTimeout(() => setOpen(true), 600);
+    if (open) return;
+    const t = window.setTimeout(() => openTour(0), 700);
     return () => window.clearTimeout(t);
-  }, [isLoading, prefs?.onboardingCompletedAt]);
+  }, [isLoading, prefs?.onboardingCompletedAt, open, openTour]);
 
-  return <FeatureWalkthrough open={open} onOpenChange={setOpen} />;
+  return <FeatureWalkthrough />;
 }
 
 /** Opens the tour again (e.g. from Profile / Guide). */
 export function useReplayFeatureTour() {
-  const [open, setOpen] = useState(false);
+  const { openTour } = useFeatureTour();
   const replay = useCallback(() => {
     resetFeatureTour();
-    setOpen(true);
-  }, []);
-  return {
-    open,
-    setOpen,
-    replay,
-    dialog: <FeatureWalkthrough open={open} onOpenChange={setOpen} />,
-  };
+    openTour(0);
+  }, [openTour]);
+  return { replay };
 }

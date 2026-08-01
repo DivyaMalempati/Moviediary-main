@@ -63,7 +63,7 @@ function ProfileShell({
   signOutLabel: string;
 }) {
   const { data: prefs } = usePreferences();
-  const { replay, dialog } = useReplayFeatureTour();
+  const { replay } = useReplayFeatureTour();
 
   return (
     <Layout>
@@ -179,7 +179,6 @@ function ProfileShell({
           </Button>
         </div>
       </div>
-      {dialog}
     </Layout>
   );
 }
