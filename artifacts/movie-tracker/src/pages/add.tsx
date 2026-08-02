@@ -8,6 +8,7 @@ import {
   useSearchTmdb,
   getSearchTmdbQueryKey,
   useCreateMovie,
+  useUpdateMovie,
   useMatchAllMovies,
   useListMovies,
   getListMoviesQueryKey,
@@ -64,6 +65,7 @@ export default function AddPage() {
 
   const queryClient = useQueryClient();
   const createMovie = useCreateMovie();
+  const updateMovie = useUpdateMovie();
   const matchAll = useMatchAllMovies();
 
   const { data: library } = useListMovies(undefined, {
@@ -71,9 +73,9 @@ export default function AddPage() {
   });
 
   const libraryMap = useMemo(() => {
-    const m = new Map<number, { status: string }>();
+    const m = new Map<number, { id: number; status: string }>();
     (library ?? []).forEach((mv) => {
-      if (mv.tmdbId != null) m.set(mv.tmdbId, { status: mv.status });
+      if (mv.tmdbId != null) m.set(mv.tmdbId, { id: mv.id, status: mv.status });
     });
     return m;
   }, [library]);
@@ -138,6 +140,31 @@ export default function AddPage() {
     rating?: string | null,
     watchedAt?: string | null,
   ) => {
+    const existing =
+      movie.tmdbId != null ? libraryMap.get(movie.tmdbId) : undefined;
+
+    if (status === "watched" && existing?.status === "watchlist") {
+      updateMovie.mutate(
+        {
+          id: existing.id,
+          data: {
+            status: "watched",
+            ...(rating ? { rating } : {}),
+            watchedAt: watchedAt ?? null,
+          },
+        },
+        {
+          onSuccess: () => {
+            toast.success(`Moved "${movie.title}" to Watched`);
+            queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/movies/stats"] });
+          },
+          onError: () => toast.error(`Failed to update "${movie.title}"`),
+        },
+      );
+      return;
+    }
+
     createMovie.mutate(
       {
         data: {
@@ -322,9 +349,13 @@ export default function AddPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {visibleResults.map((movie) => {
                 const lib = libraryMap.get(movie.tmdbId);
-                const isPendingThis =
+                const isPendingCreate =
                   createMovie.isPending &&
                   createMovie.variables?.data.tmdbId === movie.tmdbId;
+                const isPendingUpdate =
+                  updateMovie.isPending &&
+                  lib != null &&
+                  updateMovie.variables?.id === lib.id;
                 return (
                   <TmdbMovieCard
                     key={movie.tmdbId}
@@ -333,8 +364,13 @@ export default function AddPage() {
                     libraryStatus={lib?.status as "watched" | "watchlist" | undefined}
                     onAddWatched={() => handleAdd(movie, "watched")}
                     onAddWatchlist={() => handleAdd(movie, "watchlist")}
-                    isAddingWatched={isPendingThis && createMovie.variables?.data.status === "watched"}
-                    isAddingWatchlist={isPendingThis && createMovie.variables?.data.status === "watchlist"}
+                    isAddingWatched={
+                      (!!isPendingCreate && createMovie.variables?.data.status === "watched") ||
+                      !!isPendingUpdate
+                    }
+                    isAddingWatchlist={
+                      !!isPendingCreate && createMovie.variables?.data.status === "watchlist"
+                    }
                   />
                 );
               })}
