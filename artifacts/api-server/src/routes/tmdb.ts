@@ -1,6 +1,8 @@
 import { Router, type IRouter } from "express";
 import {
   SearchTmdbQueryParams,
+  SearchTmdbPeopleQueryParams,
+  GetPersonFilmographyQueryParams,
   GetSimilarMoviesParams,
   GetTmdbRecommendationsParams,
   GetWatchProvidersParams,
@@ -8,6 +10,8 @@ import {
 } from "@workspace/api-zod";
 import {
   searchMovies,
+  searchPeople,
+  getPersonMovieCredits,
   getTrendingIndia,
   discoverIndian,
   getSimilarMovies,
@@ -18,6 +22,7 @@ import {
   getAllGenres,
   getOnboardingSeedMovies,
   getUpcomingReleases,
+  type PersonDepartment,
 } from "../lib/tmdb.js";
 import { TROPE_KEYWORDS } from "../lib/tropes.js";
 import { requireAuth } from "../middlewares/requireAuth.js";
@@ -62,6 +67,42 @@ router.get("/tmdb/search", async (req, res): Promise<void> => {
 
   const results = await searchMovies(parsed.data.q, parsed.data.region ?? "IN");
   res.json(results);
+});
+
+// GET /tmdb/search-people?q=&department=Acting|Directing
+router.get("/tmdb/search-people", async (req, res): Promise<void> => {
+  const parsed = SearchTmdbPeopleQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  try {
+    const results = await searchPeople(
+      parsed.data.q,
+      parsed.data.department as PersonDepartment,
+    );
+    res.json(results);
+  } catch {
+    res.status(502).json({ error: "Failed to search people" });
+  }
+});
+
+// GET /tmdb/person-movies?personId=&role=cast|crew
+router.get("/tmdb/person-movies", async (req, res): Promise<void> => {
+  const parsed = GetPersonFilmographyQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  try {
+    const results = await getPersonMovieCredits(
+      parsed.data.personId,
+      parsed.data.role ?? "cast",
+    );
+    res.json(results);
+  } catch {
+    res.status(502).json({ error: "Failed to load filmography" });
+  }
 });
 
 // GET /tmdb/trending-india

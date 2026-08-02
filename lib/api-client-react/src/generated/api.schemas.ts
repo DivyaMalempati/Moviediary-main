@@ -77,10 +77,9 @@ export interface MovieInput {
   genres?: string[];
   overview?: string;
   /**
-   * When the user actually watched the film (ISO 8601 date or datetime).
-   * Null means unknown / not sure. Omit to default to now when status is watched.
-   * @nullable
-   */
+     * When the user actually watched the film (ISO 8601 date or datetime). Null means unknown / not sure. Omit to default to now when status is watched.
+     * @nullable
+     */
   watchedAt?: string | null;
 }
 
@@ -187,6 +186,16 @@ export interface TmdbMovie {
   voteAverage?: number | null;
 }
 
+export interface TmdbPerson {
+  tmdbId: number;
+  name: string;
+  /** @nullable */
+  profilePath?: string | null;
+  /** @nullable */
+  knownForDepartment?: string | null;
+  knownForTitles?: string[];
+}
+
 export interface AiSuggestionsInput {
   count?: number;
 }
@@ -240,6 +249,35 @@ export type SearchTmdbParams = {
 q: string;
 region?: string;
 };
+
+export type SearchTmdbPeopleParams = {
+q: string;
+department?: SearchTmdbPeopleDepartment;
+};
+
+export type SearchTmdbPeopleDepartment = typeof SearchTmdbPeopleDepartment[keyof typeof SearchTmdbPeopleDepartment];
+
+
+export const SearchTmdbPeopleDepartment = {
+  Acting: 'Acting',
+  Directing: 'Directing',
+} as const;
+
+export type GetPersonFilmographyParams = {
+personId: number;
+/**
+ * cast = acting credits; crew = Director jobs only
+ */
+role?: GetPersonFilmographyRole;
+};
+
+export type GetPersonFilmographyRole = typeof GetPersonFilmographyRole[keyof typeof GetPersonFilmographyRole];
+
+
+export const GetPersonFilmographyRole = {
+  cast: 'cast',
+  crew: 'crew',
+} as const;
 
 export type GetUpcomingReleasesParams = {
 region?: string;
