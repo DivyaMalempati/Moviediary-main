@@ -38,6 +38,7 @@ import {
   clearPendingClaimGuestToken,
 } from "@/lib/demo-auth";
 import { invalidateLibrary } from "@/lib/queryClient";
+import { isFeatureEnabled } from "@/lib/features";
 import { cn } from "@/lib/utils";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -462,11 +463,13 @@ export default function WatchedPage() {
                     Open film
                   </Button>
                 </Link>
-                <Link href="/upcoming">
-                  <Button size="sm" variant="outline" className="h-7 text-xs">
-                    All upcoming
-                  </Button>
-                </Link>
+                {isFeatureEnabled("upcoming") && (
+                  <Link href="/upcoming">
+                    <Button size="sm" variant="outline" className="h-7 text-xs">
+                      All upcoming
+                    </Button>
+                  </Link>
+                )}
               </div>
             </div>
             <button
