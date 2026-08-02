@@ -60,15 +60,6 @@ export function SentenceLogPrompt() {
     },
   );
 
-  const previewSentence = useMemo(() => {
-    const title = film.trim() || "______";
-    const whenWord =
-      when === "today" ? "today" : when === "earlier" ? "earlier" : "…";
-    const who = withWho.trim() || "______";
-    const note = felt.trim() || "______";
-    return `Watched ${title} ${whenWord} with ${who} and ${note}`;
-  }, [film, when, withWho, felt]);
-
   const resolveWatchedAt = (): string | null => {
     if (when === "today") return todayInputValue();
     if (when === "earlier") return earlierDate || todayInputValue();
@@ -160,17 +151,20 @@ export function SentenceLogPrompt() {
   const blankClass =
     "inline-flex min-w-[7rem] max-w-full align-baseline mx-0.5 border-b border-dashed border-foreground/40 bg-transparent px-1 py-0.5 text-base font-medium text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary";
 
+  const whenChipClass = (active: boolean) =>
+    cn(
+      "inline-flex rounded-lg border px-2.5 py-1 text-sm font-medium cursor-pointer transition-colors",
+      active
+        ? "border-primary bg-primary/15 text-foreground"
+        : "border-border text-muted-foreground hover:text-foreground",
+    );
+
   return (
     <div className="space-y-5">
       <div className="rounded-2xl border border-border bg-card p-4 md:p-6 space-y-5">
-        <div>
-          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">
-            Diary prompt
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Fill the blanks — then pick the matching film. Your words stay private in your diary.
-          </p>
-        </div>
+        <p className="text-sm text-muted-foreground">
+          Fill the blanks, then pick the film. Stays private in your diary.
+        </p>
 
         <div className="text-lg md:text-xl leading-relaxed font-medium text-foreground/90 space-y-3">
           <p className="flex flex-wrap items-baseline gap-x-1 gap-y-2">
@@ -186,12 +180,7 @@ export function SentenceLogPrompt() {
               aria-label="Film title"
             />
             <span
-              className={cn(
-                "inline-flex rounded-lg border px-2.5 py-1 text-sm font-medium cursor-pointer transition-colors",
-                when === "today"
-                  ? "border-primary bg-primary/15"
-                  : "border-border text-muted-foreground hover:text-foreground",
-              )}
+              className={whenChipClass(when === "today")}
               onClick={() => setWhen("today")}
               role="button"
               tabIndex={0}
@@ -202,12 +191,7 @@ export function SentenceLogPrompt() {
               today
             </span>
             <span
-              className={cn(
-                "inline-flex rounded-lg border px-2.5 py-1 text-sm font-medium cursor-pointer transition-colors",
-                when === "earlier"
-                  ? "border-primary bg-primary/15"
-                  : "border-border text-muted-foreground hover:text-foreground",
-              )}
+              className={whenChipClass(when === "earlier")}
               onClick={() => setWhen("earlier")}
               role="button"
               tabIndex={0}
@@ -216,22 +200,6 @@ export function SentenceLogPrompt() {
               }}
             >
               earlier
-            </span>
-            <span
-              className={cn(
-                "inline-flex rounded-lg border px-2.5 py-1 text-sm font-medium cursor-pointer transition-colors",
-                when === "unknown"
-                  ? "border-primary bg-primary/15"
-                  : "border-border text-muted-foreground hover:text-foreground",
-              )}
-              onClick={() => setWhen("unknown")}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") setWhen("unknown");
-              }}
-            >
-              not sure when
             </span>
           </p>
 
@@ -244,6 +212,19 @@ export function SentenceLogPrompt() {
               className="max-w-[14rem] bg-background"
             />
           )}
+
+          <button
+            type="button"
+            className={cn(
+              "text-xs underline underline-offset-2 transition-colors",
+              when === "unknown"
+                ? "text-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            onClick={() => setWhen("unknown")}
+          >
+            Not sure when
+          </button>
 
           <p className="flex flex-wrap items-baseline gap-x-1 gap-y-2">
             <span>with</span>
@@ -267,10 +248,6 @@ export function SentenceLogPrompt() {
             />
           </p>
         </div>
-
-        <p className="text-xs text-muted-foreground italic border-t border-border/60 pt-3">
-          Preview: {previewSentence}
-        </p>
 
         <Button
           className="w-full sm:w-auto"
