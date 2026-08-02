@@ -29,6 +29,7 @@ import NotFound from "@/pages/not-found";
 import { FeatureGate } from "@/components/feature-gate";
 import { FeatureTourProvider } from "@/components/feature-tour-context";
 import { FeatureWalkthroughHost } from "@/components/feature-walkthrough";
+import { FeatureFeedbackPrompt } from "@/components/feature-feedback-prompt";
 import { Layout } from "@/components/layout";
 
 // Initialise demo mode header injection before any render
@@ -414,6 +415,7 @@ function ClerkProviderWithRoutes() {
           <FeatureTourProvider>
             <ClerkRouter />
             <FeatureWalkthroughHost />
+            <FeatureFeedbackPrompt />
           </FeatureTourProvider>
         </ClerkAuthTokenBridge>
         <Toaster />
@@ -437,6 +439,7 @@ function App() {
           <FeatureTourProvider>
             <DemoRouter />
             <FeatureWalkthroughHost />
+            <FeatureFeedbackPrompt />
           </FeatureTourProvider>
           <Toaster />
         </QueryClientProvider>

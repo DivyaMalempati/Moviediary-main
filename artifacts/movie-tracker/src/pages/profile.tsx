@@ -1,12 +1,27 @@
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { useAuth, useClerk, useUser } from "@clerk/react";
 import { Button } from "@/components/ui/button";
 import { PreferencesModal } from "@/components/preferences-modal";
 import { ClerkBoundary } from "@/components/clerk-boundary";
+import { FeatureFeedbackDialog } from "@/components/feature-feedback-dialog";
+import { markFeedbackSubmitted } from "@/components/feature-feedback-prompt";
 import { isDemoMode, exitDemoToSignIn, clearAppSession, authFetch } from "@/lib/demo-auth";
 import { usePreferences } from "@/lib/preferences";
 import { toast } from "sonner";
-import { ChevronRight, Download, LogOut, Settings, Upload, BookOpen, Play, Users, PlusCircle, Loader2 } from "lucide-react";
+import {
+  ChevronRight,
+  Download,
+  LogOut,
+  Settings,
+  Upload,
+  BookOpen,
+  Play,
+  Users,
+  PlusCircle,
+  Loader2,
+  MessageSquareHeart,
+} from "lucide-react";
 import { Link } from "wouter";
 import { useReplayFeatureTour } from "@/components/feature-walkthrough";
 import { isFeatureEnabled } from "@/lib/features";
@@ -64,6 +79,7 @@ function ProfileShell({
 }) {
   const { data: prefs } = usePreferences();
   const { replay } = useReplayFeatureTour();
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   return (
     <>
@@ -146,6 +162,21 @@ function ProfileShell({
             Replay walkthrough
           </button>
 
+          <button
+            type="button"
+            onClick={() => setFeedbackOpen(true)}
+            className="w-full flex items-center gap-3 px-1 py-3 text-left text-sm hover:text-foreground text-foreground/90 transition-colors"
+          >
+            <MessageSquareHeart className="w-4 h-4 text-muted-foreground" />
+            <span className="flex-1 text-left">
+              <span className="block">Request a feature</span>
+              <span className="block text-xs text-muted-foreground font-normal">
+                Tell us what you expect from a movie diary
+              </span>
+            </span>
+            <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+          </button>
+
           {isFeatureEnabled("import") && (
             <Link href="/import">
               <button
@@ -178,6 +209,13 @@ function ProfileShell({
             {signOutLabel}
           </Button>
         </div>
+
+        <FeatureFeedbackDialog
+          open={feedbackOpen}
+          onOpenChange={setFeedbackOpen}
+          source="profile"
+          onSubmitted={() => markFeedbackSubmitted()}
+        />
       </div>
     </>
   );
