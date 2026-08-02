@@ -20,6 +20,8 @@ import {
   Heart,
   Play,
   Settings,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -27,6 +29,7 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 type PartnerInfo = {
   partnerLinkId: number;
   partnerUserId: string;
+  displayName?: string | null;
   status: string;
   createdAt: string;
 } | null;
@@ -35,6 +38,8 @@ type Invite = {
   code: string;
   expiresAt: string;
   path: string;
+  recipientName?: string;
+  contactId?: number;
 };
 
 type ActiveSession = {
@@ -43,6 +48,16 @@ type ActiveSession = {
   deckSize: number;
   createdAt: string;
   path: string;
+};
+
+type Contact = {
+  id: number;
+  displayName: string;
+  partnerUserId: string | null;
+  status: "pending" | "paired" | "expired";
+  pendingInvite: { code: string; expiresAt: string; path: string } | null;
+  sessions: ActiveSession[];
+  updatedAt: string;
 };
 
 function inviteUrl(path: string) {
@@ -54,6 +69,9 @@ export default function PartnerPage() {
   const [partner, setPartner] = useState<PartnerInfo>(null);
   const [invite, setInvite] = useState<Invite | null>(null);
   const [sessions, setSessions] = useState<ActiveSession[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [expandedContactId, setExpandedContactId] = useState<number | null>(null);
+  const [recipientName, setRecipientName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -62,13 +80,15 @@ export default function PartnerPage() {
   const refresh = useCallback(async () => {
     try {
       await ensureClerkApiSession();
-      const [partnerRes, sessionsRes] = await Promise.all([
+      const [partnerRes, sessionsRes, contactsRes] = await Promise.all([
         authFetch(`${BASE}/api/partners`),
         authFetch(`${BASE}/api/match-sessions`),
+        authFetch(`${BASE}/api/partners/contacts`),
       ]);
       if (partnerRes.status === 401 || partnerRes.status === 403) {
         setPartner(null);
         setSessions([]);
+        setContacts([]);
         setLoading(false);
         return;
       }
@@ -81,6 +101,13 @@ export default function PartnerPage() {
         setSessions(sData.sessions ?? []);
       } else {
         setSessions([]);
+      }
+
+      if (contactsRes.ok) {
+        const cData = (await contactsRes.json()) as { contacts: Contact[] };
+        setContacts(cData.contacts ?? []);
+      } else {
+        setContacts([]);
       }
     } catch {
       toast.error("Couldn’t load movie night");
@@ -98,21 +125,33 @@ export default function PartnerPage() {
       exitDemoToSignIn();
       return;
     }
+    const name = recipientName.trim();
+    if (!name) {
+      toast.error("Add a name for who you’re inviting (e.g. Priya)");
+      return;
+    }
     setBusy(true);
     try {
       await ensureClerkApiSession();
       const res = await authFetch(`${BASE}/api/partners/invite`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipientName: name }),
       });
       if (res.status === 401 || res.status === 403) {
         toast.error("Sign in to invite someone for movie night");
         return;
       }
-      if (!res.ok) throw new Error("invite failed");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error((err as { error?: string }).error ?? "Couldn’t create invite");
+        return;
+      }
       const data = (await res.json()) as Invite;
       setInvite(data);
-      toast.success("Invite link ready — send it to your friend");
+      setRecipientName("");
+      toast.success(`Invite ready for ${data.recipientName ?? name}`);
+      await refresh();
     } catch {
       toast.error("Couldn’t create invite");
     } finally {
@@ -160,6 +199,7 @@ export default function PartnerPage() {
       setPartner(null);
       setSessions([]);
       setSessionShareUrl(null);
+      await refresh();
     } catch {
       toast.error("Couldn’t clear pair");
     } finally {
@@ -201,9 +241,10 @@ export default function PartnerPage() {
     }
   };
 
-  const copyInvite = async () => {
-    if (!invite) return;
-    const url = inviteUrl(invite.path);
+  const copyInvite = async (path?: string) => {
+    const p = path ?? invite?.path;
+    if (!p) return;
+    const url = inviteUrl(p);
     try {
       await navigator.clipboard.writeText(url);
       toast.success("Invite link copied");
@@ -232,6 +273,8 @@ export default function PartnerPage() {
     );
   }
 
+  const partnerLabel = partner?.displayName?.trim() || "your partner";
+
   return (
     <>
       <div className="max-w-lg mx-auto px-4 py-8 space-y-8 pb-28">
@@ -245,9 +288,8 @@ export default function PartnerPage() {
           </h1>
           {!partner && (
             <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-              Before Friday night — or whenever friends meet up — share a link and swipe the same
-              deck. Each of you keeps your own genres and languages in Preferences. You don&apos;t
-              type what they like. You both swipe, and mutual likes become tonight&apos;s shortlist.
+              Name who you’re inviting, share a link, then swipe the same deck. Mutual likes become
+              tonight&apos;s shortlist.
             </p>
           )}
         </div>
@@ -269,15 +311,15 @@ export default function PartnerPage() {
           </div>
         )}
 
-        {partner ? (
+        {partner && (
           <section className="space-y-5">
             <div className="rounded-2xl border-2 border-primary/40 bg-primary/10 p-5 space-y-4">
               <div className="space-y-1.5">
                 <p className="text-xs uppercase tracking-widest text-primary flex items-center gap-1.5 font-semibold">
-                  <Heart className="w-3.5 h-3.5" /> You&apos;re paired — ready to swipe
+                  <Heart className="w-3.5 h-3.5" /> Paired with {partnerLabel}
                 </p>
                 <p className="text-sm text-foreground/90 leading-relaxed">
-                  Tap the button below. That opens the shared movie deck. Swipe there —{" "}
+                  Tap below to open the shared movie deck. Swipe there —{" "}
                   <span className="font-medium">not</span> the bottom &quot;Swipe&quot; tab (that one
                   is solo only).
                 </p>
@@ -295,14 +337,11 @@ export default function PartnerPage() {
                 )}
                 Start movie night &amp; swipe
               </Button>
-              <p className="text-[11px] text-muted-foreground text-center">
-                After it opens, send your friend the session link so you both swipe the same films.
-              </p>
             </div>
 
             {sessions.length > 0 && (
               <div className="space-y-3">
-                <h2 className="text-sm font-semibold">Or reopen a movie night</h2>
+                <h2 className="text-sm font-semibold">Swipe sessions with {partnerLabel}</h2>
                 <ul className="space-y-2">
                   {sessions.map((s) => (
                     <li
@@ -312,7 +351,7 @@ export default function PartnerPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium">Deck · {s.deckSize} films</p>
                         <p className="text-[11px] text-muted-foreground">
-                          Started {new Date(s.createdAt).toLocaleString("en-IN")}
+                          {new Date(s.createdAt).toLocaleString("en-IN")}
                         </p>
                       </div>
                       <Button
@@ -340,20 +379,6 @@ export default function PartnerPage() {
                   Send this so they can swipe the same deck
                 </p>
                 <p className="text-xs break-all text-muted-foreground">{sessionShareUrl}</p>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="gap-2"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(sessionShareUrl).then(
-                      () => toast.success("Copied"),
-                      () => toast.message(sessionShareUrl),
-                    );
-                  }}
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  Copy again
-                </Button>
               </div>
             )}
 
@@ -370,91 +395,157 @@ export default function PartnerPage() {
               </Button>
             </div>
           </section>
-        ) : (
-          <>
-            <ol className="grid gap-3 text-sm text-muted-foreground">
-              <li className="flex gap-2">
-                <span className="font-mono text-foreground/80">1.</span>
-                <span>
-                  Each person sets their own genres &amp; languages in{" "}
-                  <Link
-                    href="/profile"
-                    className="text-foreground underline-offset-2 hover:underline"
-                  >
-                    Preferences
-                  </Link>
-                  {" "}— never fill in for each other
-                </span>
-              </li>
-              <li className="flex gap-2">
-                <span className="font-mono text-foreground/80">2.</span>
-                Share an invite so they join this movie night
-              </li>
-              <li className="flex gap-2">
-                <span className="font-mono text-foreground/80">3.</span>
-                After they join, this page shows{" "}
-                <span className="text-foreground">Start movie night &amp; swipe</span> — that opens
-                the shared deck
-              </li>
-              <li className="flex gap-2">
-                <span className="font-mono text-foreground/80">4.</span>
-                When you both like a film, it&apos;s a match — pick from those for tonight
-              </li>
-            </ol>
-
-            <section className="space-y-6">
-              <div className="space-y-3">
-                <h2 className="text-sm font-semibold flex items-center gap-2">
-                  <Link2 className="w-4 h-4" /> Invite someone
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  They open the link, sign in with their own account (and their own Preferences),
-                  and you&apos;re ready to swipe.
-                </p>
-                <Button onClick={createInvite} disabled={busy}>
-                  Create invite link
-                </Button>
-                {invite && (
-                  <div className="rounded-xl border border-border bg-secondary/40 p-4 space-y-3">
-                    <p className="font-mono text-lg tracking-wide">{invite.code}</p>
-                    <p className="text-xs text-muted-foreground break-all">
-                      {typeof window !== "undefined" ? inviteUrl(invite.path) : invite.path}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Expires {new Date(invite.expiresAt).toLocaleDateString("en-IN")}
-                    </p>
-                    <Button size="sm" variant="secondary" onClick={copyInvite} className="gap-2">
-                      <Copy className="w-3.5 h-3.5" />
-                      Copy invite link
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-3">
-                <h2 className="text-sm font-semibold">Or enter their invite code</h2>
-                <div className="flex gap-2">
-                  <Input
-                    value={joinCode}
-                    onChange={(e) => setJoinCode(e.target.value)}
-                    placeholder="reel-a1b2c3d4"
-                    className="font-mono"
-                  />
-                  <Button onClick={() => join()} disabled={busy || !joinCode.trim()}>
-                    Join
-                  </Button>
-                </div>
-              </div>
-            </section>
-
-            <Link
-              href="/swipe"
-              className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-            >
-              Solo swipe instead <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </>
         )}
+
+        <section className="space-y-6">
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold flex items-center gap-2">
+              <Link2 className="w-4 h-4" />{" "}
+              {partner ? "Invite someone else" : "Invite someone"}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Name who you’re sending this to — we’ll keep their nights and swipe sessions here.
+              {partner
+                ? " Joining a new invite clears your current pair."
+                : ""}
+            </p>
+            <Input
+              value={recipientName}
+              onChange={(e) => setRecipientName(e.target.value)}
+              placeholder="Their name (e.g. Priya)"
+              maxLength={60}
+            />
+            <Button onClick={createInvite} disabled={busy || !recipientName.trim()}>
+              Create invite link
+            </Button>
+            {invite && (
+              <div className="rounded-xl border border-border bg-secondary/40 p-4 space-y-3">
+                <p className="text-sm font-medium">
+                  Invite for {invite.recipientName ?? "friend"}
+                </p>
+                <p className="font-mono text-lg tracking-wide">{invite.code}</p>
+                <p className="text-xs text-muted-foreground break-all">
+                  {typeof window !== "undefined" ? inviteUrl(invite.path) : invite.path}
+                </p>
+                <Button size="sm" variant="secondary" onClick={() => copyInvite()} className="gap-2">
+                  <Copy className="w-3.5 h-3.5" />
+                  Copy invite link
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {!partner && (
+            <div className="space-y-3">
+              <h2 className="text-sm font-semibold">Or enter their invite code</h2>
+              <div className="flex gap-2">
+                <Input
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value)}
+                  placeholder="reel-a1b2c3d4"
+                  className="font-mono"
+                />
+                <Button onClick={() => join()} disabled={busy || !joinCode.trim()}>
+                  Join
+                </Button>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {contacts.length > 0 && (
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold">People you’ve invited</h2>
+            <ul className="space-y-2">
+              {contacts.map((c) => {
+                const open = expandedContactId === c.id;
+                return (
+                  <li
+                    key={c.id}
+                    className="rounded-xl border border-border bg-card overflow-hidden"
+                  >
+                    <button
+                      type="button"
+                      className="w-full flex items-center gap-2 px-3 py-3 text-left hover:bg-secondary/40 transition-colors"
+                      onClick={() => setExpandedContactId(open ? null : c.id)}
+                    >
+                      {open ? (
+                        <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{c.displayName}</p>
+                        <p className="text-[11px] text-muted-foreground capitalize">
+                          {c.status}
+                          {c.sessions.length
+                            ? ` · ${c.sessions.length} swipe session${c.sessions.length === 1 ? "" : "s"}`
+                            : ""}
+                        </p>
+                      </div>
+                      {c.pendingInvite && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="h-7 text-xs gap-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void copyInvite(c.pendingInvite!.path);
+                          }}
+                        >
+                          <Copy className="w-3 h-3" />
+                          Link
+                        </Button>
+                      )}
+                    </button>
+                    {open && (
+                      <div className="px-3 pb-3 space-y-2 border-t border-border/60 pt-2">
+                        {c.sessions.length === 0 ? (
+                          <p className="text-xs text-muted-foreground pl-6">
+                            {c.status === "pending"
+                              ? "Waiting for them to open the invite."
+                              : "No swipe sessions yet — start a movie night when you’re paired."}
+                          </p>
+                        ) : (
+                          c.sessions.map((s) => (
+                            <div
+                              key={s.id}
+                              className="flex items-center gap-2 rounded-lg bg-secondary/30 px-3 py-2 ml-6"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium">
+                                  {s.status === "active" ? "Active" : "Past"} · {s.deckSize} films
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  {new Date(s.createdAt).toLocaleString("en-IN")}
+                                </p>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-xs"
+                                onClick={() => setLocation(s.path)}
+                              >
+                                Open
+                              </Button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
+        <Link
+          href="/swipe"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          Solo swipe instead <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
       </div>
     </>
   );

@@ -32,6 +32,27 @@ export const partnerLinksTable = pgTable(
   ],
 );
 
+/**
+ * Named people you've invited for Together nights.
+ * Display name is typed by the inviter (WhatsApp can't tell us the contact).
+ */
+export const partnerContactsTable = pgTable(
+  "partner_contacts",
+  {
+    id: serial("id").primaryKey(),
+    ownerUserId: text("owner_user_id").notNull(),
+    displayName: text("display_name").notNull(),
+    /** Set when an invite to this contact is redeemed. */
+    partnerUserId: text("partner_user_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("partner_contacts_owner_idx").on(table.ownerUserId),
+    index("partner_contacts_partner_idx").on(table.partnerUserId),
+  ],
+);
+
 /** One-time invite codes to form a partner link. */
 export const partnerInvitesTable = pgTable(
   "partner_invites",
@@ -39,6 +60,10 @@ export const partnerInvitesTable = pgTable(
     id: serial("id").primaryKey(),
     code: text("code").notNull().unique(),
     creatorUserId: text("creator_user_id").notNull(),
+    /** Optional link to a named contact for invite history. */
+    contactId: integer("contact_id"),
+    /** Nickname snapshot at invite time (e.g. “Priya”). */
+    recipientName: text("recipient_name"),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     redeemedByUserId: text("redeemed_by_user_id"),
     redeemedAt: timestamp("redeemed_at", { withTimezone: true }),
@@ -46,6 +71,7 @@ export const partnerInvitesTable = pgTable(
   },
   (table) => [
     index("partner_invites_creator_idx").on(table.creatorUserId),
+    index("partner_invites_contact_idx").on(table.contactId),
   ],
 );
 
