@@ -149,7 +149,7 @@ export const FEATURE_GUIDE_SECTIONS: Array<{
         title: "Add a film",
         summary: "Search and add to Watched or Watchlist.",
         detail:
-          "Sidebar → Add (or Profile → Add a film). Type at least 2 characters. Optional: limit results to your streaming services from Preferences.",
+          "Sidebar → Add (or Profile → Add a film). Search by Title, Hero, or Director. Optional: limit results to your streaming services from Preferences.",
         href: "/add",
         cta: "Add a film",
         icon: PlusCircle,
