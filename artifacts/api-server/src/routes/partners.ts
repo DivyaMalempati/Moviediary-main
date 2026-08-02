@@ -1,10 +1,12 @@
 import { Router, type IRouter } from "express";
 import { randomBytes } from "crypto";
-import { and, eq, gt, isNull, or } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   db,
+  partnerContactsTable,
   partnerInvitesTable,
   partnerLinksTable,
+  matchSessionsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth.js";
 
@@ -27,36 +29,59 @@ function requireRegistered(req: any, res: any): boolean {
 }
 
 function makeInviteCode(): string {
-  // Short, URL-safe code: e.g. reel-a3f9k2
   return `reel-${randomBytes(4).toString("hex")}`;
 }
 
+function normalizeName(name: string): string {
+  return name.trim().replace(/\s+/g, " ");
+}
+
 /**
- * POST /partners/invite
- * Create (or return) an active invite code for the current user.
+ * POST /partners/invite  { recipientName }
+ * Create an invite for a named person (nickname). Always mints a fresh code
+ * so each person you invite can be tracked separately.
  */
 router.post("/partners/invite", requireAuth, async (req: any, res): Promise<void> => {
   if (!requireRegistered(req, res)) return;
 
-  const existing = await db
+  const rawName =
+    typeof req.body?.recipientName === "string" ? normalizeName(req.body.recipientName) : "";
+  if (!rawName || rawName.length < 1) {
+    res.status(400).json({ error: "Who are you inviting? Add a name (e.g. Priya)." });
+    return;
+  }
+  if (rawName.length > 60) {
+    res.status(400).json({ error: "Name is too long" });
+    return;
+  }
+
+  // Reuse contact with same display name (case-insensitive) for this owner.
+  const [existingContact] = await db
     .select()
-    .from(partnerInvitesTable)
+    .from(partnerContactsTable)
     .where(
       and(
-        eq(partnerInvitesTable.creatorUserId, req.userId),
-        isNull(partnerInvitesTable.redeemedAt),
-        gt(partnerInvitesTable.expiresAt, new Date()),
+        eq(partnerContactsTable.ownerUserId, req.userId),
+        sql`lower(${partnerContactsTable.displayName}) = ${rawName.toLowerCase()}`,
       ),
     )
     .limit(1);
 
-  if (existing[0]) {
-    res.json({
-      code: existing[0].code,
-      expiresAt: existing[0].expiresAt.toISOString(),
-      path: `/pair/${existing[0].code}`,
-    });
-    return;
+  let contact = existingContact;
+  if (!contact) {
+    const [created] = await db
+      .insert(partnerContactsTable)
+      .values({
+        ownerUserId: req.userId,
+        displayName: rawName,
+      })
+      .returning();
+    contact = created;
+  } else {
+    await db
+      .update(partnerContactsTable)
+      .set({ displayName: rawName, updatedAt: new Date() })
+      .where(eq(partnerContactsTable.id, contact.id));
   }
 
   const code = makeInviteCode();
@@ -66,6 +91,8 @@ router.post("/partners/invite", requireAuth, async (req: any, res): Promise<void
     .values({
       code,
       creatorUserId: req.userId,
+      contactId: contact.id,
+      recipientName: rawName,
       expiresAt,
     })
     .returning();
@@ -74,6 +101,8 @@ router.post("/partners/invite", requireAuth, async (req: any, res): Promise<void
     code: invite.code,
     expiresAt: invite.expiresAt.toISOString(),
     path: `/pair/${invite.code}`,
+    recipientName: rawName,
+    contactId: contact.id,
   });
 });
 
@@ -129,7 +158,6 @@ router.post("/partners/join", requireAuth, async (req: any, res): Promise<void> 
 
   let link = existingLink;
   if (!link) {
-    // End any other active links for either user (one partner at a time).
     await db
       .update(partnerLinksTable)
       .set({ status: "ended", endedAt: new Date() })
@@ -163,6 +191,16 @@ router.post("/partners/join", requireAuth, async (req: any, res): Promise<void> 
       redeemedAt: new Date(),
     })
     .where(eq(partnerInvitesTable.id, invite.id));
+
+  if (invite.contactId) {
+    await db
+      .update(partnerContactsTable)
+      .set({
+        partnerUserId: req.userId,
+        updatedAt: new Date(),
+      })
+      .where(eq(partnerContactsTable.id, invite.contactId));
+  }
 
   res.json({
     partnerLinkId: link.id,
@@ -198,14 +236,119 @@ router.get("/partners", requireAuth, async (req: any, res): Promise<void> => {
   const partnerUserId =
     link.userLowId === req.userId ? link.userHighId : link.userLowId;
 
+  const [contact] = await db
+    .select()
+    .from(partnerContactsTable)
+    .where(
+      and(
+        eq(partnerContactsTable.ownerUserId, req.userId),
+        eq(partnerContactsTable.partnerUserId, partnerUserId),
+      ),
+    )
+    .limit(1);
+
   res.json({
     partner: {
       partnerLinkId: link.id,
       partnerUserId,
+      displayName: contact?.displayName ?? null,
       status: link.status,
       createdAt: link.createdAt.toISOString(),
     },
   });
+});
+
+/**
+ * GET /partners/contacts
+ * People you've invited: nickname → pending invite / paired → swipe sessions.
+ */
+router.get("/partners/contacts", requireAuth, async (req: any, res): Promise<void> => {
+  if (!requireRegistered(req, res)) return;
+
+  const contacts = await db
+    .select()
+    .from(partnerContactsTable)
+    .where(eq(partnerContactsTable.ownerUserId, req.userId))
+    .orderBy(desc(partnerContactsTable.updatedAt));
+
+  const out = [];
+  for (const c of contacts) {
+    const [pendingInvite] = await db
+      .select()
+      .from(partnerInvitesTable)
+      .where(
+        and(
+          eq(partnerInvitesTable.contactId, c.id),
+          isNull(partnerInvitesTable.redeemedAt),
+          gt(partnerInvitesTable.expiresAt, new Date()),
+        ),
+      )
+      .orderBy(desc(partnerInvitesTable.createdAt))
+      .limit(1);
+
+    let sessions: Array<{
+      id: number;
+      status: string;
+      deckSize: number;
+      createdAt: string;
+      path: string;
+    }> = [];
+
+    if (c.partnerUserId) {
+      const [low, high] = canonicalPair(req.userId, c.partnerUserId);
+      const links = await db
+        .select()
+        .from(partnerLinksTable)
+        .where(
+          and(
+            eq(partnerLinksTable.userLowId, low),
+            eq(partnerLinksTable.userHighId, high),
+          ),
+        );
+
+      if (links.length) {
+        const linkIds = links.map((l) => l.id);
+        const rows = await db
+          .select()
+          .from(matchSessionsTable)
+          .where(inArray(matchSessionsTable.partnerLinkId, linkIds))
+          .orderBy(desc(matchSessionsTable.createdAt))
+          .limit(20);
+
+        sessions = rows.map((s) => ({
+          id: s.id,
+          status: s.status,
+          deckSize: Array.isArray(s.deck) ? s.deck.length : 0,
+          createdAt: s.createdAt.toISOString(),
+          path: `/match/${s.id}`,
+        }));
+      }
+    }
+
+    const status = c.partnerUserId
+      ? "paired"
+      : pendingInvite
+        ? "pending"
+        : "expired";
+
+    out.push({
+      id: c.id,
+      displayName: c.displayName,
+      partnerUserId: c.partnerUserId,
+      status,
+      pendingInvite: pendingInvite
+        ? {
+            code: pendingInvite.code,
+            expiresAt: pendingInvite.expiresAt.toISOString(),
+            path: `/pair/${pendingInvite.code}`,
+          }
+        : null,
+      sessions,
+      updatedAt: c.updatedAt.toISOString(),
+    });
+  }
+
+  res.json({ contacts: out });
 });
 
 /** DELETE /partners — end the active partner link. */

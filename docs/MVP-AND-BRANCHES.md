@@ -10,14 +10,20 @@ reverting one PR.
 |---|---|---|
 | Vault | `/watched`, `/watchlist`, `/movie/:id` | Log films, rate, watchlist |
 | Swipe | `/swipe` | Short personalized deck + taste onboarding |
-| Add | `/add` | Search TMDB and add titles |
-| Together | `/partner`, `/pair/:code`, `/match/:id` | Invite, shared deck, mutual likes |
-| Account | `/profile`, `/sign-in`, `/sign-up` | Prefs, export, auth |
+| Add | `/add` | Title search → Watched / Watchlist (bottom nav) |
+| Discover | `/suggestions` | Hero / Director filmography + India picks (sidebar) |
+| Together | `/partner`, `/pair/:code`, `/match/:id` | Named invites, shared deck, mutual likes (via Profile) |
+| Account | `/profile`, `/sign-in`, `/sign-up` | Prefs, Together entry, export, auth |
 | Guide | `/guide` | Page-by-page how-to + walkthrough |
 | Upcoming | `/upcoming` | Theatrical / OTT release dates (India) |
 
+## Nav layout
+- **Bottom bar:** Watched · Watchlist · Swipe · Add · Profile
+- **Sidebar:** Watched · Watchlist · Swipe · Discover · Upcoming · Guide (+ labs when enabled)
+- **Together** is not on the bottom bar — open it from Profile.
+
 ## Hidden labs (off unless `VITE_ENABLE_LABS=1`)
-Discover, Collections, Stats, Import.
+Collections, Stats, Import.
 
 These remain in the codebase but are removed from nav and redirect to `/watched`.
 

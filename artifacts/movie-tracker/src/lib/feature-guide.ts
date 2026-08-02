@@ -12,7 +12,7 @@ import {
 import { isFeatureEnabled } from "@/lib/features";
 
 /** Bump when the tour content changes so returning users see the new version once. */
-export const FEATURE_TOUR_VERSION = 4;
+export const FEATURE_TOUR_VERSION = 5;
 export const FEATURE_TOUR_STORAGE_KEY = `cinevault:feature-tour:v${FEATURE_TOUR_VERSION}`;
 
 export type FeatureGuideItem = {
@@ -65,16 +65,16 @@ export const FEATURE_TOUR_STEPS: FeatureTourStep[] = [
     target: "nav-swipe",
   },
   {
-    id: "together",
-    title: "Together",
-    tip: "Movie night with a friend. Invite → Start movie night → swipe the same deck.",
-    href: "/partner",
-    target: "nav-together",
+    id: "add",
+    title: "Add",
+    tip: "Search by title and log a film. Hero / Director search lives on Discover.",
+    href: "/add",
+    target: "nav-add",
   },
   {
     id: "profile",
     title: "Profile",
-    tip: "Preferences, export, and this guide. Add films from the sidebar (or Profile → Add).",
+    tip: "Preferences, Together movie nights, export, and this guide.",
     href: "/profile",
     target: "nav-profile",
     cta: "Got it",
@@ -120,21 +120,21 @@ export const FEATURE_GUIDE_SECTIONS: Array<{
         icon: Shuffle,
       },
       {
-        id: "nav-together",
-        title: "Together",
-        summary: "Shared movie-night ritual.",
+        id: "nav-add",
+        title: "Add",
+        summary: "Search by title and log a film.",
         detail:
-          "1) Preferences (each person, own account) · 2) Create invite link · 3) After you’re paired, Together shows a big Start movie night & swipe button · 4) Mutual likes = tonight’s shortlist. Share the /match/… link so you swipe the same deck.",
-        href: "/partner",
-        cta: "Open Together",
-        icon: Users,
+          "Bottom bar → Add. Title search only. For a hero or director’s filmography, use Discover → Hero / Director.",
+        href: "/add",
+        cta: "Add a film",
+        icon: PlusCircle,
       },
       {
         id: "nav-profile",
         title: "Profile",
-        summary: "Account, Preferences, guide, export.",
+        summary: "Account, Together, Preferences, guide, export.",
         detail:
-          "Preferences set languages, genres, and streaming apps. Replay walkthrough and open this Guide from here. Sign out / exit demo also live here.",
+          "Open Together from here for movie nights. Preferences set languages, genres, and streaming apps. Replay walkthrough and open this Guide from here.",
         href: "/profile",
         cta: "Open Profile",
         icon: User,
@@ -145,14 +145,25 @@ export const FEATURE_GUIDE_SECTIONS: Array<{
     heading: "Key actions",
     items: [
       {
-        id: "action-add",
-        title: "Add a film",
-        summary: "Search and add to Watched or Watchlist.",
+        id: "action-together",
+        title: "Together",
+        summary: "Movie night with named people you invite.",
         detail:
-          "Sidebar → Add (or Profile → Add a film). Search by Title, Hero, or Director. Optional: limit results to your streaming services from Preferences.",
-        href: "/add",
-        cta: "Add a film",
-        icon: PlusCircle,
+          "Profile → Together. Name who you’re inviting (e.g. Priya), share the link, then Start movie night & swipe the same deck. People you’ve invited lists each person → pending/paired → swipe sessions.",
+        href: "/partner",
+        cta: "Open Together",
+        icon: Users,
+      },
+      {
+        id: "action-discover",
+        title: "Discover",
+        summary: "Hero / Director search plus India picks.",
+        detail:
+          "Sidebar → Discover. First tab: search actors or directors and add from their filmography. Other tabs: trending, because you liked, and AI picks.",
+        href: "/suggestions",
+        cta: "Open Discover",
+        icon: Clapperboard,
+        feature: "discover",
       },
       {
         id: "action-prefs",
@@ -226,6 +237,8 @@ export function tourTargetForHref(href: string): string | undefined {
       return "nav-profile";
     case "/add":
       return "nav-add";
+    case "/suggestions":
+      return "nav-discover";
     case "/guide":
       return "nav-guide";
     default:

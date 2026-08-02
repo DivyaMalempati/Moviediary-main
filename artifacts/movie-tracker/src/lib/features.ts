@@ -35,11 +35,11 @@ const MVP_FEATURES: ReadonlySet<AppFeature> = new Set([
   "guide",
   "movieDetails",
   "upcoming",
+  "discover",
 ]);
 
 /** Lab / secondary features — hidden from nav until their own branch is ready. */
 const LAB_FEATURES: ReadonlySet<AppFeature> = new Set([
-  "discover",
   "collections",
   "stats",
   "import",
@@ -90,26 +90,26 @@ export type NavItem = {
   feature: AppFeature;
 };
 
+/** Desktop sidebar — Discover near the top; Together lives under Profile. */
 export const SIDEBAR_NAV: NavItem[] = [
   { href: "/watched", label: "Watched", feature: "watched" },
   { href: "/watchlist", label: "Watchlist", feature: "watchlist" },
   { href: "/swipe", label: "Swipe", feature: "swipe" },
-  { href: "/partner", label: "Together", feature: "together" },
-  { href: "/add", label: "Add", feature: "add" },
-  { href: "/guide", label: "Guide", feature: "guide" },
-  // Labs — only appear when VITE_ENABLE_LABS=1
   { href: "/suggestions", label: "Discover", feature: "discover" },
   { href: "/upcoming", label: "Upcoming", feature: "upcoming" },
+  { href: "/guide", label: "Guide", feature: "guide" },
+  // Labs
   { href: "/collections", label: "Collections", feature: "collections" },
   { href: "/stats", label: "Stats", feature: "stats" },
   { href: "/import", label: "Import", feature: "import" },
 ];
 
+/** Mobile bottom bar — Add instead of Together (Together is on Profile). */
 export const BOTTOM_NAV: NavItem[] = [
   { href: "/watched", label: "Watched", feature: "watched" },
   { href: "/watchlist", label: "Watchlist", feature: "watchlist" },
   { href: "/swipe", label: "Swipe", feature: "swipe" },
-  { href: "/partner", label: "Together", feature: "together" },
+  { href: "/add", label: "Add", feature: "add" },
   { href: "/profile", label: "Profile", feature: "profile" },
 ];
 

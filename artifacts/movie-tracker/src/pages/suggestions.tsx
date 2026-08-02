@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { LanguageBadge } from "@/components/language-badge";
 import { RatingPickerDialog } from "@/components/rating-picker-dialog";
+import { PersonFilmographySearch } from "@/components/person-filmography-search";
 import { getPosterUrl, RATING_LABELS } from "@/lib/movie-utils";
 import {
   useGetTrendingIndia,
@@ -19,7 +20,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Sparkles, TrendingUp, ThumbsUp, Loader2, Bot,
-  Check, Eye, BookmarkPlus, Film, X, MessageCircleHeart, Ban,
+  Check, Eye, BookmarkPlus, Film, X, MessageCircleHeart, Ban, UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -336,7 +337,7 @@ export default function SuggestionsPage() {
   const { dismissed, dismiss, clearAll } = useDismissed();
   const { muteGenres } = useMuteGenres();
 
-  const [activeTab, setActiveTab] = useState("foryou");
+  const [activeTab, setActiveTab] = useState("people");
   const [trendingLang, setTrendingLang] = useState<string>("all");
 
   const { data: library } = useListMovies(undefined, { query: { queryKey: getListMoviesQueryKey() } });
@@ -460,7 +461,9 @@ export default function SuggestionsPage() {
               <Sparkles className="w-8 h-8 text-primary" />
               Discover
             </h1>
-            <p className="text-muted-foreground mt-1">Your personal film friend, always ready with a great pick.</p>
+            <p className="text-muted-foreground mt-1">
+              Browse by hero or director, or get picks tuned to your taste.
+            </p>
           </div>
           {dismissedCount > 0 && (
             <button
@@ -473,17 +476,24 @@ export default function SuggestionsPage() {
         </section>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-secondary p-1 rounded-xl h-12">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 bg-secondary p-1 rounded-xl h-auto min-h-12 gap-1">
+            <TabsTrigger value="people" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
+              <UserRound className="w-4 h-4 mr-2" /> Hero / Director
+            </TabsTrigger>
             <TabsTrigger value="foryou" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
               <MessageCircleHeart className="w-4 h-4 mr-2" /> For You
             </TabsTrigger>
             <TabsTrigger value="liked" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
-              <ThumbsUp className="w-4 h-4 mr-2" /> Because You Liked
+              <ThumbsUp className="w-4 h-4 mr-2" /> Liked
             </TabsTrigger>
             <TabsTrigger value="trending" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
-              <TrendingUp className="w-4 h-4 mr-2" /> Trending India
+              <TrendingUp className="w-4 h-4 mr-2" /> Trending
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="people" className="mt-6">
+            <PersonFilmographySearch />
+          </TabsContent>
 
           {/* ── AI Curated ── */}
           <TabsContent value="foryou" className="mt-6 space-y-6">
