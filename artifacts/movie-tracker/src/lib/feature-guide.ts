@@ -67,7 +67,7 @@ export const FEATURE_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: "add",
     title: "Add",
-    tip: "Search by title and log a film. Hero / Director search lives on Discover.",
+    tip: "Log a film by title, or use the Discover tabs for Hero / Director, For You, Liked, and Trending.",
     href: "/add",
     target: "nav-add",
   },
@@ -122,9 +122,9 @@ export const FEATURE_GUIDE_SECTIONS: Array<{
       {
         id: "nav-add",
         title: "Add",
-        summary: "Search by title and log a film.",
+        summary: "Log a film or browse Discover tabs.",
         detail:
-          "Bottom bar → Add. Title search only. For a hero or director’s filmography, use Discover → Hero / Director.",
+          "Bottom bar → Add. Log tab: title search (and Sentence log when enabled). Other tabs: Hero / Director, For You, Liked, and Trending.",
         href: "/add",
         cta: "Add a film",
         icon: PlusCircle,
@@ -157,10 +157,10 @@ export const FEATURE_GUIDE_SECTIONS: Array<{
       {
         id: "action-discover",
         title: "Discover",
-        summary: "Hero / Director search plus India picks.",
+        summary: "Hero / Director search plus India picks — on Add.",
         detail:
-          "Sidebar → Discover. First tab: search actors or directors and add from their filmography. Other tabs: trending, because you liked, and AI picks.",
-        href: "/suggestions",
+          "Add → Hero / Director (or sidebar Discover). Search actors or directors and add from their filmography. Other tabs: For You, Liked, and Trending.",
+        href: "/add?tab=people",
         cta: "Open Discover",
         icon: Clapperboard,
         feature: "discover",
@@ -237,6 +237,8 @@ export function tourTargetForHref(href: string): string | undefined {
       return "nav-profile";
     case "/add":
       return "nav-add";
+    case "/add?tab=people":
+      return "nav-discover";
     case "/suggestions":
       return "nav-discover";
     case "/guide":

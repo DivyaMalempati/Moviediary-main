@@ -95,7 +95,7 @@ export const SIDEBAR_NAV: NavItem[] = [
   { href: "/watched", label: "Watched", feature: "watched" },
   { href: "/watchlist", label: "Watchlist", feature: "watchlist" },
   { href: "/swipe", label: "Swipe", feature: "swipe" },
-  { href: "/suggestions", label: "Discover", feature: "discover" },
+  { href: "/add?tab=people", label: "Discover", feature: "discover" },
   { href: "/upcoming", label: "Upcoming", feature: "upcoming" },
   { href: "/guide", label: "Guide", feature: "guide" },
   // Labs

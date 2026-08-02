@@ -22,6 +22,21 @@ import { isDemoMode, exitDemoToSignIn } from "@/lib/demo-auth";
 import { ClerkBoundary } from "@/components/clerk-boundary";
 import { BOTTOM_NAV, SIDEBAR_NAV, enabledNav } from "@/lib/features";
 import { tourTargetForHref } from "@/lib/feature-guide";
+import { isDiscoverTab } from "@/components/discover-content";
+
+function navItemActive(location: string, href: string): boolean {
+  const [hrefPath, hrefSearch] = href.split("?");
+  const locPath = location.split("?")[0] || "/";
+  // Sidebar Discover deep-links into Add tabs.
+  if (hrefPath === "/add" && hrefSearch?.includes("tab=")) {
+    const tab =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("tab")
+        : null;
+    return locPath === "/add" && isDiscoverTab(tab);
+  }
+  return locPath === hrefPath || (hrefPath !== "/" && locPath.startsWith(`${hrefPath}/`));
+}
 
 interface LayoutProps {
   children: ReactNode;
@@ -39,6 +54,8 @@ function iconForHref(href: string): LucideIcon {
       return Shuffle;
     case "/add":
       return PlusCircle;
+    case "/add?tab=people":
+      return Sparkles;
     case "/guide":
       return BookOpen;
     case "/suggestions":
@@ -146,7 +163,7 @@ export function Layout({ children }: LayoutProps) {
         <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto min-h-0">
           {sidebarItems.map(({ href, label }) => {
             const Icon = iconForHref(href);
-            const isActive = location === href || location.startsWith(`${href}/`);
+            const isActive = navItemActive(location, href);
             const tourId = tourTargetForHref(href);
             return (
               <Link
@@ -181,7 +198,7 @@ export function Layout({ children }: LayoutProps) {
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-lg border-t border-border flex items-center justify-around px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         {bottomItems.map(({ href, label }) => {
           const Icon = iconForHref(href);
-          const isActive = location === href || (href !== "/" && location.startsWith(`${href}/`));
+          const isActive = navItemActive(location, href);
           const tourId = tourTargetForHref(href);
           return (
             <Link
