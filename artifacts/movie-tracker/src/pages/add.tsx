@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { TmdbMovieCard } from "@/components/tmdb-movie-card";
+import { SentenceLogPrompt } from "@/components/sentence-log-prompt";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -17,6 +18,7 @@ import { toast } from "sonner";
 import { useDebounce } from "@/hooks/use-debounce";
 import { RatingPickerDialog } from "@/components/rating-picker-dialog";
 import { usePreferences } from "@/lib/preferences";
+import { useSessionSettings } from "@/hooks/use-session-settings";
 import { getAuthHeaders } from "@/lib/demo-auth";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
@@ -53,7 +55,9 @@ export default function AddPage() {
   const [onMyServices, setOnMyServices] = useState(false);
   const [streamingIds, setStreamingIds] = useState<Set<number> | null>(null);
   const [filteringStreaming, setFilteringStreaming] = useState(false);
+  const [showTitleSearch, setShowTitleSearch] = useState(false);
 
+  const { sentenceLog } = useSessionSettings();
   const { data: prefs } = usePreferences();
   const preferredProviders = prefs?.preferredProviders ?? [];
   const watchRegion = prefs?.watchRegion ?? "IN";
@@ -205,14 +209,48 @@ export default function AddPage() {
         <section className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold">Add</h1>
           <p className="text-muted-foreground">
-            Search by title to log a film. Looking for a hero or director?{" "}
-            <Link href="/suggestions" className="text-primary underline underline-offset-2">
-              Open Discover
-            </Link>
-            .
+            {sentenceLog
+              ? "Log what you watched with a short diary prompt — or search by title below."
+              : "Search by title to log a film. Looking for a hero or director? "}
+            {!sentenceLog && (
+              <>
+                <Link href="/suggestions" className="text-primary underline underline-offset-2">
+                  Open Discover
+                </Link>
+                .
+              </>
+            )}
           </p>
+          {sentenceLog && (
+            <p className="text-xs text-muted-foreground">
+              Sentence log is on for this session. Turn it off anytime in{" "}
+              <Link href="/profile" className="text-primary underline underline-offset-2">
+                Profile → Session settings
+              </Link>
+              .
+            </p>
+          )}
         </section>
 
+        {sentenceLog && <SentenceLogPrompt />}
+
+        {sentenceLog && (
+          <div className="flex items-center justify-between gap-3 pt-2">
+            <p className="text-sm font-medium">Title search</p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-xs"
+              onClick={() => setShowTitleSearch((v) => !v)}
+            >
+              {showTitleSearch ? "Hide" : "Show title search"}
+            </Button>
+          </div>
+        )}
+
+        {(!sentenceLog || showTitleSearch) && (
+        <>
         <div className="bg-card rounded-2xl border border-border p-4 md:p-6 shadow-sm sticky top-0 z-20 space-y-4">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -316,6 +354,8 @@ export default function AddPage() {
             </div>
           )}
         </div>
+        </>
+        )}
       </div>
 
       <RatingPickerDialog
