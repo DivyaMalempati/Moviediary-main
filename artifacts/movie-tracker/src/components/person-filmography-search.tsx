@@ -55,7 +55,7 @@ function PersonRow({
   );
 }
 
-/** Hero / Director search → filmography → add to vault. Used on Discover. */
+/** Hero / Director search → filmography → add to vault. Used on Add → Discover tabs. */
 export function PersonFilmographySearch() {
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebounce(query, 500);
