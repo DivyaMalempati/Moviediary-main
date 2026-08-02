@@ -15,11 +15,13 @@ const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(guestRouter);
+// Import/export + orphaned helpers register concrete /movies/* paths.
+// Mount before moviesRouter so GET /movies/:id cannot steal /movies/export.
+router.use(importRouter);
 router.use(moviesRouter);
 router.use(tmdbRouter);
 router.use(suggestionsRouter);
 router.use(preferencesRouter);
-router.use(importRouter);
 router.use(collectionsRouter);
 router.use(discoverRouter);
 router.use(partnersRouter);

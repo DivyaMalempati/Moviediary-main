@@ -3,7 +3,7 @@ import { useAuth, useClerk, useUser } from "@clerk/react";
 import { Button } from "@/components/ui/button";
 import { PreferencesModal } from "@/components/preferences-modal";
 import { ClerkBoundary } from "@/components/clerk-boundary";
-import { isDemoMode, exitDemoToSignIn, clearAppSession, getAuthHeaders } from "@/lib/demo-auth";
+import { isDemoMode, exitDemoToSignIn, clearAppSession, authFetch } from "@/lib/demo-auth";
 import { usePreferences } from "@/lib/preferences";
 import { toast } from "sonner";
 import { ChevronRight, Download, LogOut, Settings, Upload, BookOpen, Play, Users, PlusCircle, Loader2 } from "lucide-react";
@@ -15,17 +15,18 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 async function exportLibrary() {
   try {
-    const res = await fetch(`${BASE}/api/movies/export`, {
-      credentials: "include",
-      headers: await getAuthHeaders(),
-    });
+    // authFetch remints stale app sessions on 401 (plain fetch does not).
+    const res = await authFetch(`${BASE}/api/movies/export`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = "cinevault_library.csv";
+    a.rel = "noopener";
+    document.body.appendChild(a);
     a.click();
+    a.remove();
     URL.revokeObjectURL(url);
     toast.success("Library exported");
   } catch {
