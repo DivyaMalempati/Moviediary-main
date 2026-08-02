@@ -115,7 +115,10 @@ async function downloadOrphanedCsv() {
     const a = document.createElement("a");
     a.href = url;
     a.download = "cinevault_orphaned_movies.csv";
+    a.rel = "noopener";
+    document.body.appendChild(a);
     a.click();
+    a.remove();
     URL.revokeObjectURL(url);
   } catch {
     toast.error("Couldn’t export CSV");

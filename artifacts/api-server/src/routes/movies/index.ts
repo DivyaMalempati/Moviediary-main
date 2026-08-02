@@ -15,8 +15,29 @@ import {
 import { searchMovies, getMovieDetails } from "../../lib/tmdb.js";
 import { logger } from "../../lib/logger.js";
 import { requireAuth } from "../../middlewares/requireAuth.js";
+import { verifyGuestToken } from "../guest.js";
 
 const router: IRouter = Router();
+
+/**
+ * Resolve the guest userId that may be claimed into the signed-in account.
+ * Requires a verified guest session token (body.guestToken or x-claim-guest-token).
+ */
+function resolveClaimGuestId(req: any): string | null {
+  const raw =
+    (typeof req.body?.guestToken === "string" && req.body.guestToken) ||
+    (typeof req.headers["x-claim-guest-token"] === "string" &&
+      req.headers["x-claim-guest-token"]) ||
+    "";
+  if (!raw) return null;
+  const guestId = verifyGuestToken(raw);
+  if (!guestId || !guestId.startsWith("guest_")) return null;
+  return guestId;
+}
+
+function toCSVRow(cols: string[]): string {
+  return cols.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",");
+}
 
 const VALID_RATINGS = new Set([
   "loved",
@@ -264,6 +285,109 @@ router.post("/movies/match-all", requireAuth, async (req: any, res): Promise<voi
   }
 
   res.json({ matched, failed, total: unmatched.length });
+});
+
+// ── Static /movies/* paths — must be registered before /movies/:id ───────────
+
+// POST /movies/claim-orphaned
+router.post("/movies/claim-orphaned", requireAuth, async (req: any, res): Promise<void> => {
+  const userId = req.userId as string;
+  if (userId.startsWith("guest_")) {
+    res.status(400).json({
+      error: "Sign in to claim guest movies",
+      claimed: 0,
+    });
+    return;
+  }
+
+  const guestId = resolveClaimGuestId(req);
+  if (!guestId) {
+    res.status(400).json({
+      error: "A valid guest session token is required to claim movies",
+      claimed: 0,
+    });
+    return;
+  }
+
+  const result = await db
+    .update(moviesTable)
+    .set({ userId })
+    .where(eq(moviesTable.userId, guestId))
+    .returning({ id: moviesTable.id });
+
+  res.json({ claimed: result.length });
+});
+
+// GET /movies/orphaned-count
+router.get("/movies/orphaned-count", requireAuth, async (req: any, res): Promise<void> => {
+  const guestId = resolveClaimGuestId(req);
+  if (!guestId) {
+    res.json({ count: 0 });
+    return;
+  }
+
+  const [{ count: n }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(moviesTable)
+    .where(eq(moviesTable.userId, guestId));
+
+  res.json({ count: Number(n) });
+});
+
+// GET /movies/export — library CSV (watched + watchlist)
+router.get("/movies/export", requireAuth, async (req: any, res): Promise<void> => {
+  const movies = await db
+    .select()
+    .from(moviesTable)
+    .where(eq(moviesTable.userId, req.userId))
+    .orderBy(moviesTable.createdAt);
+
+  const header = "title,status,rating,year,language";
+  const rows = movies.map((m) =>
+    toCSVRow([
+      m.title,
+      m.status,
+      m.rating ?? "",
+      String(m.releaseYear ?? ""),
+      m.originalLanguage ?? "",
+    ]),
+  );
+  const csv = [header, ...rows].join("\n");
+
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", 'attachment; filename="cinevault_library.csv"');
+  res.send(csv);
+});
+
+// GET /movies/export-orphaned — CSV for the pending guest session only
+router.get("/movies/export-orphaned", requireAuth, async (req: any, res): Promise<void> => {
+  const guestId = resolveClaimGuestId(req);
+  if (!guestId) {
+    res.status(400).json({ error: "A valid guest session token is required to export" });
+    return;
+  }
+
+  const movies = await db
+    .select()
+    .from(moviesTable)
+    .where(eq(moviesTable.userId, guestId))
+    .orderBy(moviesTable.createdAt);
+
+  const header = "title,status,rating,year,language";
+  const rows = movies.map((m) =>
+    toCSVRow([
+      m.title,
+      m.status,
+      m.rating ?? "",
+      String(m.releaseYear ?? ""),
+      m.originalLanguage ?? "",
+    ]),
+  );
+  const csv = [header, ...rows].join("\n");
+
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", 'attachment; filename="cinevault_orphaned_movies.csv"');
+  res.send(csv);
 });
 
 // GET /movies/:id
