@@ -451,24 +451,20 @@ export async function getPersonalizedSwipePool(opts: {
   const mixGenreId =
     genreIdFilter ?? genreIds[page % Math.max(genreIds.length, 1)];
 
-  // Trope / keyword override — still apply 80/20 familiarity around the trope.
+  // Trope / keyword override — keep every bucket on the same keyword so
+  // "Treasure Hunt" never mixes in unrelated popular / gem titles.
   if (keywordId != null) {
-    const [tropePage, streaming, gems] = await Promise.all([
+    const [tropePage, streaming, moreTrope] = await Promise.all([
       discoverByKeyword(keywordId, effectiveLanguages, page, genreIdFilter, undefined, certification).catch(() => []),
       streamingWatch
         ? discoverByKeyword(keywordId, effectiveLanguages, page, genreIdFilter, streamingWatch, certification).catch(() => [])
         : Promise.resolve([]),
-      discoverByKeyword(keywordId, effectiveLanguages, page + 1, genreIdFilter, undefined, certification)
-        .then(async (base) => {
-          const gems = await discoverHiddenGems(effectiveLanguages, page, genreIdFilter, undefined, certification).catch(() => []);
-          return [...base, ...gems];
-        })
-        .catch(() => []),
+      discoverByKeyword(keywordId, effectiveLanguages, page + 1, genreIdFilter, undefined, certification).catch(() => []),
     ]);
     const pools = {
       safe: prep(tropePage, "trope"),
       streaming: prep(streaming.length ? streaming : tropePage, "streaming"),
-      wildcard: prep(gems, "wildcard"),
+      wildcard: prep(moreTrope, "wildcard"),
     };
     return assembleDeckMix(pools, MIX_TROPE, target);
   }
