@@ -22,8 +22,8 @@ export interface MovieInput {
   genres?: string[];
   overview?: string;
   /**
-   * When the user actually watched the film (ISO 8601 date or datetime).
-   * Null means unknown / not sure. Omit to default to now when status is watched.
-   */
+     * When the user actually watched the film (ISO 8601 date or datetime). Null means unknown / not sure. Omit to default to now when status is watched.
+     * @nullable
+     */
   watchedAt?: string | null;
 }

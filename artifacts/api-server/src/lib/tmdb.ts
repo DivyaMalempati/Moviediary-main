@@ -1,4 +1,8 @@
+import { INDIAN_CINEMA_LANGUAGES } from "./languageDefaults.js";
+
 const TMDB_BASE = "https://api.themoviedb.org/3";
+
+const INDIAN_LANG_SET = new Set<string>(INDIAN_CINEMA_LANGUAGES);
 
 function getApiKey(): string {
   const key = process.env.TMDB_API_KEY;
@@ -103,6 +107,112 @@ export async function searchMovies(query: string, region = "IN") {
   ]);
   const data = (await res.json()) as { results: TmdbMovieRaw[] };
   return data.results.map((m) => mapTmdbMovie(m, idToName));
+}
+
+export type PersonDepartment = "Acting" | "Directing";
+
+export type TmdbPersonResult = {
+  tmdbId: number;
+  name: string;
+  profilePath: string | null;
+  knownForDepartment: string | null;
+  knownForTitles: string[];
+};
+
+type TmdbPersonRaw = {
+  id: number;
+  name: string;
+  profile_path?: string | null;
+  known_for_department?: string | null;
+  known_for?: Array<{ title?: string; name?: string; media_type?: string }>;
+};
+
+/** India-first then popularity — used for person filmographies. */
+export function sortFilmographyIndiaFirst<
+  T extends { originalLanguage?: string | null; voteAverage?: number | null },
+>(movies: T[]): T[] {
+  return movies.slice().sort((a, b) => {
+    const aIn = a.originalLanguage && INDIAN_LANG_SET.has(a.originalLanguage) ? 0 : 1;
+    const bIn = b.originalLanguage && INDIAN_LANG_SET.has(b.originalLanguage) ? 0 : 1;
+    if (aIn !== bIn) return aIn - bIn;
+    return (b.voteAverage ?? 0) - (a.voteAverage ?? 0);
+  });
+}
+
+/**
+ * Search TMDB people. Soft-ranks by department (Acting / Directing) so heroes
+ * and directors surface first without hiding cross-discipline matches.
+ */
+export async function searchPeople(
+  query: string,
+  department: PersonDepartment = "Acting",
+): Promise<TmdbPersonResult[]> {
+  const res = await tmdbFetch("/search/person", {
+    query,
+    include_adult: "false",
+  });
+  const data = (await res.json()) as { results: TmdbPersonRaw[] };
+
+  const mapped = (data.results ?? []).map((p) => ({
+    tmdbId: p.id,
+    name: p.name,
+    profilePath: p.profile_path ?? null,
+    knownForDepartment: p.known_for_department ?? null,
+    knownForTitles: (p.known_for ?? [])
+      .filter((k) => !k.media_type || k.media_type === "movie")
+      .map((k) => k.title || k.name)
+      .filter((t): t is string => !!t)
+      .slice(0, 3),
+    _dept: p.known_for_department ?? "",
+  }));
+
+  mapped.sort((a, b) => {
+    const aMatch = a._dept === department ? 0 : 1;
+    const bMatch = b._dept === department ? 0 : 1;
+    return aMatch - bMatch;
+  });
+
+  return mapped.map(({ _dept: _, ...rest }) => rest);
+}
+
+type CreditMovieRaw = TmdbMovieRaw & {
+  job?: string;
+  popularity?: number;
+  character?: string;
+};
+
+/**
+ * Filmography for a person. role=cast → acting credits; role=crew → Director jobs only.
+ */
+export async function getPersonMovieCredits(
+  personId: number,
+  role: "cast" | "crew" = "cast",
+) {
+  const [res, { idToName }] = await Promise.all([
+    tmdbFetch(`/person/${personId}/movie_credits`),
+    getGenreMaps(),
+  ]);
+  const data = (await res.json()) as {
+    cast?: CreditMovieRaw[];
+    crew?: CreditMovieRaw[];
+  };
+
+  const raw: CreditMovieRaw[] =
+    role === "crew"
+      ? (data.crew ?? []).filter((c) => c.job === "Director")
+      : (data.cast ?? []);
+
+  // Dedupe by movie id (people can appear multiple times in crew).
+  const seen = new Set<number>();
+  const unique: CreditMovieRaw[] = [];
+  for (const m of raw) {
+    if (seen.has(m.id)) continue;
+    seen.add(m.id);
+    unique.push(m);
+  }
+
+  const movies = unique.map((m) => mapTmdbMovie(m, idToName));
+  return sortFilmographyIndiaFirst(movies);
 }
 
 export async function getMovieDetails(tmdbId: number) {

@@ -68,7 +68,7 @@ export const CreateMovieBody = zod.object({
   "originalLanguage": zod.string().optional(),
   "genres": zod.array(zod.string()).optional(),
   "overview": zod.string().optional(),
-  "watchedAt": zod.string().nullish().describe('When the user actually watched the film (ISO 8601 date or datetime).\nNull means unknown / not sure. Omit to default to now when status is watched.\n')
+  "watchedAt": zod.string().nullish().describe('When the user actually watched the film (ISO 8601 date or datetime). Null means unknown \/ not sure. Omit to default to now when status is watched.\n')
 })
 
 export const createMovieResponseRewatchCountMin = 0;
@@ -340,6 +340,51 @@ export const SearchTmdbResponseItem = zod.object({
   "voteAverage": zod.number().nullish()
 })
 export const SearchTmdbResponse = zod.array(SearchTmdbResponseItem)
+
+
+/**
+ * @summary Search TMDB for actors or directors
+ */
+export const searchTmdbPeopleQueryDepartmentDefault = `Acting`;
+
+export const SearchTmdbPeopleQueryParams = zod.object({
+  "q": zod.coerce.string(),
+  "department": zod.enum(['Acting', 'Directing']).default(searchTmdbPeopleQueryDepartmentDefault)
+})
+
+export const SearchTmdbPeopleResponseItem = zod.object({
+  "tmdbId": zod.number(),
+  "name": zod.string(),
+  "profilePath": zod.string().nullish(),
+  "knownForDepartment": zod.string().nullish(),
+  "knownForTitles": zod.array(zod.string()).optional()
+})
+export const SearchTmdbPeopleResponse = zod.array(SearchTmdbPeopleResponseItem)
+
+
+/**
+ * @summary Filmography for a TMDB person (cast or director credits)
+ */
+export const getPersonFilmographyQueryRoleDefault = `cast`;
+
+export const GetPersonFilmographyQueryParams = zod.object({
+  "personId": zod.coerce.number(),
+  "role": zod.enum(['cast', 'crew']).default(getPersonFilmographyQueryRoleDefault)
+})
+
+export const GetPersonFilmographyResponseItem = zod.object({
+  "tmdbId": zod.number(),
+  "title": zod.string(),
+  "originalTitle": zod.string().nullish(),
+  "posterPath": zod.string().nullish(),
+  "releaseYear": zod.number().nullish(),
+  "releaseDate": zod.string().nullish().describe('Release day YYYY-MM-DD when known'),
+  "originalLanguage": zod.string().nullish(),
+  "genres": zod.array(zod.string()).nullish(),
+  "overview": zod.string().nullish(),
+  "voteAverage": zod.number().nullish()
+})
+export const GetPersonFilmographyResponse = zod.array(GetPersonFilmographyResponseItem)
 
 
 /**

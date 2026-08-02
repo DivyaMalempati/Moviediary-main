@@ -24,6 +24,7 @@ import type {
   AiSuggestionsInput,
   BulkMatchResult,
   DiscoverIndianParams,
+  GetPersonFilmographyParams,
   GetUpcomingReleasesParams,
   HealthStatus,
   ListMoviesParams,
@@ -33,7 +34,9 @@ import type {
   MovieUpdate,
   RewatchInput,
   SearchTmdbParams,
+  SearchTmdbPeopleParams,
   TmdbMovie,
+  TmdbPerson,
   WatchProviders
 } from './api.schemas';
 
@@ -879,6 +882,174 @@ export function useSearchTmdb<TData = Awaited<ReturnType<typeof searchTmdb>>, TE
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getSearchTmdbQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSearchTmdbPeopleUrl = (params: SearchTmdbPeopleParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/tmdb/search-people?${stringifiedParams}` : `/api/tmdb/search-people`
+}
+
+/**
+ * @summary Search TMDB for actors or directors
+ */
+export const searchTmdbPeople = async (params: SearchTmdbPeopleParams, options?: RequestInit): Promise<TmdbPerson[]> => {
+
+  return customFetch<TmdbPerson[]>(getSearchTmdbPeopleUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getSearchTmdbPeopleQueryKey = (params?: SearchTmdbPeopleParams,) => {
+    return [
+    `/api/tmdb/search-people`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getSearchTmdbPeopleQueryOptions = <TData = Awaited<ReturnType<typeof searchTmdbPeople>>, TError = ErrorType<unknown>>(params: SearchTmdbPeopleParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof searchTmdbPeople>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getSearchTmdbPeopleQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof searchTmdbPeople>>> = ({ signal }) => searchTmdbPeople(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof searchTmdbPeople>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type SearchTmdbPeopleQueryResult = NonNullable<Awaited<ReturnType<typeof searchTmdbPeople>>>
+export type SearchTmdbPeopleQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Search TMDB for actors or directors
+ */
+
+export function useSearchTmdbPeople<TData = Awaited<ReturnType<typeof searchTmdbPeople>>, TError = ErrorType<unknown>>(
+ params: SearchTmdbPeopleParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof searchTmdbPeople>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getSearchTmdbPeopleQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetPersonFilmographyUrl = (params: GetPersonFilmographyParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/tmdb/person-movies?${stringifiedParams}` : `/api/tmdb/person-movies`
+}
+
+/**
+ * @summary Filmography for a TMDB person (cast or director credits)
+ */
+export const getPersonFilmography = async (params: GetPersonFilmographyParams, options?: RequestInit): Promise<TmdbMovie[]> => {
+
+  return customFetch<TmdbMovie[]>(getGetPersonFilmographyUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPersonFilmographyQueryKey = (params?: GetPersonFilmographyParams,) => {
+    return [
+    `/api/tmdb/person-movies`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetPersonFilmographyQueryOptions = <TData = Awaited<ReturnType<typeof getPersonFilmography>>, TError = ErrorType<unknown>>(params: GetPersonFilmographyParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPersonFilmography>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPersonFilmographyQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPersonFilmography>>> = ({ signal }) => getPersonFilmography(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPersonFilmography>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPersonFilmographyQueryResult = NonNullable<Awaited<ReturnType<typeof getPersonFilmography>>>
+export type GetPersonFilmographyQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Filmography for a TMDB person (cast or director credits)
+ */
+
+export function useGetPersonFilmography<TData = Awaited<ReturnType<typeof getPersonFilmography>>, TError = ErrorType<unknown>>(
+ params: GetPersonFilmographyParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPersonFilmography>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPersonFilmographyQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

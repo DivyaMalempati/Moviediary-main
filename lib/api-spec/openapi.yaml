@@ -237,6 +237,61 @@ paths:
                 items:
                   $ref: "#/components/schemas/TmdbMovie"
 
+  /tmdb/search-people:
+    get:
+      operationId: searchTmdbPeople
+      tags: [tmdb]
+      summary: Search TMDB for actors or directors
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: department
+          in: query
+          schema:
+            type: string
+            enum: [Acting, Directing]
+            default: Acting
+      responses:
+        "200":
+          description: People search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TmdbPerson"
+
+  /tmdb/person-movies:
+    get:
+      operationId: getPersonFilmography
+      tags: [tmdb]
+      summary: Filmography for a TMDB person (cast or director credits)
+      parameters:
+        - name: personId
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [cast, crew]
+            default: cast
+            description: cast = acting credits; crew = Director jobs only
+      responses:
+        "200":
+          description: Movies credited to this person (India-first sort)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TmdbMovie"
+
   /tmdb/trending-india:
     get:
       operationId: getTrendingIndia
@@ -633,6 +688,23 @@ components:
           type: ["string", "null"]
         voteAverage:
           type: ["number", "null"]
+
+    TmdbPerson:
+      type: object
+      required: [tmdbId, name]
+      properties:
+        tmdbId:
+          type: integer
+        name:
+          type: string
+        profilePath:
+          type: ["string", "null"]
+        knownForDepartment:
+          type: ["string", "null"]
+        knownForTitles:
+          type: array
+          items:
+            type: string
 
     AiSuggestionsInput:
       type: object
