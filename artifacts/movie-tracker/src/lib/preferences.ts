@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   authFetch,
@@ -21,6 +22,8 @@ export interface UserPreferences {
   watchRegion: string;
   maxCertification: MaxCertification | null;
   mutedGenres: string[];
+  /** Films marked Not interested — hidden from Discover + Swipe. */
+  dismissedTmdbIds: number[];
   onboardingCompletedAt: string | null;
 }
 
@@ -40,6 +43,7 @@ const defaultPreferences: UserPreferences = {
   watchRegion: "IN",
   maxCertification: null,
   mutedGenres: [],
+  dismissedTmdbIds: [],
   onboardingCompletedAt: null,
 };
 
@@ -79,6 +83,9 @@ function normalizePrefs(data: Partial<UserPreferences>): UserPreferences {
     watchRegion: data.watchRegion || "IN",
     maxCertification,
     mutedGenres: Array.isArray(data.mutedGenres) ? data.mutedGenres : [],
+    dismissedTmdbIds: Array.isArray(data.dismissedTmdbIds)
+      ? data.dismissedTmdbIds.filter((id): id is number => Number.isInteger(id) && id > 0)
+      : [],
   };
 }
 
@@ -193,6 +200,62 @@ export function useMuteGenres() {
   };
 
   return { muteGenres, isPending };
+}
+
+async function postDismiss(tmdbId: number): Promise<UserPreferences> {
+  await ensureClerkApiSession();
+  const res = await authFetch(`${API_BASE}/api/preferences/dismiss`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tmdbId }),
+  });
+  if (res.status === 401) throw new PreferencesAuthError();
+  if (!res.ok) throw new Error("Failed to dismiss film");
+  return normalizePrefs(await res.json());
+}
+
+async function clearDismissed(): Promise<UserPreferences> {
+  await ensureClerkApiSession();
+  const res = await authFetch(`${API_BASE}/api/preferences/dismiss`, {
+    method: "DELETE",
+  });
+  if (res.status === 401) throw new PreferencesAuthError();
+  if (!res.ok) throw new Error("Failed to clear dismissed films");
+  return normalizePrefs(await res.json());
+}
+
+/** Persist "Not interested" so Discover and Swipe both hide the film. */
+export function useDismissFilm() {
+  const qc = useQueryClient();
+
+  const dismiss = useCallback(
+    async (tmdbId: number | null | undefined) => {
+      if (tmdbId == null) return;
+      // Optimistic local cache so Discover updates immediately.
+      qc.setQueryData<UserPreferences>(["preferences"], (prev) => {
+        const base = prev ?? defaultPreferences;
+        if (base.dismissedTmdbIds.includes(tmdbId)) return base;
+        return { ...base, dismissedTmdbIds: [tmdbId, ...base.dismissedTmdbIds] };
+      });
+      try {
+        const next = await postDismiss(tmdbId);
+        qc.setQueryData(["preferences"], next);
+        return next;
+      } catch (err) {
+        void qc.invalidateQueries({ queryKey: ["preferences"] });
+        throw err;
+      }
+    },
+    [qc],
+  );
+
+  const clearAll = useCallback(async () => {
+    const next = await clearDismissed();
+    qc.setQueryData(["preferences"], next);
+    return next;
+  }, [qc]);
+
+  return { dismiss, clearAll };
 }
 
 export type WatchProviderCatalogItem = {

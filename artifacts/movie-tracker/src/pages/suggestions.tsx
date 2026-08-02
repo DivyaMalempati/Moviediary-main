@@ -24,46 +24,19 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { useMuteGenres } from "@/lib/preferences";
+import { useDismissFilm, useMuteGenres, usePreferences } from "@/lib/preferences";
 
-// ---------------------------------------------------------------------------
-// Dismissed-movies hook — persisted to localStorage
-// ---------------------------------------------------------------------------
-const STORAGE_KEY = "cinevault:dismissed";
+// Legacy browser-only dismissals (pre server sync) — migrated once into prefs.
+const LEGACY_DISMISS_KEY = "cinevault:dismissed";
 
-function loadDismissed(): Set<number> {
+function loadLegacyDismissed(): number[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return new Set();
-    return new Set(JSON.parse(raw) as number[]);
+    const raw = localStorage.getItem(LEGACY_DISMISS_KEY);
+    if (!raw) return [];
+    return (JSON.parse(raw) as number[]).filter((id) => Number.isInteger(id) && id > 0);
   } catch {
-    return new Set();
+    return [];
   }
-}
-
-function saveDismissed(set: Set<number>) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify([...set]));
-}
-
-function useDismissed() {
-  const [dismissed, setDismissed] = useState<Set<number>>(loadDismissed);
-
-  const dismiss = useCallback((tmdbId: number | null | undefined) => {
-    if (tmdbId == null) return;
-    setDismissed((prev) => {
-      const next = new Set(prev);
-      next.add(tmdbId);
-      saveDismissed(next);
-      return next;
-    });
-  }, []);
-
-  const clearAll = useCallback(() => {
-    setDismissed(new Set());
-    localStorage.removeItem(STORAGE_KEY);
-  }, []);
-
-  return { dismissed, dismiss, clearAll };
 }
 
 function DismissMenu({
@@ -334,8 +307,48 @@ function AiFriendCard({
 export default function SuggestionsPage() {
   const queryClient = useQueryClient();
   const createMovie = useCreateMovie();
-  const { dismissed, dismiss, clearAll } = useDismissed();
+  const { data: prefs } = usePreferences();
+  const { dismiss, clearAll } = useDismissFilm();
   const { muteGenres } = useMuteGenres();
+  const dismissed = useMemo(
+    () => new Set(prefs?.dismissedTmdbIds ?? []),
+    [prefs?.dismissedTmdbIds],
+  );
+
+  const handleDismiss = useCallback(
+    (tmdbId: number | null) => {
+      void dismiss(tmdbId).catch(() => toast.error("Couldn’t hide that film"));
+    },
+    [dismiss],
+  );
+
+  const handleClearDismissed = useCallback(() => {
+    void clearAll()
+      .then(() => toast.success("Hidden films restored"))
+      .catch(() => toast.error("Couldn’t restore hidden films"));
+  }, [clearAll]);
+
+  // One-time: push older localStorage dismissals into the account so Swipe sees them.
+  useEffect(() => {
+    const legacy = loadLegacyDismissed();
+    if (!legacy.length) return;
+    let cancelled = false;
+    (async () => {
+      for (const id of legacy) {
+        if (cancelled) return;
+        try {
+          await dismiss(id);
+        } catch {
+          /* keep legacy until sync works */
+          return;
+        }
+      }
+      if (!cancelled) localStorage.removeItem(LEGACY_DISMISS_KEY);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [dismiss]);
 
   const [activeTab, setActiveTab] = useState("people");
   const [trendingLang, setTrendingLang] = useState<string>("all");
@@ -378,7 +391,12 @@ export default function SuggestionsPage() {
     const genres: string[] = Array.isArray(movie.genres) && movie.genres.length > 0
       ? movie.genres.slice(0, 2)
       : [];
-    dismiss(movie.tmdbId);
+    try {
+      await dismiss(movie.tmdbId);
+    } catch {
+      toast.error("Couldn’t hide that film");
+      return;
+    }
     if (genres.length === 0) {
       toast.message("Hidden for now", {
         description: "No genre tags on this title — muted only this film.",
@@ -467,7 +485,7 @@ export default function SuggestionsPage() {
           </div>
           {dismissedCount > 0 && (
             <button
-              onClick={clearAll}
+              onClick={handleClearDismissed}
               className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 mt-1 shrink-0"
             >
               Reset {dismissedCount} hidden
@@ -536,7 +554,7 @@ export default function SuggestionsPage() {
                       movie={movie}
                       inLibrary={movie.tmdbId ? inLibrarySet.has(movie.tmdbId) : false}
                       onAdd={handleAdd}
-                      onDismiss={dismiss}
+                      onDismiss={handleDismiss}
                       onMuteLikeThis={handleMuteLikeThis}
                     />
                   ))}
@@ -545,7 +563,7 @@ export default function SuggestionsPage() {
                 {visibleAi.length === 0 && aiResults && aiResults.length > 0 && (
                   <div className="text-center py-10 text-muted-foreground text-sm">
                     No new picks right now — everything here is already in your library or hidden.{" "}
-                    <button onClick={clearAll} className="underline underline-offset-2 hover:text-foreground">
+                    <button onClick={handleClearDismissed} className="underline underline-offset-2 hover:text-foreground">
                       Restore hidden
                     </button>
                     {" · "}
@@ -574,7 +592,7 @@ export default function SuggestionsPage() {
               </div>
             ) : visibleLiked.length === 0 ? (
               <div className="text-center py-20 text-muted-foreground text-sm">
-                All suggestions hidden. <button onClick={clearAll} className="underline underline-offset-2 hover:text-foreground">Restore them</button>
+                All suggestions hidden. <button onClick={handleClearDismissed} className="underline underline-offset-2 hover:text-foreground">Restore them</button>
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -584,7 +602,7 @@ export default function SuggestionsPage() {
                     movie={movie}
                     inLibrary={!!movie.tmdbId && inLibrarySet.has(movie.tmdbId)}
                     onAdd={handleAdd}
-                    onDismiss={dismiss}
+                    onDismiss={handleDismiss}
                     onMuteLikeThis={handleMuteLikeThis}
                   />
                 ))}
@@ -615,7 +633,7 @@ export default function SuggestionsPage() {
               <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
             ) : visibleTrending.length === 0 && (trendingData?.length ?? 0) > 0 ? (
               <div className="text-center py-20 text-muted-foreground text-sm">
-                All suggestions hidden. <button onClick={clearAll} className="underline underline-offset-2 hover:text-foreground">Restore them</button>
+                All suggestions hidden. <button onClick={handleClearDismissed} className="underline underline-offset-2 hover:text-foreground">Restore them</button>
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -625,7 +643,7 @@ export default function SuggestionsPage() {
                     movie={movie}
                     inLibrary={!!movie.tmdbId && inLibrarySet.has(movie.tmdbId)}
                     onAdd={handleAdd}
-                    onDismiss={dismiss}
+                    onDismiss={handleDismiss}
                     onMuteLikeThis={handleMuteLikeThis}
                   />
                 ))}

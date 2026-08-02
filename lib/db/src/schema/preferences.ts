@@ -12,6 +12,8 @@ export const userPreferencesTable = pgTable("user_preferences", {
   maxCertification: text("max_certification"),
   // Genres the user never wants recommended ("don't recommend movies like this").
   mutedGenres: text("muted_genres").array().notNull().default([]),
+  // Films marked "Not interested" — excluded from Discover + Swipe decks.
+  dismissedTmdbIds: integer("dismissed_tmdb_ids").array().notNull().default([]),
   // Set the first time a user ever saves preferences (onboarding, or the
   // settings-gear modal for existing users who never saw onboarding). Used
   // to decide whether to show the onboarding step before swipe.
