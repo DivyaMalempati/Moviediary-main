@@ -1,4 +1,5 @@
 import { RATING_LABELS, getPosterUrl } from "@/lib/movie-utils";
+import { splitDiaryNote } from "@/lib/diary-notes";
 import { getSyncSessionHeaders } from "@/lib/demo-auth";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -53,7 +54,7 @@ export function buildMovieShareText(input: ShareMovieInput): string {
       ? RATING_LABELS[input.rating]
       : null;
   const streaming = input.streamingOn?.trim() || null;
-  const review = input.notes?.trim() || null;
+  const { withWho, review } = splitDiaryNote(input.notes);
 
   // WhatsApp *bold* markers — ignored as plain text elsewhere.
   const lines = [`I'd recommend *${input.title}*${year} — worth a watch.`];
@@ -69,6 +70,7 @@ export function buildMovieShareText(input: ShareMovieInput): string {
   const details: string[] = [];
   if (streaming) details.push(`*Streaming:* ${streaming}`);
   if (ratingLabel) details.push(`*Rating:* ${ratingLabel}`);
+  if (withWho) details.push(`*With:* ${withWho}`);
   if (review) details.push(`*Review:* “${review}”`);
 
   if (details.length) {
@@ -319,11 +321,12 @@ export async function renderMovieShareCard(input: ShareMovieInput): Promise<Blob
   const ratingLabel =
     input.rating && RATING_LABELS[input.rating] ? RATING_LABELS[input.rating] : null;
   const streaming = input.streamingOn?.trim() || null;
-  const review = input.notes?.trim() ?? "";
+  const { withWho, review } = splitDiaryNote(input.notes);
 
   const detailLines: string[] = [];
   if (streaming) detailLines.push(`Streaming: ${streaming}`);
   if (ratingLabel) detailLines.push(`Rating: ${ratingLabel}`);
+  if (withWho) detailLines.push(`With: ${withWho}`);
   if (input.isRewatch) {
     detailLines.push(
       input.timesSeen && input.timesSeen > 1
