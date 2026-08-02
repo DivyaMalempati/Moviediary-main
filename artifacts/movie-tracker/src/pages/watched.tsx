@@ -310,9 +310,10 @@ export default function WatchedPage() {
 
   const releaseReminder: LookingForwardFilm | null = useMemo(() => {
     if (!watchlist?.length || releaseReminderDismissed) return null;
-    const candidates = findReleaseReminders(watchlist, { withinDays: 7 }).filter(
-      (f) => !isReleaseDismissed(f.id, f.releaseDate),
-    );
+    const candidates = findReleaseReminders(watchlist, {
+      withinDays: 7,
+      includePastDays: 14,
+    }).filter((f) => !isReleaseDismissed(f.id, f.releaseDate));
     return candidates[0] ?? null;
   }, [watchlist, releaseReminderDismissed]);
 
@@ -458,7 +459,10 @@ export default function WatchedPage() {
                 {formatReleaseCopy(releaseReminder)}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                {formatReleaseDateLabel(releaseReminder.releaseDate)} · from Looking forward
+                {formatReleaseDateLabel(releaseReminder.releaseDate)}
+                {releaseReminder.daysUntil < 0
+                  ? " · just out on your watchlist"
+                  : " · from Looking forward"}
               </p>
               <div className="flex items-center gap-2 mt-3">
                 <Link href={`/movie/${releaseReminder.id}`}>

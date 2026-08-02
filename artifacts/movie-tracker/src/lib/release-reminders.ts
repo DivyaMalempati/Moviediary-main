@@ -26,6 +26,18 @@ export function daysUntilRelease(releaseDate: string, today = new Date()): numbe
   return Math.round(ms / (24 * 60 * 60 * 1000));
 }
 
+/** Prefer out-today, then just-released, then upcoming soon. */
+function compareReminderPriority(a: LookingForwardFilm, b: LookingForwardFilm) {
+  const tier = (d: number) => (d === 0 ? 0 : d < 0 ? 1 : 2);
+  const ta = tier(a.daysUntil);
+  const tb = tier(b.daysUntil);
+  if (ta !== tb) return ta - tb;
+  const da = Math.abs(a.daysUntil);
+  const db = Math.abs(b.daysUntil);
+  if (da !== db) return da - db;
+  return a.title.localeCompare(b.title);
+}
+
 /** Watchlist titles with a known release day still ahead (or just out). */
 export function findLookingForward(
   movies: Array<{
@@ -39,7 +51,7 @@ export function findLookingForward(
   opts?: { today?: Date; includePastDays?: number },
 ): LookingForwardFilm[] {
   const today = opts?.today ?? new Date();
-  const includePastDays = opts?.includePastDays ?? 7;
+  const includePastDays = opts?.includePastDays ?? 14;
 
   return movies
     .flatMap((m) => {
@@ -59,10 +71,14 @@ export function findLookingForward(
         },
       ];
     })
-    .sort((a, b) => a.daysUntil - b.daysUntil || a.title.localeCompare(b.title));
+    .sort(compareReminderPriority);
 }
 
-/** Titles releasing today or within the next N days (default 7). */
+/**
+ * Titles releasing soon OR just released (default: next 7 days + past 14).
+ * Previously only future dates were included — so “out today / just out”
+ * never surfaced after release day.
+ */
 export function findReleaseReminders(
   movies: Array<{
     id: number;
@@ -72,12 +88,14 @@ export function findReleaseReminders(
     releaseDate?: string | null;
     originalLanguage?: string | null;
   }>,
-  opts?: { today?: Date; withinDays?: number },
+  opts?: { today?: Date; withinDays?: number; includePastDays?: number },
 ): LookingForwardFilm[] {
   const withinDays = opts?.withinDays ?? 7;
-  return findLookingForward(movies, { today: opts?.today, includePastDays: 0 }).filter(
-    (f) => f.daysUntil >= 0 && f.daysUntil <= withinDays,
-  );
+  const includePastDays = opts?.includePastDays ?? 14;
+  return findLookingForward(movies, {
+    today: opts?.today,
+    includePastDays,
+  }).filter((f) => f.daysUntil <= withinDays && f.daysUntil >= -includePastDays);
 }
 
 export function releaseDismissKey(movieId: number, releaseDate: string) {
