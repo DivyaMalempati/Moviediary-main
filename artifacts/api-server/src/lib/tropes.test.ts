@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { TROPE_KEYWORDS, tropeBySlug } from "./tropes.js";
+import {
+  TROPE_KEYWORDS,
+  tropeBySlug,
+  tropeKeywordIdsOr,
+} from "./tropes.js";
 
 describe("trope keyword catalog", () => {
   it("maps treasure-hunt to the real TMDB treasure hunt keyword", () => {
@@ -13,7 +17,20 @@ describe("trope keyword catalog", () => {
     expect(tropeBySlug("heist")?.keywordId).toBe(10051);
   });
 
-  it("uses unique keyword ids", () => {
+  it("ORs related keywords for treasure-hunt India coverage", () => {
+    const trope = tropeBySlug("treasure-hunt");
+    expect(trope).toBeTruthy();
+    const ids = tropeKeywordIdsOr(trope!);
+    expect(ids[0]).toBe(6956);
+    expect(ids).toEqual(expect.arrayContaining([1454, 169953, 207372]));
+  });
+
+  it("seeds known Indian treasure / quest titles for treasure-hunt", () => {
+    const seeds = tropeBySlug("treasure-hunt")?.indiaSeedTmdbIds ?? [];
+    expect(seeds).toEqual(expect.arrayContaining([401285, 412197, 891445]));
+  });
+
+  it("uses unique primary keyword ids", () => {
     const ids = TROPE_KEYWORDS.map((t) => t.keywordId);
     expect(new Set(ids).size).toBe(ids.length);
   });

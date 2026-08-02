@@ -1,8 +1,5 @@
-/**
- * Cold-start language allowlist when a user has no Preferences yet.
- * India-first (+ optional English) — not a world-cinema grab-bag.
- */
-export const INDIA_COLD_START_LANGUAGES = [
+/** Indian cinema languages (no English). Used to prioritize India-first trope hits. */
+export const INDIAN_CINEMA_LANGUAGES = [
   "hi",
   "te",
   "ta",
@@ -10,6 +7,14 @@ export const INDIA_COLD_START_LANGUAGES = [
   "kn",
   "bn",
   "mr",
+] as const;
+
+/**
+ * Cold-start language allowlist when a user has no Preferences yet.
+ * India-first (+ optional English) — not a world-cinema grab-bag.
+ */
+export const INDIA_COLD_START_LANGUAGES = [
+  ...INDIAN_CINEMA_LANGUAGES,
   "en",
 ] as const;
 

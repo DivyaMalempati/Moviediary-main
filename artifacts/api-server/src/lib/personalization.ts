@@ -6,12 +6,17 @@ import {
   discoverHiddenGems,
   discoverStreamingHighlights,
   discoverByKeyword,
+  getMovieDetails,
   getSimilarMovies,
   getRecommendations,
   getGenreNameToIdMap,
   type WatchFilter,
 } from "./tmdb.js";
+import { INDIAN_CINEMA_LANGUAGES } from "./languageDefaults.js";
+import { tropeByKeywordId, tropeKeywordIdsOr } from "./tropes.js";
 import { logger } from "./logger.js";
+
+const INDIAN_LANG_SET = new Set<string>(INDIAN_CINEMA_LANGUAGES);
 
 // ── Rating → weight ──────────────────────────────────────────────────────────
 const RATING_WEIGHT: Record<string, number> = {
@@ -196,6 +201,106 @@ export const MIX_TOGETHER = { wildcard: 0.55, streaming: 0.2, safe: 0.25 };
 
 const MIX_GENRE_FILTER = { safe: 0.7, streaming: 0.15, wildcard: 0.15 };
 const MIX_TROPE = { safe: 0.5, streaming: 0.2, wildcard: 0.3 };
+
+/**
+ * India-first trope discovery:
+ * 1) curated Indian seed titles (often missing TMDB trope tags)
+ * 2) Indian-language hits for primary + related keywords
+ * 3) English fill only when `en` is in the effective language allowlist
+ */
+async function fetchIndiaFirstTropeFilms(opts: {
+  keywordId: number;
+  effectiveLanguages: string[];
+  page: number;
+  genreIdFilter?: number;
+  watch?: WatchFilter;
+  certification?: { country: string; max: string };
+}): Promise<SwipeCandidate[]> {
+  const { keywordId, effectiveLanguages, page, genreIdFilter, watch, certification } = opts;
+  const trope = tropeByKeywordId(keywordId);
+  const keywordIds = trope ? tropeKeywordIdsOr(trope) : [keywordId];
+
+  const indiaLangs = effectiveLanguages.filter((l) => INDIAN_LANG_SET.has(l));
+  // English fill only when prefs/cold-start allow it — never sneak in ko/ja/fr.
+  const fillLangs = effectiveLanguages.filter((l) => l === "en");
+
+  const seedIds = [...(trope?.indiaSeedTmdbIds ?? [])];
+
+  const [seedRows, indiaHits, indiaMore, fillHits] = await Promise.all([
+    Promise.all(
+      seedIds.map(async (id) => {
+        try {
+          const m = await getMovieDetails(id);
+          const c: SwipeCandidate = {
+            tmdbId: m.tmdbId,
+            title: m.title,
+            posterPath: m.posterPath,
+            releaseYear: m.releaseYear,
+            originalLanguage: m.originalLanguage,
+            overview: m.overview,
+            genres: m.genres,
+            voteAverage: m.voteAverage,
+          };
+          return c;
+        } catch {
+          return null;
+        }
+      }),
+    ),
+    indiaLangs.length > 0
+      ? discoverByKeyword(
+          keywordIds,
+          indiaLangs,
+          page,
+          genreIdFilter,
+          watch,
+          certification,
+          { voteCountGte: 5 },
+        ).catch(() => [])
+      : Promise.resolve([]),
+    indiaLangs.length > 0
+      ? discoverByKeyword(
+          keywordIds,
+          indiaLangs,
+          page + 1,
+          genreIdFilter,
+          watch,
+          certification,
+          { voteCountGte: 5 },
+        ).catch(() => [])
+      : Promise.resolve([]),
+    fillLangs.length > 0
+      ? discoverByKeyword(
+          keywordId,
+          fillLangs,
+          page,
+          genreIdFilter,
+          watch,
+          certification,
+          { voteCountGte: 30 },
+        ).catch(() => [])
+      : Promise.resolve([]),
+  ]);
+
+  const seeds = seedRows.filter((s): s is SwipeCandidate => {
+    if (!s) return false;
+    const lang = s.originalLanguage;
+    if (!lang) return true;
+    // Prefer seeds in the user's Indian allowlist; if they only have en, keep Indian seeds anyway
+    // for India-first trope identity when cold-start includes both.
+    if (indiaLangs.length > 0) return indiaLangs.includes(lang) || INDIAN_LANG_SET.has(lang);
+    return effectiveLanguages.includes(lang) || INDIAN_LANG_SET.has(lang);
+  });
+
+  const seen = new Set<number>();
+  const out: SwipeCandidate[] = [];
+  for (const film of [...seeds, ...indiaHits, ...indiaMore, ...fillHits]) {
+    if (seen.has(film.tmdbId)) continue;
+    seen.add(film.tmdbId);
+    out.push(film);
+  }
+  return out;
+}
 
 function shuffle<T>(arr: T[]): T[] {
   const a = arr.slice();
@@ -451,20 +556,37 @@ export async function getPersonalizedSwipePool(opts: {
   const mixGenreId =
     genreIdFilter ?? genreIds[page % Math.max(genreIds.length, 1)];
 
-  // Trope / keyword override — keep every bucket on the same keyword so
-  // "Treasure Hunt" never mixes in unrelated popular / gem titles.
+  // Trope / keyword override — India-first (seeds + Indian langs), then English fill.
+  // Do not shuffle: order is the product signal.
   if (keywordId != null) {
-    const [tropePage, streaming, moreTrope] = await Promise.all([
-      discoverByKeyword(keywordId, effectiveLanguages, page, genreIdFilter, undefined, certification).catch(() => []),
+    const prepTrope = (list: SwipeCandidate[], source: DeckSource) =>
+      tagSource(clean(list), source);
+
+    const [tropeCore, streaming] = await Promise.all([
+      fetchIndiaFirstTropeFilms({
+        keywordId,
+        effectiveLanguages,
+        page,
+        genreIdFilter,
+        certification,
+      }),
       streamingWatch
-        ? discoverByKeyword(keywordId, effectiveLanguages, page, genreIdFilter, streamingWatch, certification).catch(() => [])
+        ? fetchIndiaFirstTropeFilms({
+            keywordId,
+            effectiveLanguages,
+            page,
+            genreIdFilter,
+            watch: streamingWatch,
+            certification,
+          })
         : Promise.resolve([]),
-      discoverByKeyword(keywordId, effectiveLanguages, page + 1, genreIdFilter, undefined, certification).catch(() => []),
     ]);
+
+    const splitAt = Math.max(1, Math.ceil(tropeCore.length * 0.55));
     const pools = {
-      safe: prep(tropePage, "trope"),
-      streaming: prep(streaming.length ? streaming : tropePage, "streaming"),
-      wildcard: prep(moreTrope, "wildcard"),
+      safe: prepTrope(tropeCore.slice(0, splitAt), "trope"),
+      streaming: prepTrope(streaming.length ? streaming : tropeCore, "streaming"),
+      wildcard: prepTrope(tropeCore.slice(splitAt), "wildcard"),
     };
     return assembleDeckMix(pools, MIX_TROPE, target);
   }
