@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, userPreferencesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth.js";
+import { ensureSchema } from "../lib/ensure-schema.js";
 
 const router: IRouter = Router();
 
@@ -105,14 +106,28 @@ async function ensurePrefsRow(userId: string) {
   return again;
 }
 
-// GET /preferences
-router.get("/preferences", requireAuth, async (req: any, res): Promise<void> => {
+async function loadPrefsRow(userId: string) {
   const [prefs] = await db
     .select()
     .from(userPreferencesTable)
-    .where(eq(userPreferencesTable.userId, req.userId));
+    .where(eq(userPreferencesTable.userId, userId));
+  return prefs;
+}
 
-  res.json(toResponse(prefs));
+// GET /preferences
+router.get("/preferences", requireAuth, async (req: any, res): Promise<void> => {
+  try {
+    res.json(toResponse(await loadPrefsRow(req.userId)));
+  } catch (err) {
+    // Self-heal after deploys that shipped schema code before drizzle push.
+    try {
+      await ensureSchema();
+      res.json(toResponse(await loadPrefsRow(req.userId)));
+    } catch (retryErr) {
+      console.error("[preferences] GET failed", retryErr ?? err);
+      res.status(500).json({ error: "Failed to load preferences" });
+    }
+  }
 });
 
 // PUT /preferences — taste prefs only; dismissed films are managed separately.
