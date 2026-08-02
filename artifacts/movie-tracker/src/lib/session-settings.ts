@@ -1,6 +1,9 @@
 /**
  * Browser session settings — toggles for trying unreleased UX without redeploy.
  * Stored in localStorage so it survives refresh; not synced to the server.
+ *
+ * Snapshots are referentially stable when values don't change — required by
+ * useSyncExternalStore (a new object every read causes Maximum update depth).
  */
 
 const SENTENCE_LOG_KEY = "cinevault:session:sentence-log";
@@ -13,6 +16,12 @@ export type SessionSettings = {
 const DEFAULTS: SessionSettings = {
   sentenceLog: false,
 };
+
+/** Stable server/SSR snapshot. */
+const SERVER_SNAPSHOT: SessionSettings = { sentenceLog: false };
+
+let cachedSnapshot: SessionSettings = { ...DEFAULTS };
+let cachedKey = "";
 
 function readBool(key: string, fallback: boolean): boolean {
   try {
@@ -33,10 +42,22 @@ function writeBool(key: string, value: boolean) {
   }
 }
 
+function snapshotKey(sentenceLog: boolean) {
+  return sentenceLog ? "1" : "0";
+}
+
 export function getSessionSettings(): SessionSettings {
-  return {
-    sentenceLog: readBool(SENTENCE_LOG_KEY, DEFAULTS.sentenceLog),
-  };
+  const sentenceLog = readBool(SENTENCE_LOG_KEY, DEFAULTS.sentenceLog);
+  const key = snapshotKey(sentenceLog);
+  if (key !== cachedKey) {
+    cachedKey = key;
+    cachedSnapshot = { sentenceLog };
+  }
+  return cachedSnapshot;
+}
+
+export function getServerSessionSettings(): SessionSettings {
+  return SERVER_SNAPSHOT;
 }
 
 export function isSentenceLogEnabled(): boolean {
@@ -45,6 +66,8 @@ export function isSentenceLogEnabled(): boolean {
 
 export function setSentenceLogEnabled(enabled: boolean) {
   writeBool(SENTENCE_LOG_KEY, enabled);
+  // Bust cache so the next getSnapshot returns a new reference.
+  cachedKey = "";
   try {
     window.dispatchEvent(
       new CustomEvent("cinevault:session-settings", {
