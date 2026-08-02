@@ -28,4 +28,16 @@ channel = "stable-25_05"
 # Publishable key only (safe in the browser). Secret stays in Replit Secrets as CLERK_SECRET_KEY.
 CLERK_PUBLISHABLE_KEY = "pk_test_YW1hemVkLW11c3RhbmctMTguY2xlcmsuYWNjb3VudHMuZGV2JA"
 VITE_CLERK_PUBLISHABLE_KEY = "pk_test_YW1hemVkLW11c3RhbmctMTguY2xlcmsuYWNjb3VudHMuZGV2JA"
+
+[[ports]]
+localPort = 8080
+externalPort = 80
+
+[[ports]]
+localPort = 8081
+externalPort = 8081
+
+[[ports]]
+localPort = 18645
+externalPort = 3000
 # Also set in Replit Secrets (server): CLERK_SECRET_KEY, TMDB_API_KEY, SESSION_SECRET, DATABASE_URL
