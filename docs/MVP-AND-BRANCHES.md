@@ -14,9 +14,10 @@ reverting one PR.
 | Together | `/partner`, `/pair/:code`, `/match/:id` | Invite, shared deck, mutual likes |
 | Account | `/profile`, `/sign-in`, `/sign-up` | Prefs, export, auth |
 | Guide | `/guide` | Page-by-page how-to + walkthrough |
+| Upcoming | `/upcoming` | Theatrical / OTT release dates (India) |
 
 ## Hidden labs (off unless `VITE_ENABLE_LABS=1`)
-Discover, Upcoming, Collections, Stats, Import.
+Discover, Collections, Stats, Import.
 
 These remain in the codebase but are removed from nav and redirect to `/watched`.
 
