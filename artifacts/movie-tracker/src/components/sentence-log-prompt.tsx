@@ -6,6 +6,7 @@ import {
   useSearchTmdb,
   getSearchTmdbQueryKey,
   useCreateMovie,
+  useUpdateMovie,
   useListMovies,
   getListMoviesQueryKey,
 } from "@workspace/api-client-react";
@@ -63,14 +64,15 @@ export function SentenceLogPrompt() {
 
   const queryClient = useQueryClient();
   const createMovie = useCreateMovie();
+  const updateMovie = useUpdateMovie();
   const { data: library } = useListMovies(undefined, {
     query: { queryKey: getListMoviesQueryKey() },
   });
 
   const libraryMap = useMemo(() => {
-    const m = new Map<number, { status: string }>();
+    const m = new Map<number, { id: number; status: string }>();
     (library ?? []).forEach((mv) => {
-      if (mv.tmdbId != null) m.set(mv.tmdbId, { status: mv.status });
+      if (mv.tmdbId != null) m.set(mv.tmdbId, { id: mv.id, status: mv.status });
     });
     return m;
   }, [library]);
@@ -100,6 +102,17 @@ export function SentenceLogPrompt() {
     return null;
   };
 
+  const afterLogged = (title: string) => {
+    toast.success(`Logged “${title}” in your diary`);
+    queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/movies/stats"] });
+    setFilm("");
+    setWithWho("");
+    setFelt("");
+    setWhen("today");
+    setSearching(false);
+  };
+
   const logFilm = (movie: {
     title: string;
     tmdbId?: number | null;
@@ -116,13 +129,41 @@ export function SentenceLogPrompt() {
       withWho,
       felt,
     });
+    const watchedAt = resolveWatchedAt();
+    const existing =
+      movie.tmdbId != null ? libraryMap.get(movie.tmdbId) : undefined;
+
+    if (existing?.status === "watched") {
+      toast.info(`“${movie.title}” is already in Watched`);
+      return;
+    }
+
+    // Watchlist → Watched (move + attach diary note)
+    if (existing?.status === "watchlist") {
+      updateMovie.mutate(
+        {
+          id: existing.id,
+          data: {
+            status: "watched",
+            notes,
+            watchedAt,
+          },
+        },
+        {
+          onSuccess: () => afterLogged(movie.title),
+          onError: () => toast.error(`Couldn't log “${movie.title}”`),
+        },
+      );
+      return;
+    }
+
     createMovie.mutate(
       {
         data: {
           title: movie.title,
           status: "watched",
           notes,
-          watchedAt: resolveWatchedAt(),
+          watchedAt,
           ...(movie.tmdbId != null && { tmdbId: movie.tmdbId }),
           ...(movie.posterPath != null && { posterPath: movie.posterPath }),
           ...(movie.releaseYear != null && { releaseYear: movie.releaseYear }),
@@ -135,16 +176,7 @@ export function SentenceLogPrompt() {
         },
       },
       {
-        onSuccess: () => {
-          toast.success(`Logged “${movie.title}” in your diary`);
-          queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
-          queryClient.invalidateQueries({ queryKey: ["/api/movies/stats"] });
-          setFilm("");
-          setWithWho("");
-          setFelt("");
-          setWhen("today");
-          setSearching(false);
-        },
+        onSuccess: () => afterLogged(movie.title),
         onError: (err: any) => {
           if (err?.response?.status === 409 || err?.status === 409) {
             toast.info(`“${movie.title}” is already in your library`);
@@ -293,9 +325,13 @@ export function SentenceLogPrompt() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {results.slice(0, 8).map((movie) => {
                 const lib = libraryMap.get(movie.tmdbId);
-                const pending =
+                const pendingCreate =
                   createMovie.isPending &&
                   createMovie.variables?.data.tmdbId === movie.tmdbId;
+                const pendingUpdate =
+                  updateMovie.isPending &&
+                  lib != null &&
+                  updateMovie.variables?.id === lib.id;
                 return (
                   <TmdbMovieCard
                     key={movie.tmdbId}
@@ -308,7 +344,7 @@ export function SentenceLogPrompt() {
                         description: "Use title search below for Watchlist.",
                       });
                     }}
-                    isAddingWatched={!!pending}
+                    isAddingWatched={!!pendingCreate || !!pendingUpdate}
                     isAddingWatchlist={false}
                   />
                 );

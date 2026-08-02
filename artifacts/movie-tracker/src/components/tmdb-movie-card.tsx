@@ -39,6 +39,8 @@ export function TmdbMovieCard({
   const posterUrl = getPosterUrl(posterPath);
   const displayLang = language ?? originalLanguage;
   const displayYear = year ?? releaseYear;
+  const alreadyWatched = inLibrary && libraryStatus === "watched";
+  const onWatchlist = inLibrary && libraryStatus === "watchlist";
 
   return (
     <div className="flex bg-card border border-border rounded-xl overflow-hidden shadow-sm hover-elevate">
@@ -70,14 +72,27 @@ export function TmdbMovieCard({
         )}
 
         <div className="mt-auto flex flex-wrap gap-2 pt-2">
-          {inLibrary ? (
+          {alreadyWatched ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground bg-secondary rounded-lg px-3 py-1.5 w-full">
               <Check className="w-3.5 h-3.5 shrink-0 text-foreground" />
-              <span>
-                Already in library
-                {libraryStatus && <span className="ml-1 opacity-60">· {libraryStatus}</span>}
-              </span>
+              <span>Already watched</span>
             </div>
+          ) : onWatchlist ? (
+            <>
+              <Button
+                size="sm"
+                variant="default"
+                onClick={onAddWatched}
+                disabled={isAddingWatched || isAddingWatchlist}
+                className="flex-1 text-xs h-8"
+              >
+                {isAddingWatched ? "Saving…" : "Mark Watched"}
+              </Button>
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-secondary rounded-lg px-2.5 h-8">
+                <Check className="w-3 h-3 shrink-0" />
+                On watchlist
+              </div>
+            </>
           ) : (
             <>
               <Button
