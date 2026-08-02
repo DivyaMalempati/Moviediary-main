@@ -129,19 +129,27 @@ type TmdbPersonRaw = {
 
 /** India-first then popularity — used for person filmographies. */
 export function sortFilmographyIndiaFirst<
-  T extends { originalLanguage?: string | null; voteAverage?: number | null },
+  T extends {
+    originalLanguage?: string | null;
+    voteAverage?: number | null;
+    popularity?: number | null;
+  },
 >(movies: T[]): T[] {
   return movies.slice().sort((a, b) => {
     const aIn = a.originalLanguage && INDIAN_LANG_SET.has(a.originalLanguage) ? 0 : 1;
     const bIn = b.originalLanguage && INDIAN_LANG_SET.has(b.originalLanguage) ? 0 : 1;
     if (aIn !== bIn) return aIn - bIn;
+    const popDiff = (b.popularity ?? 0) - (a.popularity ?? 0);
+    if (popDiff !== 0) return popDiff;
     return (b.voteAverage ?? 0) - (a.voteAverage ?? 0);
   });
 }
 
+type TmdbPersonRawWithPop = TmdbPersonRaw & { popularity?: number };
+
 /**
- * Search TMDB people. Soft-ranks by department (Acting / Directing) so heroes
- * and directors surface first without hiding cross-discipline matches.
+ * Search TMDB people. Ranks exact name + department + popularity so Indian
+ * heroes like "Suriya" beat lesser-known people with the same first name.
  */
 export async function searchPeople(
   query: string,
@@ -151,7 +159,8 @@ export async function searchPeople(
     query,
     include_adult: "false",
   });
-  const data = (await res.json()) as { results: TmdbPersonRaw[] };
+  const data = (await res.json()) as { results: TmdbPersonRawWithPop[] };
+  const q = query.trim().toLowerCase();
 
   const mapped = (data.results ?? []).map((p) => ({
     tmdbId: p.id,
@@ -164,15 +173,21 @@ export async function searchPeople(
       .filter((t): t is string => !!t)
       .slice(0, 3),
     _dept: p.known_for_department ?? "",
+    _name: p.name.toLowerCase(),
+    _pop: p.popularity ?? 0,
   }));
 
   mapped.sort((a, b) => {
+    const aExact = a._name === q ? 0 : a._name.startsWith(q) ? 1 : 2;
+    const bExact = b._name === q ? 0 : b._name.startsWith(q) ? 1 : 2;
+    if (aExact !== bExact) return aExact - bExact;
     const aMatch = a._dept === department ? 0 : 1;
     const bMatch = b._dept === department ? 0 : 1;
-    return aMatch - bMatch;
+    if (aMatch !== bMatch) return aMatch - bMatch;
+    return b._pop - a._pop;
   });
 
-  return mapped.map(({ _dept: _, ...rest }) => rest);
+  return mapped.map(({ _dept, _name, _pop, ...rest }) => rest);
 }
 
 type CreditMovieRaw = TmdbMovieRaw & {
@@ -211,8 +226,17 @@ export async function getPersonMovieCredits(
     unique.push(m);
   }
 
-  const movies = unique.map((m) => mapTmdbMovie(m, idToName));
-  return sortFilmographyIndiaFirst(movies);
+  // Sort on raw credits (have popularity) before mapping to API shape.
+  const sorted = sortFilmographyIndiaFirst(
+    unique.map((m) => ({
+      ...m,
+      originalLanguage: m.original_language ?? null,
+      voteAverage: m.vote_average ?? null,
+      popularity: m.popularity ?? null,
+    })),
+  );
+
+  return sorted.map((m) => mapTmdbMovie(m, idToName));
 }
 
 export async function getMovieDetails(tmdbId: number) {

@@ -134,11 +134,13 @@ export default function AddPage() {
     },
   );
 
+  // Also run people search in Title mode so names like "Suriya" surface the
+  // actor (TMDB movie search only matches titles, not cast).
   const { data: peopleResults, isLoading: isSearchingPeople } = useSearchTmdbPeople(
     { q: debouncedQuery, department: personDepartment },
     {
       query: {
-        enabled: !isTitleMode && !selectedPerson && debouncedQuery.length > 1,
+        enabled: !selectedPerson && debouncedQuery.length > 1,
         queryKey: getSearchTmdbPeopleQueryKey({
           q: debouncedQuery,
           department: personDepartment,
@@ -146,6 +148,21 @@ export default function AddPage() {
       },
     },
   );
+
+  const peoplePreview = useMemo(() => {
+    if (!peopleResults?.length) return [];
+    const q = debouncedQuery.trim().toLowerCase();
+    // In Title mode, only show people when the query looks like a name match.
+    if (isTitleMode) {
+      return peopleResults
+        .filter((p) => {
+          const n = p.name.toLowerCase();
+          return n === q || n.startsWith(q) || n.split(/\s+/).some((part) => part === q);
+        })
+        .slice(0, 5);
+    }
+    return peopleResults;
+  }, [peopleResults, debouncedQuery, isTitleMode]);
 
   const { data: filmography, isLoading: isLoadingFilms } = useGetPersonFilmography(
     { personId: selectedPerson?.tmdbId ?? 0, role: personRole },
@@ -288,8 +305,8 @@ export default function AddPage() {
         : "Search by title…";
 
   const isSearching =
-    (isTitleMode && isSearchingTitles) ||
-    (!isTitleMode && !selectedPerson && isSearchingPeople) ||
+    (isTitleMode && isSearchingTitles && !peoplePreview.length) ||
+    (!selectedPerson && isSearchingPeople && !isTitleMode) ||
     (!!selectedPerson && isLoadingFilms) ||
     filteringStreaming;
 
@@ -450,36 +467,65 @@ export default function AddPage() {
                 </p>
               </div>
             )
-          ) : !isTitleMode && peopleResults && peopleResults.length > 0 ? (
+          ) : !isTitleMode && peoplePreview.length > 0 ? (
             <div className="space-y-2">
-              {peopleResults.map((person) => (
+              {peoplePreview.map((person) => (
                 <PersonRow
                   key={person.tmdbId}
                   person={person}
-                  onSelect={() => setSelectedPerson(person)}
+                  onSelect={() => {
+                    setSearchMode(person.knownForDepartment === "Directing" ? "director" : "hero");
+                    setSelectedPerson(person);
+                  }}
                 />
               ))}
             </div>
-          ) : isTitleMode && visibleResults && visibleResults.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {visibleResults.map((movie) => {
-                const lib = libraryMap.get(movie.tmdbId);
-                const isPendingThis =
-                  createMovie.isPending &&
-                  createMovie.variables?.data.tmdbId === movie.tmdbId;
-                return (
-                  <TmdbMovieCard
-                    key={movie.tmdbId}
-                    {...movie}
-                    inLibrary={!!lib}
-                    libraryStatus={lib?.status as "watched" | "watchlist" | undefined}
-                    onAddWatched={() => handleAdd(movie, "watched")}
-                    onAddWatchlist={() => handleAdd(movie, "watchlist")}
-                    isAddingWatched={isPendingThis && createMovie.variables?.data.status === "watched"}
-                    isAddingWatchlist={isPendingThis && createMovie.variables?.data.status === "watchlist"}
-                  />
-                );
-              })}
+          ) : isTitleMode && (peoplePreview.length > 0 || (visibleResults && visibleResults.length > 0)) ? (
+            <div className="space-y-6">
+              {peoplePreview.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">People</p>
+                  {peoplePreview.map((person) => (
+                    <PersonRow
+                      key={person.tmdbId}
+                      person={person}
+                      onSelect={() => {
+                        setSearchMode(
+                          person.knownForDepartment === "Directing" ? "director" : "hero",
+                        );
+                        setSelectedPerson(person);
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+              {visibleResults && visibleResults.length > 0 && (
+                <div className="space-y-2">
+                  {peoplePreview.length > 0 && (
+                    <p className="text-sm font-medium text-muted-foreground">Titles</p>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {visibleResults.map((movie) => {
+                      const lib = libraryMap.get(movie.tmdbId);
+                      const isPendingThis =
+                        createMovie.isPending &&
+                        createMovie.variables?.data.tmdbId === movie.tmdbId;
+                      return (
+                        <TmdbMovieCard
+                          key={movie.tmdbId}
+                          {...movie}
+                          inLibrary={!!lib}
+                          libraryStatus={lib?.status as "watched" | "watchlist" | undefined}
+                          onAddWatched={() => handleAdd(movie, "watched")}
+                          onAddWatchlist={() => handleAdd(movie, "watchlist")}
+                          isAddingWatched={isPendingThis && createMovie.variables?.data.status === "watched"}
+                          isAddingWatchlist={isPendingThis && createMovie.variables?.data.status === "watchlist"}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           ) : debouncedQuery.length > 1 ? (
             <div className="text-center py-20 space-y-2">
