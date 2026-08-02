@@ -9,6 +9,7 @@ import {
   matchSessionsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth.js";
+import { ensureSchema } from "../lib/ensure-schema.js";
 
 const router: IRouter = Router();
 
@@ -41,27 +42,14 @@ function normalizeName(name: string): string {
  * Create an invite for a named person (nickname). Always mints a fresh code
  * so each person you invite can be tracked separately.
  */
-router.post("/partners/invite", requireAuth, async (req: any, res): Promise<void> => {
-  if (!requireRegistered(req, res)) return;
-
-  const rawName =
-    typeof req.body?.recipientName === "string" ? normalizeName(req.body.recipientName) : "";
-  if (!rawName || rawName.length < 1) {
-    res.status(400).json({ error: "Who are you inviting? Add a name (e.g. Priya)." });
-    return;
-  }
-  if (rawName.length > 60) {
-    res.status(400).json({ error: "Name is too long" });
-    return;
-  }
-
+async function createNamedInvite(userId: string, rawName: string) {
   // Reuse contact with same display name (case-insensitive) for this owner.
   const [existingContact] = await db
     .select()
     .from(partnerContactsTable)
     .where(
       and(
-        eq(partnerContactsTable.ownerUserId, req.userId),
+        eq(partnerContactsTable.ownerUserId, userId),
         sql`lower(${partnerContactsTable.displayName}) = ${rawName.toLowerCase()}`,
       ),
     )
@@ -72,7 +60,7 @@ router.post("/partners/invite", requireAuth, async (req: any, res): Promise<void
     const [created] = await db
       .insert(partnerContactsTable)
       .values({
-        ownerUserId: req.userId,
+        ownerUserId: userId,
         displayName: rawName,
       })
       .returning();
@@ -90,20 +78,48 @@ router.post("/partners/invite", requireAuth, async (req: any, res): Promise<void
     .insert(partnerInvitesTable)
     .values({
       code,
-      creatorUserId: req.userId,
+      creatorUserId: userId,
       contactId: contact.id,
       recipientName: rawName,
       expiresAt,
     })
     .returning();
 
-  res.status(201).json({
+  return {
     code: invite.code,
     expiresAt: invite.expiresAt.toISOString(),
     path: `/pair/${invite.code}`,
     recipientName: rawName,
     contactId: contact.id,
-  });
+  };
+}
+
+router.post("/partners/invite", requireAuth, async (req: any, res): Promise<void> => {
+  if (!requireRegistered(req, res)) return;
+
+  const rawName =
+    typeof req.body?.recipientName === "string" ? normalizeName(req.body.recipientName) : "";
+  if (!rawName || rawName.length < 1) {
+    res.status(400).json({ error: "Who are you inviting? Add a name (e.g. Priya)." });
+    return;
+  }
+  if (rawName.length > 60) {
+    res.status(400).json({ error: "Name is too long" });
+    return;
+  }
+
+  try {
+    res.status(201).json(await createNamedInvite(req.userId, rawName));
+  } catch (err) {
+    // Self-heal after deploys that shipped named-invite code before drizzle push.
+    try {
+      await ensureSchema();
+      res.status(201).json(await createNamedInvite(req.userId, rawName));
+    } catch (retryErr) {
+      console.error("[partners] invite failed", retryErr ?? err);
+      res.status(500).json({ error: "Couldn’t create invite. Try again after a refresh." });
+    }
+  }
 });
 
 /**
@@ -265,11 +281,27 @@ router.get("/partners", requireAuth, async (req: any, res): Promise<void> => {
 router.get("/partners/contacts", requireAuth, async (req: any, res): Promise<void> => {
   if (!requireRegistered(req, res)) return;
 
-  const contacts = await db
-    .select()
-    .from(partnerContactsTable)
-    .where(eq(partnerContactsTable.ownerUserId, req.userId))
-    .orderBy(desc(partnerContactsTable.updatedAt));
+  let contacts;
+  try {
+    contacts = await db
+      .select()
+      .from(partnerContactsTable)
+      .where(eq(partnerContactsTable.ownerUserId, req.userId))
+      .orderBy(desc(partnerContactsTable.updatedAt));
+  } catch (err) {
+    try {
+      await ensureSchema();
+      contacts = await db
+        .select()
+        .from(partnerContactsTable)
+        .where(eq(partnerContactsTable.ownerUserId, req.userId))
+        .orderBy(desc(partnerContactsTable.updatedAt));
+    } catch (retryErr) {
+      console.error("[partners] contacts failed", retryErr ?? err);
+      res.status(500).json({ error: "Couldn’t load invites" });
+      return;
+    }
+  }
 
   const out = [];
   for (const c of contacts) {
