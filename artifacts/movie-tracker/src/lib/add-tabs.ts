@@ -13,7 +13,7 @@ export const DISCOVER_SUBTABS: Array<{
   label: string;
   shortLabel: string;
 }> = [
-  { id: "people", label: "Hero / Director", shortLabel: "Hero" },
+  { id: "people", label: "Actor / Director", shortLabel: "Actor" },
   { id: "foryou", label: "For You", shortLabel: "For You" },
   { id: "liked", label: "Liked", shortLabel: "Liked" },
   { id: "trending", label: "Trending", shortLabel: "Trending" },

@@ -20,7 +20,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { RatingPickerDialog } from "@/components/rating-picker-dialog";
 import { getPosterUrl } from "@/lib/movie-utils";
 
-type PersonMode = "hero" | "director";
+type PersonMode = "actor" | "director";
 
 function PersonRow({
   person,
@@ -55,11 +55,11 @@ function PersonRow({
   );
 }
 
-/** Hero / Director search → filmography → add to vault. Used on Add → Discover tabs. */
+/** Actor / Director search → filmography → add to vault. Used on Add → Discover tabs. */
 export function PersonFilmographySearch() {
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebounce(query, 500);
-  const [mode, setMode] = useState<PersonMode>("hero");
+  const [mode, setMode] = useState<PersonMode>("actor");
   const [selectedPerson, setSelectedPerson] = useState<TmdbPerson | null>(null);
   const [pendingWatched, setPendingWatched] = useState<any | null>(null);
 
@@ -153,15 +153,15 @@ export function PersonFilmographySearch() {
     (!selectedPerson && isSearchingPeople) || (!!selectedPerson && isLoadingFilms);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-tour="add-actor-search">
       <ToggleGroup
         type="single"
         value={mode}
         onValueChange={(v) => v && changeMode(v as PersonMode)}
         className="justify-start"
       >
-        <ToggleGroupItem value="hero" aria-label="Search by hero">
-          Hero
+        <ToggleGroupItem value="actor" aria-label="Search by actor">
+          Actor
         </ToggleGroupItem>
         <ToggleGroupItem value="director" aria-label="Search by director">
           Director
@@ -191,7 +191,11 @@ export function PersonFilmographySearch() {
         <div className="relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
           <Input
-            placeholder={mode === "director" ? "Search by director…" : "Search by actor / hero…"}
+            placeholder={
+              mode === "director"
+                ? "Search by director…"
+                : "Search actors — hero, heroine, comedian…"
+            }
             className="pl-12 h-12 text-base bg-background border-border"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -246,7 +250,7 @@ export function PersonFilmographySearch() {
         </p>
       ) : (
         <p className="text-center text-muted-foreground/60 py-12 text-sm">
-          Find films by Indian (and world) heroes or directors — e.g. Suriya, Mani Ratnam.
+          Search any actor — hero, heroine, comedian — or a director. e.g. Samantha, Vadivelu, Mani Ratnam.
         </p>
       )}
 
