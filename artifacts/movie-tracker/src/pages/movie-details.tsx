@@ -20,7 +20,7 @@ import {
   useRewatchMovie,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getPosterUrl, RATING_LABELS, formatWatchDate } from "@/lib/movie-utils";
+import { getPosterUrl, RATING_LABELS, formatWatchDate, todayInputValue, toWatchDateInput } from "@/lib/movie-utils";
 import { LanguageBadge } from "@/components/language-badge";
 import { MoviePosterCard } from "@/components/movie-card";
 import { Star, Heart, Bookmark, Check, Trash2, ArrowLeft, Loader2, Calendar, Clapperboard, Tv, Eye, BookmarkPlus, Film, FolderOpen, Plus, X, RotateCcw, Ban } from "lucide-react";
@@ -127,11 +127,13 @@ export default function MovieDetailsPage() {
 
   const [ratingDialogMovie, setRatingDialogMovie] = useState<{
     title: string;
-    action: (r: string | null) => void;
+    action: (payload: { rating: string | null; watchedAt: string | null }) => void;
     titleSuffix?: string;
     skipLabel?: string;
   } | null>(null);
   const [rewatchDialogOpen, setRewatchDialogOpen] = useState(false);
+  const [editingWatchDate, setEditingWatchDate] = useState(false);
+  const [watchDateDraft, setWatchDateDraft] = useState("");
   const [shareOpen, setShareOpen] = useState(false);
   const [sharePayload, setSharePayload] = useState<ShareMovieInput | null>(null);
   const [newColName, setNewColName] = useState("");
@@ -179,12 +181,23 @@ export default function MovieDetailsPage() {
       // watchlist → watched: ask for rating
       setRatingDialogMovie({
         title: movie.title,
-        action: (selectedRating) => {
+        action: ({ rating: selectedRating, watchedAt }) => {
           setRatingDialogMovie(null);
-          updateMovie.mutate({ id, data: { status: "watched", ...(selectedRating ? { rating: selectedRating } : {}) } }, {
+          updateMovie.mutate({
+            id,
+            data: {
+              status: "watched",
+              watchedAt,
+              ...(selectedRating ? { rating: selectedRating } : {}),
+            },
+          }, {
             onSuccess: () => {
               if (selectedRating) setRating(selectedRating);
-              toast.success("Marked as Watched", {
+              toast.success(
+                watchedAt
+                  ? `Marked as Watched · ${formatWatchDate(watchedAt)}`
+                  : "Marked as Watched",
+                {
                 action: {
                   label: "Share",
                   onClick: () => {
@@ -283,12 +296,18 @@ export default function MovieDetailsPage() {
     );
   };
 
-  const doAddTmdb = (tmdbMovie: any, status: "watched" | "watchlist", rating?: string | null) => {
+  const doAddTmdb = (
+    tmdbMovie: any,
+    status: "watched" | "watchlist",
+    rating?: string | null,
+    watchedAt?: string | null,
+  ) => {
     createMovie.mutate({
       data: {
         title: tmdbMovie.title,
         status,
         ...(rating ? { rating } : {}),
+        ...(status === "watched" ? { watchedAt: watchedAt ?? null } : {}),
         ...(tmdbMovie.tmdbId != null && { tmdbId: tmdbMovie.tmdbId }),
         ...(tmdbMovie.posterPath != null && { posterPath: tmdbMovie.posterPath }),
         ...(tmdbMovie.releaseYear != null && { releaseYear: tmdbMovie.releaseYear }),
@@ -307,11 +326,31 @@ export default function MovieDetailsPage() {
     if (status === "watched") {
       setRatingDialogMovie({
         title: tmdbMovie.title,
-        action: (r) => { setRatingDialogMovie(null); doAddTmdb(tmdbMovie, "watched", r); },
+        action: ({ rating: r, watchedAt }) => {
+          setRatingDialogMovie(null);
+          doAddTmdb(tmdbMovie, "watched", r, watchedAt);
+        },
       });
     } else {
       doAddTmdb(tmdbMovie, "watchlist");
     }
+  };
+
+  const saveWatchDate = (next: string | null) => {
+    if (!id) return;
+    updateMovie.mutate(
+      { id, data: { watchedAt: next } },
+      {
+        onSuccess: () => {
+          setEditingWatchDate(false);
+          toast.success(next ? `Watch date · ${formatWatchDate(next)}` : "Watch date cleared");
+          queryClient.invalidateQueries({ queryKey: getGetMovieQueryKey(id) });
+          queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
+          queryClient.invalidateQueries({ queryKey: ["movie-stats"] });
+        },
+        onError: () => toast.error("Couldn’t update watch date"),
+      },
+    );
   };
 
   const handleMuteLikeThis = async () => {
@@ -498,17 +537,6 @@ export default function MovieDetailsPage() {
             const times = 1 + (movie.rewatchCount ?? 0);
             const dated = [...(movie.rewatchDates ?? [])].slice().reverse();
             const lastIso = movie.watchedAt ?? null;
-            const lastMatchesRewatch =
-              !!lastIso &&
-              dated.some((iso) => {
-                const a = new Date(iso);
-                const b = new Date(lastIso);
-                return (
-                  !Number.isNaN(a.getTime()) &&
-                  !Number.isNaN(b.getTime()) &&
-                  a.toDateString() === b.toDateString()
-                );
-              });
             const undated =
               (movie.rewatchCount ?? 0) - (movie.rewatchDates?.length ?? 0);
             return (
@@ -524,17 +552,67 @@ export default function MovieDetailsPage() {
                     : ""}
                 </p>
                 <ul className="space-y-2 text-sm">
-                  {lastIso && !lastMatchesRewatch && (
-                    <li className="flex items-center gap-2 text-muted-foreground">
+                  <li className="flex flex-col gap-2 text-muted-foreground">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Calendar className="w-3.5 h-3.5 shrink-0" />
                       <span>
                         {(movie.rewatchCount ?? 0) > 0 ? "Last watched" : "Watched"}{" "}
-                        <span className="text-foreground font-medium">
-                          {formatWatchDate(lastIso)}
-                        </span>
+                        {lastIso ? (
+                          <span className="text-foreground font-medium">
+                            {formatWatchDate(lastIso)}
+                          </span>
+                        ) : (
+                          <span className="text-foreground/80 italic">date unknown</span>
+                        )}
                       </span>
-                    </li>
-                  )}
+                      {!editingWatchDate && (
+                        <button
+                          type="button"
+                          className="text-xs text-primary hover:underline"
+                          onClick={() => {
+                            setWatchDateDraft(toWatchDateInput(lastIso));
+                            setEditingWatchDate(true);
+                          }}
+                        >
+                          Edit date
+                        </button>
+                      )}
+                    </div>
+                    {editingWatchDate && (
+                      <div className="flex flex-wrap items-center gap-2 pl-5">
+                        <Input
+                          type="date"
+                          value={watchDateDraft}
+                          max={todayInputValue()}
+                          onChange={(e) => setWatchDateDraft(e.target.value)}
+                          className="h-8 w-auto bg-secondary border-border text-sm"
+                        />
+                        <Button
+                          size="sm"
+                          className="h-8"
+                          onClick={() => saveWatchDate(watchDateDraft || null)}
+                        >
+                          Save
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 text-muted-foreground"
+                          onClick={() => saveWatchDate(null)}
+                        >
+                          Not sure
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 text-muted-foreground"
+                          onClick={() => setEditingWatchDate(false)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    )}
+                  </li>
                   {dated.map((iso, i) => (
                     <li
                       key={`${iso}-${i}`}
@@ -554,9 +632,9 @@ export default function MovieDetailsPage() {
                       {undated} rewatch{undated === 1 ? "" : "es"} logged without a date
                     </li>
                   )}
-                  {!lastIso && dated.length === 0 && (
-                    <li className="text-sm text-muted-foreground italic">
-                      No dates logged yet — dates are optional when you rewatch.
+                  {movie.createdAt && (
+                    <li className="text-xs text-muted-foreground/70 pl-5">
+                      Added to diary {formatWatchDate(movie.createdAt)}
                     </li>
                   )}
                 </ul>
@@ -873,7 +951,7 @@ export default function MovieDetailsPage() {
         confirmOnSelect
         titleSuffix={ratingDialogMovie?.titleSuffix}
         skipLabel={ratingDialogMovie?.skipLabel}
-        onConfirm={(r) => ratingDialogMovie?.action(r)}
+        onConfirm={(payload) => ratingDialogMovie?.action(payload)}
         onCancel={() => setRatingDialogMovie(null)}
       />
       <RewatchLogDialog

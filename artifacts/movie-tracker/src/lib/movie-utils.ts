@@ -24,3 +24,20 @@ export function formatWatchDate(iso: string | null | undefined) {
     year: "numeric",
   });
 }
+
+/** Today's date as `YYYY-MM-DD` for `<input type="date">`. */
+export function todayInputValue(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Convert a `YYYY-MM-DD` (or ISO) value to a date-only string for APIs. */
+export function toWatchDateInput(iso: string | null | undefined): string {
+  if (!iso) return todayInputValue();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return todayInputValue();
+  return todayInputValue(d);
+}

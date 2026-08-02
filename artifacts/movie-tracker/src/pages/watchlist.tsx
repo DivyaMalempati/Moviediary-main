@@ -51,10 +51,17 @@ export default function WatchlistPage() {
 
   const handleMarkWatched = (id: number) => setPendingId(id);
 
-  const submitWatched = (rating: string | null) => {
+  const submitWatched = (payload: { rating: string | null; watchedAt: string | null }) => {
     if (!pendingId) return;
     updateMovie.mutate(
-      { id: pendingId, data: { status: "watched", rating: rating ?? null } },
+      {
+        id: pendingId,
+        data: {
+          status: "watched",
+          rating: payload.rating ?? null,
+          watchedAt: payload.watchedAt,
+        },
+      },
       {
         onSuccess: () => {
           toast.success("Marked as watched!");

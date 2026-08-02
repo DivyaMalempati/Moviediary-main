@@ -395,7 +395,12 @@ export default function SuggestionsPage() {
       toast.error("Couldn't update preferences");
     }
   };
-  const doAdd = (movie: any, status: "watched" | "watchlist", rating?: string | null) => {
+  const doAdd = (
+    movie: any,
+    status: "watched" | "watchlist",
+    rating?: string | null,
+    watchedAt?: string | null,
+  ) => {
     const safeRating =
       rating && rating in RATING_LABELS ? rating : null;
 
@@ -411,6 +416,7 @@ export default function SuggestionsPage() {
           originalLanguage: movie.originalLanguage ?? movie.language,
         }),
         ...(status === "watched" && safeRating ? { rating: safeRating } : {}),
+        ...(status === "watched" ? { watchedAt: watchedAt ?? null } : {}),
       },
     }, {
       onSuccess: () => {
@@ -624,10 +630,10 @@ export default function SuggestionsPage() {
         movieTitle={pendingWatched?.title ?? ""}
         confirmOnSelect
         onCancel={() => setPendingWatched(null)}
-        onConfirm={(rating) => {
+        onConfirm={({ rating, watchedAt }) => {
           const movie = pendingWatched;
           setPendingWatched(null);
-          if (movie) doAdd(movie, "watched", rating);
+          if (movie) doAdd(movie, "watched", rating, watchedAt);
         }}
       />
     </>

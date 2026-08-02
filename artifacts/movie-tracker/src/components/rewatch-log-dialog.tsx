@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Heart, Star } from "lucide-react";
-import { RATING_LABELS } from "@/lib/movie-utils";
+import { RATING_LABELS, todayInputValue } from "@/lib/movie-utils";
 import {
   Dialog,
   DialogContent,
@@ -22,14 +22,6 @@ interface RewatchLogDialogProps {
   movieTitle: string;
   onConfirm: (payload: RewatchLogPayload) => void;
   onCancel: () => void;
-}
-
-function todayInputValue() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
 }
 
 /** Log a rewatch with optional rating and optional watch date. */

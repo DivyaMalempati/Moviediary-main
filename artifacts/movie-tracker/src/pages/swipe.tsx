@@ -187,6 +187,7 @@ async function saveFilm(
   film: SwipeFilm,
   status: "watchlist" | "watched",
   rating?: string | null,
+  watchedAt?: string | null,
 ): Promise<{ ok: boolean; id?: number }> {
   try {
     const body: Record<string, unknown> = {
@@ -201,6 +202,7 @@ async function saveFilm(
     if (film.overview != null)          body.overview = film.overview;
     if (film.genres?.length)            body.genres = film.genres;
     if (rating)                         body.rating = rating;
+    if (status === "watched")           body.watchedAt = watchedAt ?? null;
 
     const res = await fetch(`${BASE}/api/movies`, {
       method: "POST",
@@ -919,7 +921,7 @@ function SwipeDeck() {
 
     const retryAll = async () => {
       for (const item of queued) {
-        const { ok } = await saveFilm(item.film, item.status, item.rating);
+        const { ok } = await saveFilm(item.film, item.status, item.rating, item.watchedAt);
         if (ok) {
           dequeueOffline(item.film.tmdbId);
           synced++;
@@ -1009,14 +1011,18 @@ function SwipeDeck() {
     }
   }, [advance, isOnline, pushUndo, qc, savedFilms.length]);
 
-  const commitWatched = useCallback(async (film: SwipeFilm, rating: string | null) => {
+  const commitWatched = useCallback(async (
+    film: SwipeFilm,
+    rating: string | null,
+    watchedAt: string | null,
+  ) => {
     // MovieInput.rating is optional string; only send when set.
     // Values must match DB enum / RATING_LABELS: loved|great|very_good|good|ok|avg|meh
     const safeRating =
       rating && rating in RATING_LABELS ? rating : null;
 
     if (!isOnline) {
-      enqueueOffline(film, "watched", safeRating);
+      enqueueOffline(film, "watched", safeRating, watchedAt);
       setPendingCount(getOfflineQueue().length);
       pushUndo({ film, action: "watched" });
       toast.warning("Logged offline — will sync when you're back online", {
@@ -1025,24 +1031,27 @@ function SwipeDeck() {
       return;
     }
 
-    const { ok, id } = await saveFilm(film, "watched", safeRating);
+    const { ok, id } = await saveFilm(film, "watched", safeRating, watchedAt);
     if (ok) {
       setWatchedFilms((w) => [...w, film]);
       pushUndo({ film, action: "watched", movieId: id ?? null });
       void invalidateLibrary(qc);
     } else {
-      enqueueOffline(film, "watched", safeRating);
+      enqueueOffline(film, "watched", safeRating, watchedAt);
       setPendingCount(getOfflineQueue().length);
       pushUndo({ film, action: "watched" });
       toast.error("Log failed — queued for retry when connection improves", { duration: 4000 });
     }
   }, [isOnline, pushUndo, qc]);
 
-  const resolveWatchedRating = useCallback(async (rating: string | null) => {
+  const resolveWatchedRating = useCallback(async (payload: {
+    rating: string | null;
+    watchedAt: string | null;
+  }) => {
     const film = ratingFilm;
     setRatingFilm(null);
     if (!film) return;
-    await commitWatched(film, rating);
+    await commitWatched(film, payload.rating, payload.watchedAt);
     if (pendingFinishRef.current && !finishingRef.current) {
       pendingFinishRef.current = false;
       finishingRef.current = true;
@@ -1378,10 +1387,11 @@ function SwipeDeck() {
         onCancel={() => {
           // Gesture already committed — dismiss still logs watched, no rating
           // (same as dialog "Skip rating", unlike add.tsx which aborts entirely).
-          void resolveWatchedRating(null);
+          // Keep default watch day = today when the sheet is dismissed.
+          void resolveWatchedRating({ rating: null, watchedAt: new Date().toISOString().slice(0, 10) });
         }}
-        onConfirm={(rating) => {
-          void resolveWatchedRating(rating);
+        onConfirm={(payload) => {
+          void resolveWatchedRating(payload);
         }}
       />
     </>
