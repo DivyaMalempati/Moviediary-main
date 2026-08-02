@@ -1,12 +1,30 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { MoviePosterCard } from "@/components/movie-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useListMovies, useUpdateMovie, getListMoviesQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Bookmark, Download, Loader2, Search, Star, X } from "lucide-react";
+import { Bell, Bookmark, Download, Loader2, Search, Star, X } from "lucide-react";
 import { isFeatureEnabled } from "@/lib/features";
+import {
+  dismissReleaseReminder,
+  findReleaseReminders,
+  formatReleaseCopy,
+  formatReleaseDateLabel,
+  isReleaseDismissed,
+  releasePosterUrl,
+  type LookingForwardFilm,
+} from "@/lib/release-reminders";
+import { RatingPickerDialog } from "@/components/rating-picker-dialog";
+import { toast } from "sonner";
 
 // ── CSV export ────────────────────────────────────────────────────────────────
 function exportCSV(movies: any[], filename: string) {
@@ -27,11 +45,47 @@ function exportCSV(movies: any[], filename: string) {
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url; a.download = filename; a.click();
+  a.href = url;
+  a.download = filename;
+  a.click();
   URL.revokeObjectURL(url);
 }
-import { RatingPickerDialog } from "@/components/rating-picker-dialog";
-import { toast } from "sonner";
+
+// ── Sort ──────────────────────────────────────────────────────────────────────
+type SortKey = "year_desc" | "newest" | "oldest" | "az" | "release_soon";
+
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: "year_desc", label: "Film year ↓" },
+  { value: "newest", label: "Newest added" },
+  { value: "oldest", label: "Oldest added" },
+  { value: "release_soon", label: "Release date" },
+  { value: "az", label: "A–Z" },
+];
+
+const SORT_STORAGE_KEY = "cinevault:watchlist-sort";
+
+function sortWatchlist(list: any[], sort: SortKey) {
+  return [...list].sort((a, b) => {
+    switch (sort) {
+      case "year_desc":
+        return (b.releaseYear ?? 0) - (a.releaseYear ?? 0);
+      case "newest":
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      case "oldest":
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      case "release_soon": {
+        const ad = a.releaseDate ? new Date(`${a.releaseDate}T12:00:00`).getTime() : Number.POSITIVE_INFINITY;
+        const bd = b.releaseDate ? new Date(`${b.releaseDate}T12:00:00`).getTime() : Number.POSITIVE_INFINITY;
+        if (ad !== bd) return ad - bd;
+        return (b.releaseYear ?? 0) - (a.releaseYear ?? 0);
+      }
+      case "az":
+        return a.title.localeCompare(b.title);
+      default:
+        return 0;
+    }
+  });
+}
 
 export default function WatchlistPage() {
   const queryClient = useQueryClient();
@@ -40,14 +94,44 @@ export default function WatchlistPage() {
 
   const [pendingId, setPendingId] = useState<number | null>(null);
   const [query, setQuery] = useState("");
+  const [releaseReminderDismissed, setReleaseReminderDismissed] = useState(false);
+  const [sort, setSort] = useState<SortKey>(() => {
+    try {
+      const saved = localStorage.getItem(SORT_STORAGE_KEY) as SortKey | null;
+      if (saved && SORT_OPTIONS.some((o) => o.value === saved)) return saved;
+    } catch {
+      /* ignore */
+    }
+    return "year_desc";
+  });
+
+  const updateSort = (s: SortKey) => {
+    setSort(s);
+    try {
+      localStorage.setItem(SORT_STORAGE_KEY, s);
+    } catch {
+      /* ignore */
+    }
+  };
 
   const pendingMovie = movies?.find((m) => m.id === pendingId);
 
-  const filtered = query.trim()
-    ? movies?.filter((m) =>
-        m.title.toLowerCase().includes(query.toLowerCase())
-      )
-    : movies;
+  const releaseReminder: LookingForwardFilm | null = useMemo(() => {
+    if (!movies?.length || releaseReminderDismissed) return null;
+    const candidates = findReleaseReminders(movies, {
+      withinDays: 7,
+      includePastDays: 14,
+    }).filter((f) => !isReleaseDismissed(f.id, f.releaseDate));
+    return candidates[0] ?? null;
+  }, [movies, releaseReminderDismissed]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const base = q
+      ? (movies ?? []).filter((m) => m.title.toLowerCase().includes(q))
+      : (movies ?? []);
+    return sortWatchlist(base, sort);
+  }, [movies, query, sort]);
 
   const handleMarkWatched = (id: number) => setPendingId(id);
 
@@ -72,13 +156,62 @@ export default function WatchlistPage() {
           toast.error("Failed to update movie");
           setPendingId(null);
         },
-      }
+      },
     );
   };
 
   return (
     <>
       <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
+        {releaseReminder && (
+          <div className="relative flex items-start gap-4 rounded-xl border border-sky-400/30 bg-sky-400/5 px-5 py-4">
+            {releasePosterUrl(releaseReminder) ? (
+              <img
+                src={releasePosterUrl(releaseReminder)!}
+                alt=""
+                className="w-12 h-[72px] rounded-md object-cover shrink-0 shadow"
+              />
+            ) : (
+              <div className="w-12 h-[72px] rounded-md bg-secondary flex items-center justify-center shrink-0">
+                <Bell className="w-5 h-5 text-muted-foreground" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium leading-snug">
+                {formatReleaseCopy(releaseReminder)}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {formatReleaseDateLabel(releaseReminder.releaseDate)}
+                {releaseReminder.daysUntil < 0 ? " · just out" : " · on your watchlist"}
+              </p>
+              <div className="flex items-center gap-2 mt-3">
+                <Link href={`/movie/${releaseReminder.id}`}>
+                  <Button size="sm" className="bg-white text-black hover:bg-white/90 h-7 text-xs">
+                    Open film
+                  </Button>
+                </Link>
+                {isFeatureEnabled("upcoming") && (
+                  <Link href="/upcoming">
+                    <Button size="sm" variant="outline" className="h-7 text-xs">
+                      All upcoming
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                dismissReleaseReminder(releaseReminder.id, releaseReminder.releaseDate);
+                setReleaseReminderDismissed(true);
+              }}
+              className="text-muted-foreground hover:text-foreground transition-colors p-1 shrink-0"
+              aria-label="Dismiss release reminder"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         <section className="flex items-start justify-between gap-4">
           <div className="flex flex-col gap-2">
@@ -94,7 +227,8 @@ export default function WatchlistPage() {
             )}
           </div>
           <Button
-            variant="outline" size="sm"
+            variant="outline"
+            size="sm"
             className="gap-1.5 text-xs h-8 shrink-0 mt-1"
             onClick={() => exportCSV(movies ?? [], "cinevault_watchlist.csv")}
             disabled={!movies?.length}
@@ -103,24 +237,38 @@ export default function WatchlistPage() {
           </Button>
         </section>
 
-        {/* Search */}
         {!isLoading && (movies?.length ?? 0) > 0 && (
-          <div className="relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search your watchlist…"
-              className="pl-9 pr-9 bg-card border-border"
-            />
-            {query && (
-              <button
-                onClick={() => setQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative max-w-sm flex-1 min-w-[12rem]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search your watchlist…"
+                className="pl-9 pr-9 bg-card border-border"
+              />
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            <Select value={sort} onValueChange={(v) => updateSort(v as SortKey)}>
+              <SelectTrigger className="w-[160px] bg-card">
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent>
+                {SORT_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
 
@@ -134,15 +282,15 @@ export default function WatchlistPage() {
             <h3 className="text-lg font-medium text-foreground">Your watchlist is empty</h3>
             <p className="text-muted-foreground text-sm mt-1">Discover new films and add them here.</p>
           </div>
-        ) : filtered?.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <div className="text-center py-20 bg-card rounded-2xl border border-border border-dashed">
             <Search className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-            <h3 className="text-lg font-medium text-foreground">No results for "{query}"</h3>
+            <h3 className="text-lg font-medium text-foreground">No results for &quot;{query}&quot;</h3>
             <p className="text-muted-foreground text-sm mt-1">Try a different title.</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
-            {filtered?.map((movie) => (
+            {filtered.map((movie) => (
               <MoviePosterCard
                 key={movie.id}
                 id={movie.id}

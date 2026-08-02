@@ -136,8 +136,13 @@ export default function UpcomingPage() {
   }, [watchlist]);
 
   const lookingForward = useMemo(
-    () => findLookingForward(watchlist ?? [], { includePastDays: 7 }),
+    () => findLookingForward(watchlist ?? [], { includePastDays: 14 }),
     [watchlist],
+  );
+
+  const justOut = useMemo(
+    () => lookingForward.filter((f) => f.daysUntil < 0),
+    [lookingForward],
   );
 
   const soonReminders = useMemo(
@@ -194,6 +199,42 @@ export default function UpcomingPage() {
             we'll nudge you when they land.
           </p>
         </section>
+
+        {justOut.length > 0 && (
+          <section className="space-y-3">
+            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              <Bell className="h-4 w-4" /> Just out
+            </h2>
+            <div className="space-y-2">
+              {justOut.slice(0, 4).map((film) => (
+                <Link
+                  key={film.id}
+                  href={`/movie/${film.id}`}
+                  className="flex items-center gap-3 rounded-xl border border-sky-400/30 bg-sky-400/5 px-3 py-2.5 transition-colors hover:bg-sky-400/10"
+                >
+                  {getPosterUrl(film.posterPath, "w500") ? (
+                    <img
+                      src={getPosterUrl(film.posterPath, "w500")!}
+                      alt=""
+                      className="h-14 w-10 shrink-0 rounded object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-14 w-10 shrink-0 items-center justify-center rounded bg-secondary">
+                      <Sparkles className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{film.title}</p>
+                    <p className="text-xs text-muted-foreground">{formatReleaseCopy(film)}</p>
+                  </div>
+                  <span className="shrink-0 text-[11px] font-mono text-muted-foreground">
+                    {formatReleaseDateLabel(film.releaseDate)}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
 
         {soonReminders.length > 0 && (
           <section className="space-y-3">
