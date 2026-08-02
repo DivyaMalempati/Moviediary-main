@@ -201,7 +201,7 @@ router.post("/match-sessions", requireAuth, async (req: any, res): Promise<void>
   }
 
   const partnerUserId = partnerOf(link, req.userId);
-  const [profileA, profileB, prefsA, prefsB, libA, libB] = await Promise.all([
+  const [profileA, profileB, prefsA, prefsB, libA, libB, dismissA, dismissB] = await Promise.all([
     buildTasteProfile(req.userId),
     buildTasteProfile(partnerUserId),
     loadPrefs(req.userId),
@@ -214,6 +214,16 @@ router.post("/match-sessions", requireAuth, async (req: any, res): Promise<void>
       .select({ tmdbId: moviesTable.tmdbId })
       .from(moviesTable)
       .where(and(eq(moviesTable.userId, partnerUserId), isNotNull(moviesTable.tmdbId))),
+    db
+      .select({ dismissedTmdbIds: userPreferencesTable.dismissedTmdbIds })
+      .from(userPreferencesTable)
+      .where(eq(userPreferencesTable.userId, req.userId))
+      .limit(1),
+    db
+      .select({ dismissedTmdbIds: userPreferencesTable.dismissedTmdbIds })
+      .from(userPreferencesTable)
+      .where(eq(userPreferencesTable.userId, partnerUserId))
+      .limit(1),
   ]);
 
   const { profile, explicitPrefs, overlap } = intersectTasteProfiles(
@@ -240,6 +250,8 @@ router.post("/match-sessions", requireAuth, async (req: any, res): Promise<void>
   const excludeIds = new Set<number>([
     ...libA.map((m) => m.tmdbId).filter((id): id is number => !!id),
     ...libB.map((m) => m.tmdbId).filter((id): id is number => !!id),
+    ...(dismissA[0]?.dismissedTmdbIds ?? []),
+    ...(dismissB[0]?.dismissedTmdbIds ?? []),
   ]);
 
   // Exclude prior Together passes for this pair so the same skips don't resurface.

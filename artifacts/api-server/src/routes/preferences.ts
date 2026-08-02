@@ -6,6 +6,7 @@ import { requireAuth } from "../middlewares/requireAuth.js";
 const router: IRouter = Router();
 
 const VALID_CERTIFICATIONS = new Set(["U", "UA", "A"]);
+const MAX_DISMISSED = 500;
 
 type PrefsBody = {
   preferredLanguages: string[];
@@ -78,8 +79,30 @@ function toResponse(prefs: typeof userPreferencesTable.$inferSelect | undefined)
     watchRegion: prefs?.watchRegion ?? "IN",
     maxCertification: prefs?.maxCertification ?? null,
     mutedGenres: prefs?.mutedGenres ?? [],
+    dismissedTmdbIds: prefs?.dismissedTmdbIds ?? [],
     onboardingCompletedAt: prefs?.onboardingCompletedAt ?? null,
   };
+}
+
+async function ensurePrefsRow(userId: string) {
+  const [existing] = await db
+    .select()
+    .from(userPreferencesTable)
+    .where(eq(userPreferencesTable.userId, userId));
+  if (existing) return existing;
+
+  const [created] = await db
+    .insert(userPreferencesTable)
+    .values({ userId })
+    .onConflictDoNothing()
+    .returning();
+  if (created) return created;
+
+  const [again] = await db
+    .select()
+    .from(userPreferencesTable)
+    .where(eq(userPreferencesTable.userId, userId));
+  return again;
 }
 
 // GET /preferences
@@ -92,7 +115,7 @@ router.get("/preferences", requireAuth, async (req: any, res): Promise<void> => 
   res.json(toResponse(prefs));
 });
 
-// PUT /preferences
+// PUT /preferences — taste prefs only; dismissed films are managed separately.
 router.put("/preferences", requireAuth, async (req: any, res): Promise<void> => {
   const data = validateBody(req.body);
   if (!data) {
@@ -138,6 +161,78 @@ router.put("/preferences", requireAuth, async (req: any, res): Promise<void> => 
     .returning();
 
   res.json(toResponse(result));
+});
+
+/**
+ * POST /preferences/dismiss  { tmdbId }
+ * Mark a film "Not interested" — hide from Discover and Swipe.
+ */
+router.post("/preferences/dismiss", requireAuth, async (req: any, res): Promise<void> => {
+  const tmdbId = Number(req.body?.tmdbId);
+  if (!Number.isInteger(tmdbId) || tmdbId < 1) {
+    res.status(400).json({ error: "tmdbId required" });
+    return;
+  }
+
+  const prefs = await ensurePrefsRow(req.userId);
+  if (!prefs) {
+    res.status(500).json({ error: "Couldn’t save preference" });
+    return;
+  }
+
+  const current = prefs.dismissedTmdbIds ?? [];
+  if (current.includes(tmdbId)) {
+    res.json(toResponse(prefs));
+    return;
+  }
+
+  const next = [tmdbId, ...current].slice(0, MAX_DISMISSED);
+  const [updated] = await db
+    .update(userPreferencesTable)
+    .set({ dismissedTmdbIds: next, updatedAt: new Date() })
+    .where(eq(userPreferencesTable.userId, req.userId))
+    .returning();
+
+  res.json(toResponse(updated));
+});
+
+/**
+ * DELETE /preferences/dismiss/:tmdbId
+ * Undo a single "Not interested".
+ */
+router.delete("/preferences/dismiss/:tmdbId", requireAuth, async (req: any, res): Promise<void> => {
+  const tmdbId = Number(req.params.tmdbId);
+  if (!Number.isInteger(tmdbId) || tmdbId < 1) {
+    res.status(400).json({ error: "tmdbId required" });
+    return;
+  }
+
+  const prefs = await ensurePrefsRow(req.userId);
+  if (!prefs) {
+    res.status(500).json({ error: "Couldn’t update preference" });
+    return;
+  }
+
+  const next = (prefs.dismissedTmdbIds ?? []).filter((id) => id !== tmdbId);
+  const [updated] = await db
+    .update(userPreferencesTable)
+    .set({ dismissedTmdbIds: next, updatedAt: new Date() })
+    .where(eq(userPreferencesTable.userId, req.userId))
+    .returning();
+
+  res.json(toResponse(updated));
+});
+
+/** DELETE /preferences/dismiss — clear all "Not interested" films. */
+router.delete("/preferences/dismiss", requireAuth, async (req: any, res): Promise<void> => {
+  await ensurePrefsRow(req.userId);
+  const [updated] = await db
+    .update(userPreferencesTable)
+    .set({ dismissedTmdbIds: [], updatedAt: new Date() })
+    .where(eq(userPreferencesTable.userId, req.userId))
+    .returning();
+
+  res.json(toResponse(updated ?? undefined));
 });
 
 export default router;

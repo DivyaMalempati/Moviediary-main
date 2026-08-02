@@ -48,6 +48,7 @@ router.get("/discover/swipe", requireAuth, async (req: any, res): Promise<void> 
 
   const excludeIds = new Set<number>([
     ...library.map((m) => m.tmdbId).filter((id): id is number => !!id),
+    ...(prefsRow[0]?.dismissedTmdbIds ?? []),
     ...clientExcluded,
   ]);
 

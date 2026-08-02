@@ -12,6 +12,7 @@ async function getUserPrefs(userId: string): Promise<{
   preferredLanguages: string[];
   mutedGenres: string[];
   maxCertification: string | null;
+  dismissedTmdbIds: number[];
 }> {
   const [prefs] = await db
     .select()
@@ -21,7 +22,17 @@ async function getUserPrefs(userId: string): Promise<{
     preferredLanguages: prefs?.preferredLanguages ?? [],
     mutedGenres: prefs?.mutedGenres ?? [],
     maxCertification: prefs?.maxCertification ?? null,
+    dismissedTmdbIds: prefs?.dismissedTmdbIds ?? [],
   };
+}
+
+function notDismissed<T extends { tmdbId?: number | null }>(
+  items: T[],
+  dismissed: number[],
+): T[] {
+  if (!dismissed.length) return items;
+  const set = new Set(dismissed);
+  return items.filter((m) => m.tmdbId == null || !set.has(m.tmdbId));
 }
 
 async function getUserPreferredLanguages(userId: string): Promise<string[]> {
@@ -106,8 +117,9 @@ router.get("/suggestions/because-you-liked", requireAuth, async (req: any, res):
         return (b.voteAverage ?? 0) - (a.voteAverage ?? 0);
       });
 
+      const dismissed = new Set(prefs.dismissedTmdbIds);
       for (const m of combined) {
-        if (!m.tmdbId || seen.has(m.tmdbId) || libraryIds.has(m.tmdbId)) continue;
+        if (!m.tmdbId || seen.has(m.tmdbId) || libraryIds.has(m.tmdbId) || dismissed.has(m.tmdbId)) continue;
         seen.add(m.tmdbId);
         suggestions.push(m);
         if (suggestions.length >= 20) break;
@@ -118,14 +130,14 @@ router.get("/suggestions/because-you-liked", requireAuth, async (req: any, res):
     }
   }
 
-  res.json(suggestions.slice(0, 20));
+  res.json(notDismissed(suggestions, prefs.dismissedTmdbIds).slice(0, 20));
 });
 
 // ---------------------------------------------------------------------------
 // TMDB-based fallback used when Gemini is unavailable or library is empty
 // ---------------------------------------------------------------------------
 async function getTmdbFallback(userId: string, preferredLangs: string[], mutedGenres: string[] = []): Promise<any[]> {
-  const [watched, libraryIds] = await Promise.all([
+  const [watched, libraryIds, prefs] = await Promise.all([
     db
       .select()
       .from(moviesTable)
@@ -133,14 +145,19 @@ async function getTmdbFallback(userId: string, preferredLangs: string[], mutedGe
       .orderBy(desc(moviesTable.createdAt))
       .limit(10),
     getLibraryTmdbIds(userId),
+    getUserPrefs(userId),
   ]);
+  const dismissed = new Set(prefs.dismissedTmdbIds);
 
   // If no watch history, discover by preferences (or trending if no preferences)
   if (watched.length === 0) {
     const discovered = preferredLangs.length > 0
       ? await discoverMovies(preferredLangs)
       : await getTrending();
-    return withoutMutedGenres(notInLibrary(discovered, libraryIds), mutedGenres)
+    return notDismissed(
+      withoutMutedGenres(notInLibrary(discovered, libraryIds), mutedGenres),
+      prefs.dismissedTmdbIds,
+    )
       .slice(0, 10)
       .map((m) => ({ ...m, source: "tmdb" }));
   }
@@ -157,7 +174,7 @@ async function getTmdbFallback(userId: string, preferredLangs: string[], mutedGe
         getRecommendations(seed.tmdbId),
       ]);
       const combined = withoutMutedGenres([...similar, ...recs], mutedGenres)
-        .filter((m) => m.tmdbId && !libraryIds.has(m.tmdbId))
+        .filter((m) => m.tmdbId && !libraryIds.has(m.tmdbId) && !dismissed.has(m.tmdbId))
         .filter((m) => preferredLangs.length === 0 || preferredLangs.includes(m.originalLanguage ?? ""))
         .sort((a, b) => (b.voteAverage ?? 0) - (a.voteAverage ?? 0));
 
@@ -180,7 +197,7 @@ async function getTmdbFallback(userId: string, preferredLangs: string[], mutedGe
       ? await discoverMovies(preferredLangs)
       : await getTrending();
     for (const m of withoutMutedGenres(discovered, mutedGenres)) {
-      if (!m.tmdbId || seen.has(m.tmdbId) || libraryIds.has(m.tmdbId)) continue;
+      if (!m.tmdbId || seen.has(m.tmdbId) || libraryIds.has(m.tmdbId) || dismissed.has(m.tmdbId)) continue;
       seen.add(m.tmdbId);
       results.push({ ...m, source: "tmdb" });
       if (results.length >= 10) break;
@@ -303,8 +320,10 @@ Respond ONLY with a JSON array, no markdown fences, no explanation:
     const libraryTitles = new Set(
       libraryRows.map((m) => m.title.trim().toLowerCase()).filter(Boolean),
     );
+    const dismissed = new Set(prefs.dismissedTmdbIds);
     const filtered = suggestions.filter((s) => {
       if (s?.tmdbId != null && libraryIds.has(Number(s.tmdbId))) return false;
+      if (s?.tmdbId != null && dismissed.has(Number(s.tmdbId))) return false;
       const title = typeof s?.title === "string" ? s.title.trim().toLowerCase() : "";
       if (title && libraryTitles.has(title)) return false;
       return true;

@@ -897,19 +897,29 @@ function SwipeDeck() {
     if (films.length === 0) setExhausted(true);
   }, [onMyServices, selectedTrope]);
 
-  // Always keep library IDs in the exclude set (watched + watchlist).
+  // Always keep library + "Not interested" IDs in the exclude set.
   useEffect(() => {
     if (!libraryFetched) return;
     for (const m of library ?? []) {
       if (m.tmdbId != null) seenRef.current.add(m.tmdbId);
     }
-  }, [libraryFetched, library]);
+    for (const id of prefs?.dismissedTmdbIds ?? []) {
+      seenRef.current.add(id);
+    }
+  }, [libraryFetched, library, prefs?.dismissedTmdbIds]);
 
-  // Start / restart deck after library is known, or when filters change.
+  // Start / restart deck after library is known, or when filters / dismissals change.
   useEffect(() => {
     if (!libraryFetched) return;
     void startDeck(1, selectedGenreId, 1);
-  }, [libraryFetched, selectedGenreId, selectedTrope, onMyServices, startDeck]);
+  }, [
+    libraryFetched,
+    selectedGenreId,
+    selectedTrope,
+    onMyServices,
+    prefs?.dismissedTmdbIds,
+    startDeck,
+  ]);
 
   useEffect(() => {
     if (!isOnline) return;
