@@ -1,29 +1,25 @@
-import { useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import {
+  getServerSessionSettings,
   getSessionSettings,
   setSentenceLogEnabled,
   subscribeSessionSettings,
-  type SessionSettings,
 } from "@/lib/session-settings";
-
-function getSnapshot(): SessionSettings {
-  return getSessionSettings();
-}
-
-function getServerSnapshot(): SessionSettings {
-  return { sentenceLog: false };
-}
 
 export function useSessionSettings() {
   const settings = useSyncExternalStore(
     subscribeSessionSettings,
-    getSnapshot,
-    getServerSnapshot,
+    getSessionSettings,
+    getServerSessionSettings,
   );
+
+  const setSentenceLog = useCallback((enabled: boolean) => {
+    setSentenceLogEnabled(enabled);
+  }, []);
 
   return {
     settings,
     sentenceLog: settings.sentenceLog,
-    setSentenceLog: setSentenceLogEnabled,
+    setSentenceLog,
   };
 }
