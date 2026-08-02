@@ -144,7 +144,12 @@ export default function PartnerPage() {
       }
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        toast.error((err as { error?: string }).error ?? "Couldn’t create invite");
+        toast.error(
+          (err as { error?: string }).error ??
+            (res.status >= 500
+              ? "Server couldn’t create the invite — refresh and try once more"
+              : "Couldn’t create invite"),
+        );
         return;
       }
       const data = (await res.json()) as Invite;
@@ -152,7 +157,8 @@ export default function PartnerPage() {
       setRecipientName("");
       toast.success(`Invite ready for ${data.recipientName ?? name}`);
       await refresh();
-    } catch {
+    } catch (err) {
+      console.error("[together] createInvite", err);
       toast.error("Couldn’t create invite");
     } finally {
       setBusy(false);
