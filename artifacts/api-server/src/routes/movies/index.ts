@@ -56,6 +56,22 @@ function toIsoTimestamp(value: Date | string | null | undefined): string | null 
   return d.toISOString();
 }
 
+/**
+ * Parse watchedAt from the client. Date-only YYYY-MM-DD must not use
+ * `new Date("YYYY-MM-DD")` (UTC midnight → previous calendar day in US zones).
+ * Store at UTC noon so the day is stable everywhere.
+ */
+function parseWatchedAt(raw: string | null | undefined): Date | null {
+  if (raw == null) return null;
+  const trimmed = String(raw).trim();
+  if (!trimmed) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return new Date(`${trimmed}T12:00:00.000Z`);
+  }
+  const d = new Date(trimmed);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 function normalizeRewatchDates(
   value: unknown,
 ): Date[] {
@@ -137,12 +153,7 @@ router.post("/movies", requireAuth, async (req: any, res): Promise<void> => {
   let watchedAt: Date | null = null;
   if (data.status === "watched") {
     if ("watchedAt" in data) {
-      if (data.watchedAt) {
-        const d = new Date(data.watchedAt);
-        watchedAt = Number.isNaN(d.getTime()) ? null : d;
-      } else {
-        watchedAt = null;
-      }
+      watchedAt = data.watchedAt ? parseWatchedAt(data.watchedAt) : null;
     } else {
       watchedAt = new Date();
     }
@@ -455,7 +466,9 @@ router.patch("/movies/:id", requireAuth, async (req: any, res): Promise<void> =>
   if ("originalLanguage" in data) updateValues.originalLanguage = data.originalLanguage ?? null;
   if ("genres" in data) updateValues.genres = data.genres ?? null;
   if ("overview" in data) updateValues.overview = data.overview ?? null;
-  if ("watchedAt" in data) updateValues.watchedAt = data.watchedAt ? new Date(data.watchedAt) : null;
+  if ("watchedAt" in data) {
+    updateValues.watchedAt = data.watchedAt ? parseWatchedAt(data.watchedAt) : null;
+  }
   if (data.status === "watched" && !("watchedAt" in data)) updateValues.watchedAt = new Date();
 
   const [movie] = await db
@@ -512,12 +525,8 @@ router.post("/movies/:id/rewatch", requireAuth, async (req: any, res): Promise<v
     // Optional dated rewatch: append to history (and use that date as last-watched).
     const rawWatchedAt = body.data.watchedAt;
     if (rawWatchedAt != null && String(rawWatchedAt).trim() !== "") {
-      // Date-only (YYYY-MM-DD) → local noon to avoid timezone day-shift.
-      const raw = String(rawWatchedAt).trim();
-      const rewatchDate = /^\d{4}-\d{2}-\d{2}$/.test(raw)
-        ? new Date(`${raw}T12:00:00`)
-        : new Date(raw);
-      if (Number.isNaN(rewatchDate.getTime())) {
+      const rewatchDate = parseWatchedAt(String(rawWatchedAt));
+      if (!rewatchDate) {
         res.status(400).json({ error: "Invalid watchedAt date" });
         return;
       }

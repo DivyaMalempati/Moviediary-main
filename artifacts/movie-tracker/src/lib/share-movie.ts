@@ -1,4 +1,5 @@
 import { RATING_LABELS, getPosterUrl } from "@/lib/movie-utils";
+import { splitDiaryNote } from "@/lib/diary-notes";
 import { getSyncSessionHeaders } from "@/lib/demo-auth";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -32,6 +33,23 @@ export type ShareMovieInput = {
   streamingOn?: string | null;
 };
 
+/** Which logged fields to put on the share poster + caption. */
+export type ShareIncludeOptions = {
+  rating: boolean;
+  withWho: boolean;
+  review: boolean;
+  streaming: boolean;
+  rewatch: boolean;
+};
+
+export const DEFAULT_SHARE_INCLUDES: ShareIncludeOptions = {
+  rating: true,
+  withWho: true,
+  review: true,
+  streaming: true,
+  rewatch: true,
+};
+
 /** Format flatrate provider names for share captions. */
 export function formatStreamingServices(
   providers?: Array<{ name?: string | null }> | null,
@@ -46,19 +64,27 @@ export function formatStreamingServices(
 }
 
 /** Build plain-text caption to accompany the poster card (WhatsApp / share sheet). */
-export function buildMovieShareText(input: ShareMovieInput): string {
+export function buildMovieShareText(
+  input: ShareMovieInput,
+  include: ShareIncludeOptions = DEFAULT_SHARE_INCLUDES,
+): string {
   const year = input.releaseYear ? ` (${input.releaseYear})` : "";
   const ratingLabel =
-    input.rating && RATING_LABELS[input.rating]
+    include.rating && input.rating && RATING_LABELS[input.rating]
       ? RATING_LABELS[input.rating]
       : null;
-  const streaming = input.streamingOn?.trim() || null;
-  const review = input.notes?.trim() || null;
+  const streaming =
+    include.streaming && input.streamingOn?.trim()
+      ? input.streamingOn.trim()
+      : null;
+  const parts = splitDiaryNote(input.notes);
+  const withWho = include.withWho ? parts.withWho : null;
+  const review = include.review ? parts.review : null;
 
   // WhatsApp *bold* markers — ignored as plain text elsewhere.
   const lines = [`I'd recommend *${input.title}*${year} — worth a watch.`];
 
-  if (input.isRewatch) {
+  if (include.rewatch && input.isRewatch) {
     lines.push(
       input.timesSeen && input.timesSeen > 1
         ? `(A rewatch for me · seen ${input.timesSeen}×)`
@@ -69,6 +95,7 @@ export function buildMovieShareText(input: ShareMovieInput): string {
   const details: string[] = [];
   if (streaming) details.push(`*Streaming:* ${streaming}`);
   if (ratingLabel) details.push(`*Rating:* ${ratingLabel}`);
+  if (withWho) details.push(`*With:* ${withWho}`);
   if (review) details.push(`*Review:* “${review}”`);
 
   if (details.length) {
@@ -244,7 +271,10 @@ function drawCoverImage(
  * Full-bleed 4:5 share card: poster fills the frame; title/meta/quote sit in a
  * padded bottom gradient band (no floating inset poster, no empty black void).
  */
-export async function renderMovieShareCard(input: ShareMovieInput): Promise<Blob | null> {
+export async function renderMovieShareCard(
+  input: ShareMovieInput,
+  include: ShareIncludeOptions = DEFAULT_SHARE_INCLUDES,
+): Promise<Blob | null> {
   const W = 1080;
   const H = 1350;
   const canvas = document.createElement("canvas");
@@ -317,14 +347,22 @@ export async function renderMovieShareCard(input: ShareMovieInput): Promise<Blob
   const year = input.releaseYear ? ` (${input.releaseYear})` : "";
   const title = `${input.title}${year}`;
   const ratingLabel =
-    input.rating && RATING_LABELS[input.rating] ? RATING_LABELS[input.rating] : null;
-  const streaming = input.streamingOn?.trim() || null;
-  const review = input.notes?.trim() ?? "";
+    include.rating && input.rating && RATING_LABELS[input.rating]
+      ? RATING_LABELS[input.rating]
+      : null;
+  const streaming =
+    include.streaming && input.streamingOn?.trim()
+      ? input.streamingOn.trim()
+      : null;
+  const parts = splitDiaryNote(input.notes);
+  const withWho = include.withWho ? parts.withWho : null;
+  const review = include.review ? parts.review : null;
 
   const detailLines: string[] = [];
   if (streaming) detailLines.push(`Streaming: ${streaming}`);
   if (ratingLabel) detailLines.push(`Rating: ${ratingLabel}`);
-  if (input.isRewatch) {
+  if (withWho) detailLines.push(`With: ${withWho}`);
+  if (include.rewatch && input.isRewatch) {
     detailLines.push(
       input.timesSeen && input.timesSeen > 1
         ? `Rewatch ×${input.timesSeen}`

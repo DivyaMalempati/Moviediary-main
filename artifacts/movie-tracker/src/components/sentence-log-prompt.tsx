@@ -15,37 +15,10 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { buildDiaryNote } from "@/lib/diary-notes";
+import { todayInputValue } from "@/lib/movie-utils";
 
 type WhenChoice = "today" | "earlier" | "unknown";
-
-function todayYmd() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function buildDiaryNote(opts: {
-  title: string;
-  when: WhenChoice;
-  withWho: string;
-  felt: string;
-}) {
-  const withPart = opts.withWho.trim();
-  const feltPart = opts.felt.trim();
-  const whenLabel =
-    opts.when === "today" ? "today" : opts.when === "earlier" ? "earlier" : "recently";
-
-  const parts: string[] = [];
-  parts.push(
-    withPart
-      ? `Watched ${opts.title} ${whenLabel} with ${withPart}.`
-      : `Watched ${opts.title} ${whenLabel}.`,
-  );
-  if (feltPart) parts.push(feltPart);
-  return parts.join(" ").trim();
-}
 
 /**
  * Fill-in-the-blank diary prompt:
@@ -54,7 +27,7 @@ function buildDiaryNote(opts: {
 export function SentenceLogPrompt() {
   const [film, setFilm] = useState("");
   const [when, setWhen] = useState<WhenChoice>("today");
-  const [earlierDate, setEarlierDate] = useState(todayYmd);
+  const [earlierDate, setEarlierDate] = useState(todayInputValue);
   const [withWho, setWithWho] = useState("");
   const [felt, setFelt] = useState("");
   const [searching, setSearching] = useState(false);
@@ -97,8 +70,8 @@ export function SentenceLogPrompt() {
   }, [film, when, withWho, felt]);
 
   const resolveWatchedAt = (): string | null => {
-    if (when === "today") return todayYmd();
-    if (when === "earlier") return earlierDate || todayYmd();
+    if (when === "today") return todayInputValue();
+    if (when === "earlier") return earlierDate || todayInputValue();
     return null;
   };
 
@@ -123,12 +96,7 @@ export function SentenceLogPrompt() {
     genres?: string[] | null;
     overview?: string | null;
   }) => {
-    const notes = buildDiaryNote({
-      title: movie.title,
-      when,
-      withWho,
-      felt,
-    });
+    const notes = buildDiaryNote({ withWho, felt });
     const watchedAt = resolveWatchedAt();
     const existing =
       movie.tmdbId != null ? libraryMap.get(movie.tmdbId) : undefined;
@@ -271,7 +239,7 @@ export function SentenceLogPrompt() {
             <Input
               type="date"
               value={earlierDate}
-              max={todayYmd()}
+              max={todayInputValue()}
               onChange={(e) => setEarlierDate(e.target.value)}
               className="max-w-[14rem] bg-background"
             />
