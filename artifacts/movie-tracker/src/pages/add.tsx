@@ -33,6 +33,8 @@ import { getAuthHeaders } from "@/lib/demo-auth";
 import { cn } from "@/lib/utils";
 import { Link, useLocation } from "wouter";
 import { isFeatureEnabled } from "@/lib/features";
+import { FEATURE_TOUR_STEPS } from "@/lib/feature-guide";
+import { useFeatureTour } from "@/components/feature-tour-context";
 import {
   type AddTabId,
   DISCOVER_SUBTABS,
@@ -120,9 +122,16 @@ export default function AddPage() {
   const [showTitleSearch, setShowTitleSearch] = useState(false);
 
   const { sentenceLog } = useSessionSettings();
+  const { open: tourOpen, step: tourStep } = useFeatureTour();
+  const tourTarget = tourOpen ? FEATURE_TOUR_STEPS[tourStep]?.target : undefined;
   const { data: prefs } = usePreferences();
   const preferredProviders = prefs?.preferredProviders ?? [];
   const watchRegion = prefs?.watchRegion ?? "IN";
+
+  // Expand title search during the walkthrough so the spotlight can find it.
+  useEffect(() => {
+    if (tourTarget === "add-title-search") setShowTitleSearch(true);
+  }, [tourTarget]);
 
   const queryClient = useQueryClient();
   const createMovie = useCreateMovie();
@@ -343,7 +352,10 @@ export default function AddPage() {
 
         {discoverEnabled && (
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-secondary">
+            <div
+              data-tour="add-primary-modes"
+              className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-secondary"
+            >
               <button type="button" className={primaryBtnClass(primaryMode === "log")} onClick={goLog}>
                 Log
               </button>
@@ -357,7 +369,10 @@ export default function AddPage() {
             </div>
 
             {primaryMode === "discover" && (
-              <div className="flex gap-2 overflow-x-auto pb-0.5 -mx-1 px-1 scrollbar-none">
+              <div
+                data-tour="add-discover-subtabs"
+                className="flex gap-2 overflow-x-auto pb-0.5 -mx-1 px-1 scrollbar-none"
+              >
                 {DISCOVER_SUBTABS.map((tab) => (
                   <button
                     key={tab.id}
@@ -376,8 +391,13 @@ export default function AddPage() {
 
         <Tabs value={activeTab} onValueChange={onTabChange} className="w-full">
           <TabsContent value="log" className="mt-1 space-y-6">
-            {sentenceLog && <SentenceLogPrompt />}
+            {sentenceLog && (
+              <div data-tour="add-log-diary">
+                <SentenceLogPrompt />
+              </div>
+            )}
 
+            <div data-tour="add-title-search" className="space-y-4">
             {sentenceLog && (
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-medium text-muted-foreground">Title search</p>
@@ -509,6 +529,7 @@ export default function AddPage() {
                 </div>
               </>
             )}
+            </div>
           </TabsContent>
 
           {discoverEnabled && <DiscoverPanels activeTab={activeTab} />}

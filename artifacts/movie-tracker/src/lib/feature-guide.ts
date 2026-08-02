@@ -12,7 +12,7 @@ import {
 import { isFeatureEnabled } from "@/lib/features";
 
 /** Bump when the tour content changes so returning users see the new version once. */
-export const FEATURE_TOUR_VERSION = 5;
+export const FEATURE_TOUR_VERSION = 6;
 export const FEATURE_TOUR_STORAGE_KEY = `cinevault:feature-tour:v${FEATURE_TOUR_VERSION}`;
 
 export type FeatureGuideItem = {
@@ -67,9 +67,37 @@ export const FEATURE_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: "add",
     title: "Add",
-    tip: "Log a film, or switch to Discover for Hero, For You, Liked, and Trending.",
+    tip: "Open Add to log what you watched — or browse Discover for new picks.",
     href: "/add",
     target: "nav-add",
+  },
+  {
+    id: "add-log",
+    title: "Log",
+    tip: "Log is for your diary. Switch to Discover anytime from this toggle.",
+    href: "/add",
+    target: "add-primary-modes",
+  },
+  {
+    id: "add-title-search",
+    title: "Title search",
+    tip: "Search by film title below — India or Global — then mark Watched or save.",
+    href: "/add",
+    target: "add-title-search",
+  },
+  {
+    id: "add-discover",
+    title: "Discover",
+    tip: "Discover has Actor, For You, Liked, and Trending. Pick a chip to browse.",
+    href: "/add?tab=people",
+    target: "add-discover-subtabs",
+  },
+  {
+    id: "add-actor",
+    title: "Actor / Director",
+    tip: "Search any actor — hero, heroine, comedian — or a director, then log from their films.",
+    href: "/add?tab=people",
+    target: "add-actor-search",
   },
   {
     id: "profile",
@@ -124,7 +152,7 @@ export const FEATURE_GUIDE_SECTIONS: Array<{
         title: "Add",
         summary: "Log a film or browse Discover.",
         detail:
-          "Bottom bar → Add. Primary: Log | Discover. On Discover, pick Hero, For You, Liked, or Trending.",
+          "Bottom bar → Add. Primary: Log | Discover. On Log: diary blanks (if Sentence log is on) and title search below. On Discover: Actor, For You, Liked, Trending.",
         href: "/add",
         cta: "Add a film",
         icon: PlusCircle,
@@ -157,9 +185,9 @@ export const FEATURE_GUIDE_SECTIONS: Array<{
       {
         id: "action-discover",
         title: "Discover",
-        summary: "Hero / Director search plus India picks — on Add → Discover.",
+        summary: "Actor / Director search plus India picks — on Add → Discover.",
         detail:
-          "Add → Discover (or sidebar Discover). Sub-tabs: Hero / Director, For You, Liked, Trending.",
+          "Add → Discover (or sidebar Discover). Sub-tabs: Actor / Director (any actor — hero, heroine, comedian), For You, Liked, Trending.",
         href: "/add?tab=people",
         cta: "Open Discover",
         icon: Clapperboard,

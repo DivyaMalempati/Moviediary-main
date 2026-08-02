@@ -44,8 +44,8 @@ function useSpotlightRect(target: string, active: boolean): Rect | null {
     };
 
     update();
-    // Nav may paint after route change — retry briefly.
-    const times = [50, 150, 350, 700];
+    // Nav / Add tabs may paint after route change — retry briefly.
+    const times = [50, 150, 350, 700, 1200];
     const timers = times.map((ms) => window.setTimeout(update, ms));
 
     window.addEventListener("resize", update);
