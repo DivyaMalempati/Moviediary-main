@@ -1,4 +1,5 @@
 import app from "./app";
+import { ensureSchema } from "./lib/ensure-schema";
 import { logger } from "./lib/logger";
 
 // Refuse to boot in production without a real session signing secret.
@@ -22,11 +23,22 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
+async function main() {
+  try {
+    await ensureSchema();
+  } catch (err) {
+    logger.error({ err }, "Schema ensure failed — refusing to start");
     process.exit(1);
   }
 
-  logger.info({ port }, "Server listening");
-});
+  app.listen(port, (err) => {
+    if (err) {
+      logger.error({ err }, "Error listening on port");
+      process.exit(1);
+    }
+
+    logger.info({ port }, "Server listening");
+  });
+}
+
+void main();
