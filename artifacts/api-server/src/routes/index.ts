@@ -10,6 +10,7 @@ import guestRouter from "./guest";
 import discoverRouter from "./discover";
 import partnersRouter from "./partners";
 import matchSessionsRouter from "./match-sessions";
+import feedbackRouter from "./feedback";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(collectionsRouter);
 router.use(discoverRouter);
 router.use(partnersRouter);
 router.use(matchSessionsRouter);
+router.use(feedbackRouter);
 
 export default router;
