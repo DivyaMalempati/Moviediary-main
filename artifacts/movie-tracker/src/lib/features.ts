@@ -34,12 +34,12 @@ const MVP_FEATURES: ReadonlySet<AppFeature> = new Set([
   "profile",
   "guide",
   "movieDetails",
+  "upcoming",
 ]);
 
 /** Lab / secondary features — hidden from nav until their own branch is ready. */
 const LAB_FEATURES: ReadonlySet<AppFeature> = new Set([
   "discover",
-  "upcoming",
   "collections",
   "stats",
   "import",
