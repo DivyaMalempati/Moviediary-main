@@ -471,6 +471,27 @@ router.patch("/movies/:id", requireAuth, async (req: any, res): Promise<void> =>
   }
   if (data.status === "watched" && !("watchedAt" in data)) updateValues.watchedAt = new Date();
 
+  if ("rewatchDates" in data && Array.isArray(data.rewatchDates)) {
+    if (data.rewatchDates.length > 200) {
+      res.status(400).json({ error: "Too many rewatch dates" });
+      return;
+    }
+    const parsedDates: Date[] = [];
+    for (const raw of data.rewatchDates) {
+      if (typeof raw !== "string") {
+        res.status(400).json({ error: "Invalid rewatchDates entry" });
+        return;
+      }
+      const d = parseWatchedAt(raw);
+      if (!d) {
+        res.status(400).json({ error: "Invalid rewatchDates entry" });
+        return;
+      }
+      parsedDates.push(d);
+    }
+    updateValues.rewatchDates = parsedDates;
+  }
+
   const [movie] = await db
     .update(moviesTable)
     .set(updateValues)

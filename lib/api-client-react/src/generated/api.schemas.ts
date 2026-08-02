@@ -118,6 +118,12 @@ export interface MovieUpdate {
   overview?: string | null;
   /** @nullable */
   watchedAt?: string | null;
+  /**
+     * Replace the dated rewatch history (ISO 8601 date or datetime strings).
+     * Use to correct a wrong rewatch date. Length may differ from rewatchCount
+     * when some rewatches were logged without a date.
+     */
+  rewatchDates?: string[];
 }
 
 export interface RewatchInput {
