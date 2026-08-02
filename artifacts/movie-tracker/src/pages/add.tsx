@@ -129,13 +129,19 @@ export default function AddPage() {
     return results.filter((m) => streamingIds.has(m.tmdbId));
   }, [results, onMyServices, preferredProviders, streamingIds]);
 
-  const doAdd = (movie: any, status: "watched" | "watchlist", rating?: string | null) => {
+  const doAdd = (
+    movie: any,
+    status: "watched" | "watchlist",
+    rating?: string | null,
+    watchedAt?: string | null,
+  ) => {
     createMovie.mutate(
       {
         data: {
           title: movie.title,
           status,
           ...(rating ? { rating } : {}),
+          ...(status === "watched" ? { watchedAt: watchedAt ?? null } : {}),
           ...(movie.tmdbId != null && { tmdbId: movie.tmdbId }),
           ...(movie.posterPath != null && { posterPath: movie.posterPath }),
           ...(movie.releaseYear != null && { releaseYear: movie.releaseYear }),
@@ -327,10 +333,10 @@ export default function AddPage() {
         open={!!pendingWatched}
         movieTitle={pendingWatched?.title ?? ""}
         confirmOnSelect
-        onConfirm={(rating) => {
+        onConfirm={({ rating, watchedAt }) => {
           const movie = pendingWatched;
           setPendingWatched(null);
-          if (movie) doAdd(movie, "watched", rating);
+          if (movie) doAdd(movie, "watched", rating, watchedAt);
         }}
         onCancel={() => setPendingWatched(null)}
       />

@@ -492,7 +492,10 @@ components:
         overview:
           type: string
         watchedAt:
-          type: string
+          type: ["string", "null"]
+          description: >
+            When the user actually watched the film (ISO 8601 date or datetime).
+            Null means unknown / not sure. Omit to default to now when status is watched.
 
     MovieUpdate:
       type: object

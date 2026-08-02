@@ -76,7 +76,12 @@ export interface MovieInput {
   originalLanguage?: string;
   genres?: string[];
   overview?: string;
-  watchedAt?: string;
+  /**
+   * When the user actually watched the film (ISO 8601 date or datetime).
+   * Null means unknown / not sure. Omit to default to now when status is watched.
+   * @nullable
+   */
+  watchedAt?: string | null;
 }
 
 export type MovieUpdateStatus = typeof MovieUpdateStatus[keyof typeof MovieUpdateStatus];

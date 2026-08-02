@@ -166,7 +166,7 @@ export default function MatchSessionPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [busy, current, swipe]);
 
-  const logMatch = async (rating: string | null) => {
+  const logMatch = async (payload: { rating: string | null; watchedAt: string | null }) => {
     if (!logFilm) return;
     const film = logFilm;
     setLogFilm(null);
@@ -174,7 +174,11 @@ export default function MatchSessionPage() {
       const res = await authFetch(`${BASE}/api/match-sessions/${sessionId}/log-match`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tmdbId: film.tmdbId, rating }),
+        body: JSON.stringify({
+          tmdbId: film.tmdbId,
+          rating: payload.rating,
+          watchedAt: payload.watchedAt,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

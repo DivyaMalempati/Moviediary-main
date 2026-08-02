@@ -20,6 +20,8 @@ export type OfflineQueueItem = {
   film: OfflineSwipeFilm;
   status: "watchlist" | "watched";
   rating?: string | null;
+  /** Actual watch day when status is watched (`YYYY-MM-DD` or null = unknown). */
+  watchedAt?: string | null;
 };
 
 const LS_QUEUE_KEY = "cinevault:swipe:offline-queue-v2";
@@ -78,10 +80,11 @@ export function enqueueOffline(
   film: OfflineSwipeFilm,
   status: "watchlist" | "watched",
   rating?: string | null,
+  watchedAt?: string | null,
 ) {
   const q = getOfflineQueue();
   if (!q.find((i) => i.film.tmdbId === film.tmdbId)) {
-    writeOfflineQueue([...q, { film, status, rating }]);
+    writeOfflineQueue([...q, { film, status, rating, watchedAt }]);
   }
 }
 

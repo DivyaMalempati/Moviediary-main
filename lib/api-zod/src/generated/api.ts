@@ -68,7 +68,7 @@ export const CreateMovieBody = zod.object({
   "originalLanguage": zod.string().optional(),
   "genres": zod.array(zod.string()).optional(),
   "overview": zod.string().optional(),
-  "watchedAt": zod.string().optional()
+  "watchedAt": zod.string().nullish().describe('When the user actually watched the film (ISO 8601 date or datetime).\nNull means unknown / not sure. Omit to default to now when status is watched.\n')
 })
 
 export const createMovieResponseRewatchCountMin = 0;

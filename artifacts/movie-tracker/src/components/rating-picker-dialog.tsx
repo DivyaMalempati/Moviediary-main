@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Heart, Star } from "lucide-react";
-import { RATING_LABELS } from "@/lib/movie-utils";
+import { RATING_LABELS, todayInputValue } from "@/lib/movie-utils";
 import {
   Dialog,
   DialogContent,
@@ -8,11 +8,24 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+export type WatchLogPayload = {
+  rating: string | null;
+  /**
+   * Actual watch day (`YYYY-MM-DD`), or `null` when the user is not sure.
+   * Callers should send this to the API so log-day ≠ watch-day for backfills.
+   */
+  watchedAt: string | null;
+};
+
+type WatchWhen = "today" | "earlier" | "unknown";
 
 interface RatingPickerDialogProps {
   open: boolean;
   movieTitle: string;
-  onConfirm: (rating: string | null) => void;
+  onConfirm: (payload: WatchLogPayload) => void;
   onCancel: () => void;
   /**
    * When true (default), tapping a rating submits immediately.
@@ -23,6 +36,8 @@ interface RatingPickerDialogProps {
   titleSuffix?: string;
   /** Label for the skip action. */
   skipLabel?: string;
+  /** Hide the watch-date controls (e.g. rare flows that only need a rating). */
+  hideWatchDate?: boolean;
 }
 
 export function RatingPickerDialog({
@@ -33,32 +48,43 @@ export function RatingPickerDialog({
   confirmOnSelect = true,
   titleSuffix = "",
   skipLabel,
+  hideWatchDate = false,
 }: RatingPickerDialogProps) {
   const [selected, setSelected] = useState<string | null>(null);
+  const [when, setWhen] = useState<WatchWhen>("today");
+  const [earlierDate, setEarlierDate] = useState(todayInputValue);
 
   // Fresh selection every time the dialog opens for a film.
   useEffect(() => {
-    if (open) setSelected(null);
+    if (open) {
+      setSelected(null);
+      setWhen("today");
+      setEarlierDate(todayInputValue());
+    }
   }, [open, movieTitle]);
 
   const handleOpenChange = (isOpen: boolean) => {
     if (!isOpen) onCancel();
   };
 
-  const handleConfirm = () => {
-    onConfirm(selected);
+  const resolveWatchedAt = (): string | null => {
+    if (hideWatchDate) return todayInputValue();
+    if (when === "unknown") return null;
+    if (when === "earlier") return earlierDate || todayInputValue();
+    return todayInputValue();
+  };
+
+  const submit = (rating: string | null) => {
+    onConfirm({ rating, watchedAt: resolveWatchedAt() });
     setSelected(null);
   };
 
-  const handleSkip = () => {
-    onConfirm(null);
-    setSelected(null);
-  };
+  const handleConfirm = () => submit(selected);
+  const handleSkip = () => submit(null);
 
   const handleSelect = (val: string) => {
     if (confirmOnSelect) {
-      onConfirm(val);
-      setSelected(null);
+      submit(val);
       return;
     }
     setSelected((prev) => (prev === val ? null : val));
@@ -81,6 +107,48 @@ export function RatingPickerDialog({
           </DialogTitle>
         </DialogHeader>
 
+        {!hideWatchDate && (
+          <div className="space-y-2 mt-1">
+            <Label className="text-sm text-muted-foreground">When did you watch?</Label>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ["today", "Today"],
+                  ["earlier", "Earlier"],
+                  ["unknown", "Not sure"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setWhen(value)}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                    when === value
+                      ? "bg-white text-black shadow-lg shadow-white/10"
+                      : "bg-secondary border border-border hover:border-white/30 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {when === "earlier" && (
+              <Input
+                type="date"
+                value={earlierDate}
+                max={todayInputValue()}
+                onChange={(e) => setEarlierDate(e.target.value)}
+                className="bg-secondary border-border"
+              />
+            )}
+            {when === "unknown" && (
+              <p className="text-xs text-muted-foreground">
+                Won’t count toward “watched this month” until you set a date later.
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-2 mt-1">
           {Object.entries(RATING_LABELS).map(([val, label]) => {
             const isSelected = selected === val;
@@ -88,6 +156,7 @@ export function RatingPickerDialog({
             return (
               <button
                 key={val}
+                type="button"
                 onClick={() => handleSelect(val)}
                 className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 ${
                   isSelected

@@ -133,7 +133,20 @@ router.post("/movies", requireAuth, async (req: any, res): Promise<void> => {
     }
   }
 
-  const watchedAt = data.watchedAt ? new Date(data.watchedAt) : (data.status === "watched" ? new Date() : null);
+  // watchedAt: omit → now (first log default); null → unknown; string → that day.
+  let watchedAt: Date | null = null;
+  if (data.status === "watched") {
+    if ("watchedAt" in data) {
+      if (data.watchedAt) {
+        const d = new Date(data.watchedAt);
+        watchedAt = Number.isNaN(d.getTime()) ? null : d;
+      } else {
+        watchedAt = null;
+      }
+    } else {
+      watchedAt = new Date();
+    }
+  }
 
   const [movie] = await db
     .insert(moviesTable)
@@ -198,7 +211,8 @@ router.get("/movies/stats", requireAuth, async (req: any, res): Promise<void> =>
     .map(([key, count]) => ({ key, count }))
     .sort((a, b) => b.count - a.count);
 
-  // Compute monthly counts from watchedAt (fall back to createdAt when null)
+  // Monthly counts use actual watch day only — never log day (createdAt).
+  // Unknown watchedAt (backfill "not sure") is omitted from month buckets.
   const monthCounts: Record<string, number> = {};
   const now = new Date();
   const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -209,10 +223,12 @@ router.get("/movies/stats", requireAuth, async (req: any, res): Promise<void> =>
   const decadeCounts: Record<string, number> = {};
 
   for (const row of allWatched) {
-    const d = row.watchedAt ?? row.createdAt;
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    monthCounts[key] = (monthCounts[key] ?? 0) + 1;
-    if (key === thisMonthKey) thisMonth += 1;
+    if (row.watchedAt) {
+      const d = row.watchedAt;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      monthCounts[key] = (monthCounts[key] ?? 0) + 1;
+      if (key === thisMonthKey) thisMonth += 1;
+    }
 
     totalRewatches += row.rewatchCount ?? 0;
     if (row.rating === "loved") lovedCount += 1;

@@ -423,7 +423,7 @@ router.post("/match-sessions/:id/swipes", requireAuth, async (req: any, res): Pr
 });
 
 /**
- * POST /match-sessions/:id/log-match  { tmdbId, rating? }
+ * POST /match-sessions/:id/log-match  { tmdbId, rating?, watchedAt? }
  * Opt-in diary write for the requesting user only (partner logs separately).
  * Mutual likes already land on each person's watchlist via /swipes.
  */
@@ -432,6 +432,14 @@ router.post("/match-sessions/:id/log-match", requireAuth, async (req: any, res):
   const id = parseInt(req.params.id, 10);
   const tmdbId = Number(req.body?.tmdbId);
   const rating = typeof req.body?.rating === "string" ? req.body.rating : null;
+  const watchedAtRaw = req.body?.watchedAt;
+  let watchedAt: Date | null = new Date();
+  if (watchedAtRaw === null) {
+    watchedAt = null;
+  } else if (typeof watchedAtRaw === "string" && watchedAtRaw) {
+    const d = new Date(watchedAtRaw);
+    watchedAt = Number.isNaN(d.getTime()) ? new Date() : d;
+  }
   if (!id || !tmdbId) {
     res.status(400).json({ error: "session id and tmdbId required" });
     return;
@@ -474,7 +482,7 @@ router.post("/match-sessions/:id/log-match", requireAuth, async (req: any, res):
         .update(moviesTable)
         .set({
           status: "watched",
-          watchedAt: new Date(),
+          watchedAt,
           ...(rating ? { rating: rating as any } : {}),
         })
         .where(eq(moviesTable.id, existing[0].id));
@@ -496,7 +504,7 @@ router.post("/match-sessions/:id/log-match", requireAuth, async (req: any, res):
       originalLanguage: film.originalLanguage,
       overview: film.overview,
       genres: film.genres,
-      watchedAt: new Date(),
+      watchedAt,
       ...(rating ? { rating: rating as any } : {}),
     });
   }
