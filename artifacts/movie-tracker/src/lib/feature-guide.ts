@@ -67,7 +67,7 @@ export const FEATURE_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: "add",
     title: "Add",
-    tip: "Log a film by title, or use the Discover tabs for Hero / Director, For You, Liked, and Trending.",
+    tip: "Log a film, or switch to Discover for Hero, For You, Liked, and Trending.",
     href: "/add",
     target: "nav-add",
   },
@@ -122,9 +122,9 @@ export const FEATURE_GUIDE_SECTIONS: Array<{
       {
         id: "nav-add",
         title: "Add",
-        summary: "Log a film or browse Discover tabs.",
+        summary: "Log a film or browse Discover.",
         detail:
-          "Bottom bar → Add. Log tab: title search (and Sentence log when enabled). Other tabs: Hero / Director, For You, Liked, and Trending.",
+          "Bottom bar → Add. Primary: Log | Discover. On Discover, pick Hero, For You, Liked, or Trending.",
         href: "/add",
         cta: "Add a film",
         icon: PlusCircle,
@@ -157,9 +157,9 @@ export const FEATURE_GUIDE_SECTIONS: Array<{
       {
         id: "action-discover",
         title: "Discover",
-        summary: "Hero / Director search plus India picks — on Add.",
+        summary: "Hero / Director search plus India picks — on Add → Discover.",
         detail:
-          "Add → Hero / Director (or sidebar Discover). Search actors or directors and add from their filmography. Other tabs: For You, Liked, and Trending.",
+          "Add → Discover (or sidebar Discover). Sub-tabs: Hero / Director, For You, Liked, Trending.",
         href: "/add?tab=people",
         cta: "Open Discover",
         icon: Clapperboard,

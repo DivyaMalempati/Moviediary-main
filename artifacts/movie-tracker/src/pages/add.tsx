@@ -1,11 +1,11 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { TmdbMovieCard } from "@/components/tmdb-movie-card";
 import { SentenceLogPrompt } from "@/components/sentence-log-prompt";
-import { DiscoverPanels } from "@/components/discover-content";
+import { DiscoverPanels, type DiscoverTabId } from "@/components/discover-content";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import {
   useSearchTmdb,
   getSearchTmdbQueryKey,
@@ -23,11 +23,6 @@ import {
   Loader2,
   Sparkles,
   Tv,
-  UserRound,
-  MessageCircleHeart,
-  ThumbsUp,
-  TrendingUp,
-  PlusCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -40,8 +35,12 @@ import { Link, useLocation } from "wouter";
 import { isFeatureEnabled } from "@/lib/features";
 import {
   type AddTabId,
+  DISCOVER_SUBTABS,
   addTabHref,
+  defaultDiscoverTab,
+  isDiscoverAddTab,
   parseAddTab,
+  primaryModeForTab,
   readAddTabFromWindow,
 } from "@/lib/add-tabs";
 
@@ -98,11 +97,18 @@ function useAddTab(): [AddTabId, (tab: AddTabId) => void] {
 export default function AddPage() {
   const discoverEnabled = isFeatureEnabled("discover");
   const [activeTab, setActiveTab] = useAddTab();
+  const lastDiscoverTab = useRef<DiscoverTabId>("people");
+
+  useEffect(() => {
+    if (isDiscoverAddTab(activeTab)) lastDiscoverTab.current = activeTab;
+  }, [activeTab]);
 
   // If Discover is gated off, stay on Log.
   useEffect(() => {
     if (!discoverEnabled && activeTab !== "log") setActiveTab("log");
   }, [discoverEnabled, activeTab, setActiveTab]);
+
+  const primaryMode = primaryModeForTab(activeTab);
 
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebounce(query, 500);
@@ -291,71 +297,90 @@ export default function AddPage() {
     setActiveTab(next);
   };
 
-  const tabTriggerClass =
-    "rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all text-xs sm:text-sm px-2 sm:px-3";
+  const goLog = () => setActiveTab("log");
+  const goDiscover = () => {
+    if (!discoverEnabled) return;
+    setActiveTab(defaultDiscoverTab(lastDiscoverTab.current));
+  };
+
+  const primaryBtnClass = (active: boolean) =>
+    cn(
+      "h-11 rounded-lg text-sm font-semibold transition-colors",
+      active
+        ? "bg-primary text-primary-foreground shadow-sm"
+        : "text-muted-foreground hover:text-foreground",
+    );
+
+  const subtabClass = (active: boolean) =>
+    cn(
+      "shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors border",
+      active
+        ? "bg-foreground text-background border-foreground"
+        : "bg-transparent text-muted-foreground border-border hover:text-foreground hover:border-foreground/40",
+    );
 
   return (
     <>
-      <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-6">
-        <section className="flex flex-col gap-2">
+      <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-5">
+        <section className="flex flex-col gap-1.5">
           <h1 className="text-3xl font-bold">Add</h1>
-          <p className="text-muted-foreground">
-            {activeTab === "log"
+          <p className="text-muted-foreground text-sm sm:text-base">
+            {primaryMode === "log"
               ? sentenceLog
-                ? "Log what you watched with a short diary prompt — or search by title below."
-                : "Search by title to log a film, or switch tabs to browse Discover."
-              : "Browse by hero or director, or get picks tuned to your taste — then log from the poster."}
+                ? "Fill the diary blanks, or search by title."
+                : "Search by title to log a film."
+              : "Find something new, then log it from the poster."}
           </p>
-          {sentenceLog && activeTab === "log" && (
-            <p className="text-xs text-muted-foreground">
-              Sentence log is on for this session. Turn it off anytime in{" "}
-              <Link href="/profile" className="text-primary underline underline-offset-2">
-                Profile → Session settings
+          {sentenceLog && primaryMode === "log" && (
+            <p className="text-xs text-muted-foreground/80">
+              Sentence log on ·{" "}
+              <Link href="/profile" className="underline underline-offset-2 hover:text-foreground">
+                Session settings
               </Link>
-              .
             </p>
           )}
         </section>
 
-        <Tabs value={activeTab} onValueChange={onTabChange} className="w-full">
-          <TabsList
-            className={cn(
-              "grid w-full bg-secondary p-1 rounded-xl h-auto min-h-12 gap-1",
-              discoverEnabled ? "grid-cols-2 sm:grid-cols-5" : "grid-cols-1",
-            )}
-          >
-            <TabsTrigger value="log" className={tabTriggerClass}>
-              <PlusCircle className="w-4 h-4 mr-1.5 shrink-0" />
-              Log
-            </TabsTrigger>
-            {discoverEnabled && (
-              <>
-                <TabsTrigger value="people" className={tabTriggerClass}>
-                  <UserRound className="w-4 h-4 mr-1.5 shrink-0" />
-                  <span className="truncate">Hero / Director</span>
-                </TabsTrigger>
-                <TabsTrigger value="foryou" className={tabTriggerClass}>
-                  <MessageCircleHeart className="w-4 h-4 mr-1.5 shrink-0" />
-                  For You
-                </TabsTrigger>
-                <TabsTrigger value="liked" className={tabTriggerClass}>
-                  <ThumbsUp className="w-4 h-4 mr-1.5 shrink-0" />
-                  Liked
-                </TabsTrigger>
-                <TabsTrigger value="trending" className={tabTriggerClass}>
-                  <TrendingUp className="w-4 h-4 mr-1.5 shrink-0" />
-                  Trending
-                </TabsTrigger>
-              </>
-            )}
-          </TabsList>
+        {discoverEnabled && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-secondary">
+              <button type="button" className={primaryBtnClass(primaryMode === "log")} onClick={goLog}>
+                Log
+              </button>
+              <button
+                type="button"
+                className={primaryBtnClass(primaryMode === "discover")}
+                onClick={goDiscover}
+              >
+                Discover
+              </button>
+            </div>
 
-          <TabsContent value="log" className="mt-6 space-y-6">
+            {primaryMode === "discover" && (
+              <div className="flex gap-2 overflow-x-auto pb-0.5 -mx-1 px-1 scrollbar-none">
+                {DISCOVER_SUBTABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    className={subtabClass(activeTab === tab.id)}
+                    onClick={() => setActiveTab(tab.id)}
+                  >
+                    <span className="sm:hidden">{tab.shortLabel}</span>
+                    <span className="hidden sm:inline">{tab.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <Tabs value={activeTab} onValueChange={onTabChange} className="w-full">
+          <TabsContent value="log" className="mt-1 space-y-6">
             {sentenceLog && <SentenceLogPrompt />}
 
             {sentenceLog && (
-              <div className="flex items-center justify-between gap-3 pt-2">
-                <p className="text-sm font-medium">Title search</p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium text-muted-foreground">Title search</p>
                 <Button
                   type="button"
                   variant="ghost"
@@ -363,7 +388,7 @@ export default function AddPage() {
                   className="text-xs"
                   onClick={() => setShowTitleSearch((v) => !v)}
                 >
-                  {showTitleSearch ? "Hide" : "Show title search"}
+                  {showTitleSearch ? "Hide" : "Show"}
                 </Button>
               </div>
             )}
