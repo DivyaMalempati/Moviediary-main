@@ -323,7 +323,10 @@ export async function discoverMovies(
   if (extras?.voteAverageGte != null) {
     params["vote_average.gte"] = String(extras.voteAverageGte);
   }
-  if (extras?.keywordId != null) {
+  if (extras?.keywordIdsOr?.length) {
+    // Pipe = OR (TMDB discover). Prefer this for tropes with related tags.
+    params.with_keywords = extras.keywordIdsOr.join("|");
+  } else if (extras?.keywordId != null) {
     params.with_keywords = String(extras.keywordId);
   }
   if (extras?.primaryReleaseDateGte) {
@@ -354,6 +357,8 @@ export type DiscoverExtras = {
   voteCountLte?: number;
   voteAverageGte?: number;
   keywordId?: number;
+  /** Multiple keyword IDs OR'd together (`with_keywords=a|b|c`). */
+  keywordIdsOr?: number[];
   certification?: CertificationFilter;
   /** ISO date `YYYY-MM-DD` — TMDB primary_release_date.gte */
   primaryReleaseDateGte?: string;
@@ -424,19 +429,24 @@ export async function discoverHiddenGems(
   });
 }
 
-/** Discover by a specific TMDB keyword (trope) ID. */
+/** Discover by one or more TMDB keyword IDs (OR). */
 export async function discoverByKeyword(
-  keywordId: number,
+  keywordId: number | number[],
   languages?: string[],
   page = 1,
   genreId?: number,
   watch?: WatchFilter,
   certification?: CertificationFilter,
+  options?: { voteCountGte?: number },
 ) {
+  const ids = (Array.isArray(keywordId) ? keywordId : [keywordId]).filter(
+    (id) => Number.isFinite(id) && id > 0,
+  );
+  if (ids.length === 0) return [];
   return discoverMovies(languages, undefined, page, genreId, watch, {
     sortBy: "popularity.desc",
-    voteCountGte: 30,
-    keywordId,
+    voteCountGte: options?.voteCountGte ?? 30,
+    ...(ids.length === 1 ? { keywordId: ids[0] } : { keywordIdsOr: ids }),
     certification,
   });
 }
