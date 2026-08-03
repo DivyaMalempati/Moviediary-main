@@ -608,8 +608,14 @@ router.post("/movies/:id/rewatch", requireAuth, async (req: any, res): Promise<v
       watchedAt: now,
     };
 
-    // Preserve the original watch day before overwriting last-watched.
-    if (!existing.firstWatchedAt && existing.watchedAt) {
+    // On the first rewatch only: stash the previous watchedAt as first watch
+    // before we overwrite last-watched. Skip when rewatches already exist —
+    // watchedAt is then a later day, not the original watch.
+    if (
+      !existing.firstWatchedAt &&
+      existing.watchedAt &&
+      (existing.rewatchCount ?? 0) === 0
+    ) {
       updateValues.firstWatchedAt = existing.watchedAt;
     }
 
