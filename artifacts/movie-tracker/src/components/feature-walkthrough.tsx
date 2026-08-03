@@ -44,15 +44,20 @@ function useSpotlightRect(target: string, active: boolean): Rect | null {
     };
 
     update();
-    // Nav / Add tabs may paint after route change — retry briefly.
-    const times = [50, 150, 350, 700, 1200];
+    // Nav / Add tabs may paint after route / mode change — retry briefly.
+    const times = [50, 150, 350, 700, 1200, 2000];
     const timers = times.map((ms) => window.setTimeout(update, ms));
+
+    // Discover chips mount only after Add switches mode — watch the DOM.
+    const mo = new MutationObserver(update);
+    mo.observe(document.body, { childList: true, subtree: true, attributes: true });
 
     window.addEventListener("resize", update);
     window.addEventListener("scroll", update, true);
     return () => {
       cancelled = true;
       timers.forEach((t) => window.clearTimeout(t));
+      mo.disconnect();
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
     };
