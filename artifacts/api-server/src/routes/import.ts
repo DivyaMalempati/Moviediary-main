@@ -205,8 +205,9 @@ async function searchWithFallback(rawTitle: string, year?: number): Promise<Sear
 }
 
 // POST /import
-// Body: { rows: [{ title, status, rating?, year? }] }
+// Body: { rows: [{ title, status, rating?, year?, watchedAt? }] }
 // Searches TMDB for each title (with optional year hint), inserts, returns results.
+// Watched rows without watchedAt backfill first/last watch from release date.
 router.post("/import", requireAuth, async (req: any, res): Promise<void> => {
   const { rows: rawRows } = req.body ?? {};
   if (!Array.isArray(rawRows) || rawRows.length === 0) {
