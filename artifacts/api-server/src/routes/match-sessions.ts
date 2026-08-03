@@ -494,6 +494,7 @@ router.post("/match-sessions/:id/log-match", requireAuth, async (req: any, res):
         .update(moviesTable)
         .set({
           status: "watched",
+          firstWatchedAt: existing[0].firstWatchedAt ?? watchedAt,
           watchedAt,
           ...(rating ? { rating: rating as any } : {}),
         })
@@ -516,6 +517,7 @@ router.post("/match-sessions/:id/log-match", requireAuth, async (req: any, res):
       originalLanguage: film.originalLanguage,
       overview: film.overview,
       genres: film.genres,
+      firstWatchedAt: watchedAt,
       watchedAt,
       ...(rating ? { rating: rating as any } : {}),
     });

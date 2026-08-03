@@ -19,6 +19,8 @@ interface ImportRow {
   status: string;
   rating?: string;
   year?: number;
+  /** Optional watch day from CSV (YYYY-MM-DD). */
+  watchedAt?: string;
 }
 
 interface ResultRow {
@@ -62,11 +64,18 @@ function parseCSV(text: string): ImportRow[] {
     // Use named columns so any column order works (handles both import template
     // and the CSV exported from the Watched page).
     const headerCols = splitCSVLine(lines[0]).map((c) => c.toLowerCase().trim());
-    const idx = (name: string) => headerCols.indexOf(name);
+    const idx = (...names: string[]) => {
+      for (const name of names) {
+        const i = headerCols.indexOf(name);
+        if (i >= 0) return i;
+      }
+      return -1;
+    };
     const titleIdx  = idx("title");
     const statusIdx = idx("status");
     const ratingIdx = idx("rating");
     const yearIdx   = idx("year");
+    const watchedIdx = idx("watched_at", "watchedat", "watched", "date", "watch_date");
 
     return lines.slice(1).map((line) => {
       const cols = splitCSVLine(line);
@@ -79,11 +88,13 @@ function parseCSV(text: string): ImportRow[] {
       const rating = ratingRaw || undefined;
       const yearRaw = (yearIdx >= 0 ? cols[yearIdx] : "") ?? "";
       const year = yearRaw ? parseInt(yearRaw, 10) || undefined : undefined;
-      return { title, status, rating, year };
+      const watchedRaw = (watchedIdx >= 0 ? cols[watchedIdx] : "") ?? "";
+      const watchedAt = watchedRaw.trim() || undefined;
+      return { title, status, rating, year, watchedAt };
     }).filter((r) => r.title.length > 0);
   }
 
-  // No header — fall back to positional (title, status, rating, year)
+  // No header — fall back to positional (title, status, rating, year, watched_at)
   return lines.map((line) => {
     const cols = splitCSVLine(line);
     const title = cols[0] ?? "";
@@ -92,7 +103,8 @@ function parseCSV(text: string): ImportRow[] {
       : "watched") as "watched" | "watchlist";
     const rating = cols[2] || undefined;
     const year = cols[3] ? parseInt(cols[3], 10) || undefined : undefined;
-    return { title, status, rating, year };
+    const watchedAt = cols[4]?.trim() || undefined;
+    return { title, status, rating, year, watchedAt };
   }).filter((r) => r.title.length > 0);
 }
 
@@ -154,12 +166,12 @@ function parseTitleList(text: string): ImportRow[] {
 }
 
 // ── Template CSV content ─────────────────────────────────────────────────────
-const TEMPLATE_CSV = `title,status,rating,year,language
-"Baahubali 2: The Conclusion",watched,very_good,2017,te
-"RRR",watched,loved,2022,te
-"The Dark Knight",watched,loved,2008,en
-"Parasite",watched,loved,2019,ko
-"My watchlist film",watchlist,,2025,en`;
+const TEMPLATE_CSV = `title,status,rating,year,language,watched_at
+"Baahubali 2: The Conclusion",watched,very_good,2017,te,2017-04-28
+"RRR",watched,loved,2022,te,
+"The Dark Knight",watched,loved,2008,en,2008-07-18
+"Parasite",watched,loved,2019,ko,
+"My watchlist film",watchlist,,2025,en,`;
 
 const STATUS_ICON: Record<ResultRow["status"], React.ReactNode> = {
   added: <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />,
@@ -278,6 +290,7 @@ export default function ImportPage() {
           <h1 className="text-2xl font-bold mb-1">Import Movies</h1>
           <p className="text-muted-foreground text-sm">
             Paste a list of titles or upload a CSV. Each title is looked up on TMDB automatically.
+            If a watched title has no date, we use the film’s release date.
           </p>
         </div>
 
@@ -302,11 +315,14 @@ Oppenheimer`}
             <div className="space-y-1">
               <p className="font-medium text-foreground/80">CSV with metadata</p>
               <pre className="text-xs text-muted-foreground bg-background/60 rounded-lg p-3 font-mono">
-{`title,status,rating,year
-"RRR",watched,loved,2022
-"Parasite",watchlist,,2019`}
+{`title,status,rating,year,watched_at
+"RRR",watched,loved,2022,
+"Parasite",watched,loved,2019,2019-05-30`}
               </pre>
-              <p className="text-xs text-muted-foreground">Ratings: loved · great · very_good · good · ok · avg · meh</p>
+              <p className="text-xs text-muted-foreground">
+                Ratings: loved · great · very_good · good · ok · avg · meh.
+                Optional <span className="font-mono">watched_at</span> (YYYY-MM-DD); blank → release date.
+              </p>
             </div>
           </div>
           <div className="flex gap-2 pt-1">

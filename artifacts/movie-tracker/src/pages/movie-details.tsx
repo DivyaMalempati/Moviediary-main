@@ -26,7 +26,6 @@ import {
   formatWatchDate,
   todayInputValue,
   toWatchDateInput,
-  watchDateKey,
 } from "@/lib/movie-utils";
 import { LanguageBadge } from "@/components/language-badge";
 import { MoviePosterCard } from "@/components/movie-card";
@@ -346,42 +345,22 @@ export default function MovieDetailsPage() {
     }
   };
 
-  const saveWatchDate = (next: string | null) => {
+  const saveFirstWatchDate = (next: string | null) => {
     if (!id || !movie) return;
-    const data: { watchedAt: string | null; rewatchDates?: string[] } = { watchedAt: next };
-    // If Last watched matched a dated rewatch (usual after logging a rewatch),
-    // keep that history entry in sync so the wrong day doesn’t linger.
-    const oldKey = watchDateKey(movie.watchedAt);
-    const dates = [...(movie.rewatchDates ?? [])];
-    if (oldKey && dates.length) {
-      let matchIdx = -1;
-      for (let i = dates.length - 1; i >= 0; i--) {
-        if (watchDateKey(dates[i]) === oldKey) {
-          matchIdx = i;
-          break;
-        }
-      }
-      if (matchIdx >= 0) {
-        if (next) {
-          dates[matchIdx] = next;
-          data.rewatchDates = dates;
-        } else {
-          dates.splice(matchIdx, 1);
-          data.rewatchDates = dates;
-        }
-      }
-    }
+    // Edit first watch only — never rewrite rewatchDates (that was gluing dates together).
     updateMovie.mutate(
-      { id, data },
+      { id, data: { firstWatchedAt: next } },
       {
         onSuccess: () => {
           setEditingWatchDate(false);
-          toast.success(next ? `Watch date · ${formatWatchDate(next)}` : "Watch date cleared");
+          toast.success(
+            next ? `First watched · ${formatWatchDate(next)}` : "First watch date cleared",
+          );
           queryClient.invalidateQueries({ queryKey: getGetMovieQueryKey(id) });
           queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
           queryClient.invalidateQueries({ queryKey: ["movie-stats"] });
         },
-        onError: () => toast.error("Couldn’t update watch date"),
+        onError: () => toast.error("Couldn’t update first watch date"),
       },
     );
   };
@@ -390,22 +369,13 @@ export default function MovieDetailsPage() {
     if (!id || !movie) return;
     const dates = [...(movie.rewatchDates ?? [])];
     if (chronoIndex < 0 || chronoIndex >= dates.length) return;
-    const oldKey = watchDateKey(dates[chronoIndex]);
-    const lastKey = watchDateKey(movie.watchedAt);
     if (next) {
       dates[chronoIndex] = next;
     } else {
       dates.splice(chronoIndex, 1);
     }
-    const data: { rewatchDates: string[]; watchedAt?: string | null } = {
-      rewatchDates: dates,
-    };
-    // Keep Last watched aligned when editing the rewatch that set it.
-    if (oldKey && lastKey && oldKey === lastKey) {
-      data.watchedAt = next;
-    }
     updateMovie.mutate(
-      { id, data },
+      { id, data: { rewatchDates: dates } },
       {
         onSuccess: () => {
           setEditingRewatchIndex(null);
@@ -426,22 +396,16 @@ export default function MovieDetailsPage() {
     if (!id || !movie) return;
     const dates = [...(movie.rewatchDates ?? [])];
     if (chronoIndex < 0 || chronoIndex >= dates.length) return;
-    const oldKey = watchDateKey(dates[chronoIndex]);
-    const lastKey = watchDateKey(movie.watchedAt);
     dates.splice(chronoIndex, 1);
-    const data: {
-      rewatchDates: string[];
-      rewatchCount: number;
-      watchedAt?: string | null;
-    } = {
-      rewatchDates: dates,
-      rewatchCount: Math.max(0, (movie.rewatchCount ?? 0) - 1),
-    };
-    if (oldKey && lastKey && oldKey === lastKey) {
-      data.watchedAt = dates.length > 0 ? dates[dates.length - 1]! : null;
-    }
+    // Server recomputes last-watched from firstWatchedAt + remaining rewatchDates.
     updateMovie.mutate(
-      { id, data },
+      {
+        id,
+        data: {
+          rewatchDates: dates,
+          rewatchCount: Math.max(0, (movie.rewatchCount ?? 0) - 1),
+        },
+      },
       {
         onSuccess: () => {
           setEditingRewatchIndex(null);
@@ -640,7 +604,13 @@ export default function MovieDetailsPage() {
           {movie.status === "watched" && (() => {
             const times = 1 + (movie.rewatchCount ?? 0);
             const dated = [...(movie.rewatchDates ?? [])].slice().reverse();
-            const lastIso = movie.watchedAt ?? null;
+            const hasRewatches =
+              (movie.rewatchCount ?? 0) > 0 || (movie.rewatchDates?.length ?? 0) > 0;
+            // Prefer dedicated first-watch field; for never-rewatched titles,
+            // fall back to watchedAt (legacy rows before firstWatchedAt existed).
+            const firstIso =
+              movie.firstWatchedAt ??
+              (!hasRewatches ? movie.watchedAt ?? null : null);
             const undated =
               (movie.rewatchCount ?? 0) - (movie.rewatchDates?.length ?? 0);
             return (
@@ -660,10 +630,10 @@ export default function MovieDetailsPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <Calendar className="w-3.5 h-3.5 shrink-0" />
                       <span>
-                        {(movie.rewatchCount ?? 0) > 0 ? "Last watched" : "Watched"}{" "}
-                        {lastIso ? (
+                        {hasRewatches ? "First watched" : "Watched"}{" "}
+                        {firstIso ? (
                           <span className="text-foreground font-medium">
-                            {formatWatchDate(lastIso)}
+                            {formatWatchDate(firstIso)}
                           </span>
                         ) : (
                           <span className="text-foreground/80 italic">date unknown</span>
@@ -675,7 +645,7 @@ export default function MovieDetailsPage() {
                           className="text-xs text-primary hover:underline"
                           onClick={() => {
                             setEditingRewatchIndex(null);
-                            setWatchDateDraft(toWatchDateInput(lastIso));
+                            setWatchDateDraft(toWatchDateInput(firstIso));
                             setEditingWatchDate(true);
                           }}
                         >
@@ -695,7 +665,7 @@ export default function MovieDetailsPage() {
                         <Button
                           size="sm"
                           className="h-8"
-                          onClick={() => saveWatchDate(watchDateDraft || null)}
+                          onClick={() => saveFirstWatchDate(watchDateDraft || null)}
                         >
                           Save
                         </Button>
@@ -703,7 +673,7 @@ export default function MovieDetailsPage() {
                           size="sm"
                           variant="ghost"
                           className="h-8 text-muted-foreground"
-                          onClick={() => saveWatchDate(null)}
+                          onClick={() => saveFirstWatchDate(null)}
                         >
                           Not sure
                         </Button>
