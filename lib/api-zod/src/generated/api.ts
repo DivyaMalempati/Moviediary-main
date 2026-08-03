@@ -219,7 +219,8 @@ export const UpdateMovieBody = zod.object({
   "overview": zod.string().nullish(),
   "firstWatchedAt": zod.string().nullish().describe('Correct the first watch day (ISO 8601). Independent of rewatchDates.'),
   "watchedAt": zod.string().nullish().describe('Most recent watch day. Prefer firstWatchedAt / rewatchDates edits;\nthe server recomputes this when those change.'),
-  "rewatchDates": zod.array(zod.string()).optional().describe('Replace the dated rewatch history (ISO 8601 date or datetime strings).\nUse to correct a wrong rewatch date. Length may differ from rewatchCount\nwhen some rewatches were logged without a date.')
+  "rewatchDates": zod.array(zod.string()).optional().describe('Replace the dated rewatch history (ISO 8601 date or datetime strings).\nUse to correct a wrong rewatch date. Length may differ from rewatchCount\nwhen some rewatches were logged without a date.'),
+  "rewatchCount": zod.number().min(0).optional().describe('Set the rewatch count (e.g. decrement when deleting a dated rewatch).')
 })
 
 export const updateMovieResponseRewatchCountMin = 0;

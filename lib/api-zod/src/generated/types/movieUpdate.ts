@@ -49,4 +49,9 @@ export interface MovieUpdate {
      * when some rewatches were logged without a date.
      */
   rewatchDates?: string[];
+  /**
+     * Set the rewatch count (e.g. decrement when deleting a dated rewatch).
+     * @minimum 0
+     */
+  rewatchCount?: number;
 }

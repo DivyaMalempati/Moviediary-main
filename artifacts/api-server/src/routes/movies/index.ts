@@ -540,6 +540,18 @@ router.patch("/movies/:id", requireAuth, async (req: any, res): Promise<void> =>
     updateValues.rewatchDates = parsedDates;
   }
 
+  if ("rewatchCount" in data && data.rewatchCount !== undefined) {
+    if (
+      typeof data.rewatchCount !== "number" ||
+      !Number.isInteger(data.rewatchCount) ||
+      data.rewatchCount < 0
+    ) {
+      res.status(400).json({ error: "Invalid rewatchCount" });
+      return;
+    }
+    updateValues.rewatchCount = data.rewatchCount;
+  }
+
   // Keep last-watched aligned with first + dated rewatches when either changes.
   if (
     ("firstWatchedAt" in data || "rewatchDates" in data) &&
