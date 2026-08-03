@@ -31,7 +31,7 @@ import { usePreferences } from "@/lib/preferences";
 import { useSessionSettings } from "@/hooks/use-session-settings";
 import { getAuthHeaders } from "@/lib/demo-auth";
 import { cn } from "@/lib/utils";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { isFeatureEnabled } from "@/lib/features";
 import { FEATURE_TOUR_STEPS } from "@/lib/feature-guide";
 import { useFeatureTour } from "@/components/feature-tour-context";
@@ -72,18 +72,14 @@ async function isOnMyServices(
 
 function useAddTab(): [AddTabId, (tab: AddTabId) => void] {
   const [location, setLocation] = useLocation();
+  // wouter's location is pathname-only; ?tab= changes arrive via useSearch.
+  const search = useSearch();
   const [tab, setTabState] = useState<AddTabId>(() => readAddTabFromWindow());
 
-  // Sync when nav Links or back/forward change the URL (incl. ?tab=).
+  // Sync when nav Links, tour navigation, or back/forward change the URL.
   useEffect(() => {
     setTabState(readAddTabFromWindow());
-  }, [location]);
-
-  useEffect(() => {
-    const sync = () => setTabState(readAddTabFromWindow());
-    window.addEventListener("popstate", sync);
-    return () => window.removeEventListener("popstate", sync);
-  }, []);
+  }, [location, search]);
 
   const setTab = useCallback(
     (next: AddTabId) => {
@@ -128,10 +124,29 @@ export default function AddPage() {
   const preferredProviders = prefs?.preferredProviders ?? [];
   const watchRegion = prefs?.watchRegion ?? "IN";
 
-  // Expand title search during the walkthrough so the spotlight can find it.
+  // Walkthrough: force the right Add mode so spotlight targets exist.
   useEffect(() => {
-    if (tourTarget === "add-title-search") setShowTitleSearch(true);
-  }, [tourTarget]);
+    if (!tourTarget) return;
+    if (tourTarget === "add-title-search") {
+      setShowTitleSearch(true);
+      if (activeTab !== "log") setActiveTab("log");
+      return;
+    }
+    if (tourTarget === "add-primary-modes" || tourTarget === "add-log-diary") {
+      if (activeTab !== "log") setActiveTab("log");
+      return;
+    }
+    if (
+      discoverEnabled &&
+      (tourTarget === "add-discover-subtabs" ||
+        tourTarget === "add-discover-mode" ||
+        tourTarget === "add-actor-search")
+    ) {
+      if (!isDiscoverAddTab(activeTab)) {
+        setActiveTab(defaultDiscoverTab(lastDiscoverTab.current));
+      }
+    }
+  }, [tourTarget, discoverEnabled, activeTab, setActiveTab]);
 
   const queryClient = useQueryClient();
   const createMovie = useCreateMovie();
@@ -361,6 +376,7 @@ export default function AddPage() {
               </button>
               <button
                 type="button"
+                data-tour="add-discover-mode"
                 className={primaryBtnClass(primaryMode === "discover")}
                 onClick={goDiscover}
               >

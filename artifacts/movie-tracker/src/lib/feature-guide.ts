@@ -12,7 +12,7 @@ import {
 import { isFeatureEnabled } from "@/lib/features";
 
 /** Bump when the tour content changes so returning users see the new version once. */
-export const FEATURE_TOUR_VERSION = 6;
+export const FEATURE_TOUR_VERSION = 7;
 export const FEATURE_TOUR_STORAGE_KEY = `cinevault:feature-tour:v${FEATURE_TOUR_VERSION}`;
 
 export type FeatureGuideItem = {
@@ -88,7 +88,14 @@ export const FEATURE_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: "add-discover",
     title: "Discover",
-    tip: "Discover has Actor, For You, Liked, and Trending. Pick a chip to browse.",
+    tip: "Tap Discover to browse — then use Actor, For You, Liked, or Trending.",
+    href: "/add?tab=people",
+    target: "add-discover-mode",
+  },
+  {
+    id: "add-discover-chips",
+    title: "Discover chips",
+    tip: "These chips switch what you’re browsing. Start with Actor / Director.",
     href: "/add?tab=people",
     target: "add-discover-subtabs",
   },
