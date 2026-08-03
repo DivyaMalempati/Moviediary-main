@@ -32,7 +32,17 @@ export interface Movie {
   genres?: string[] | null;
   /** @nullable */
   overview?: string | null;
-  /** @nullable */
+  /**
+     * First time the user watched this title (ISO 8601). Stable across
+     * rewatches. Null means unknown / not sure.
+     * @nullable
+     */
+  firstWatchedAt?: string | null;
+  /**
+     * Most recent watch day (ISO 8601). Updated when logging a rewatch.
+     * Use firstWatchedAt for the original watch day.
+     * @nullable
+     */
   watchedAt?: string | null;
   createdAt: string;
   /**

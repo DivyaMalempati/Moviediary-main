@@ -54,9 +54,12 @@ export const moviesTable = pgTable(
     genres: text("genres").array(),
     overview: text("overview"),
 
-    // Kept as "last watched" convenience column (updated on each rewatch).
-    // rewatchDates holds optional dated rewatch entries; undated rewatches
-    // only increment rewatchCount.
+    // First time the user watched this title (stable; not overwritten by rewatches).
+    firstWatchedAt: timestamp("first_watched_at", { withTimezone: true }),
+
+    // Last watched convenience column (updated on each rewatch). Used for
+    // sorting / "recently watched". rewatchDates holds optional dated rewatch
+    // entries; undated rewatches only increment rewatchCount.
     watchedAt: timestamp("watched_at", { withTimezone: true }),
 
     // Number of rewatches after the first watch (0 = watched once).

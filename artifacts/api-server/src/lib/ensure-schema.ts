@@ -64,5 +64,18 @@ export async function ensureSchema(): Promise<void> {
       ON "partner_invites" ("contact_id");
   `);
 
+  // First watch day (distinct from last-watched / rewatch dates).
+  await pool.query(`
+    ALTER TABLE "movies"
+      ADD COLUMN IF NOT EXISTS "first_watched_at" timestamp with time zone;
+  `);
+  await pool.query(`
+    UPDATE "movies"
+    SET "first_watched_at" = "watched_at"
+    WHERE "first_watched_at" IS NULL
+      AND "rewatch_count" = 0
+      AND "watched_at" IS NOT NULL;
+  `);
+
   logger.info("Schema ensure complete");
 }

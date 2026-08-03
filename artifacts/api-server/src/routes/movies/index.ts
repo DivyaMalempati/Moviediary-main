@@ -81,6 +81,18 @@ function normalizeRewatchDates(
     .filter((d) => !Number.isNaN(d.getTime()));
 }
 
+/** Most recent day among first watch + dated rewatches. */
+function latestWatchDate(
+  first: Date | null | undefined,
+  rewatches: Date[],
+): Date | null {
+  let latest: Date | null = first ?? null;
+  for (const d of rewatches) {
+    if (!latest || d.getTime() > latest.getTime()) latest = d;
+  }
+  return latest;
+}
+
 function dbMovieToResponse(m: typeof moviesTable.$inferSelect) {
   return {
     id: m.id,
@@ -95,6 +107,7 @@ function dbMovieToResponse(m: typeof moviesTable.$inferSelect) {
     originalLanguage: m.originalLanguage ?? null,
     genres: m.genres ?? null,
     overview: m.overview ?? null,
+    firstWatchedAt: toIsoTimestamp(m.firstWatchedAt),
     watchedAt: toIsoTimestamp(m.watchedAt),
     createdAt: toIsoTimestamp(m.createdAt) ?? new Date(0).toISOString(),
     rewatchCount: m.rewatchCount ?? 0,
@@ -149,7 +162,7 @@ router.post("/movies", requireAuth, async (req: any, res): Promise<void> => {
     }
   }
 
-  // watchedAt: omit → now (first log default); null → unknown; string → that day.
+  // watchedAt / firstWatchedAt: omit → now (first log default); null → unknown; string → that day.
   let watchedAt: Date | null = null;
   if (data.status === "watched") {
     if ("watchedAt" in data) {
@@ -174,6 +187,7 @@ router.post("/movies", requireAuth, async (req: any, res): Promise<void> => {
       originalLanguage: data.originalLanguage ?? null,
       genres: data.genres ?? null,
       overview: data.overview ?? null,
+      firstWatchedAt: watchedAt,
       watchedAt,
     })
     .returning();
@@ -453,6 +467,17 @@ router.patch("/movies/:id", requireAuth, async (req: any, res): Promise<void> =>
   }
 
   const data = parsed.data;
+
+  const [existing] = await db
+    .select()
+    .from(moviesTable)
+    .where(and(eq(moviesTable.userId, req.userId), eq(moviesTable.id, params.data.id)));
+
+  if (!existing) {
+    res.status(404).json({ error: "Movie not found" });
+    return;
+  }
+
   const updateValues: Partial<typeof moviesTable.$inferInsert> = {};
 
   if (data.title !== undefined) updateValues.title = data.title;
@@ -466,10 +491,33 @@ router.patch("/movies/:id", requireAuth, async (req: any, res): Promise<void> =>
   if ("originalLanguage" in data) updateValues.originalLanguage = data.originalLanguage ?? null;
   if ("genres" in data) updateValues.genres = data.genres ?? null;
   if ("overview" in data) updateValues.overview = data.overview ?? null;
+  if ("firstWatchedAt" in data) {
+    updateValues.firstWatchedAt = data.firstWatchedAt
+      ? parseWatchedAt(data.firstWatchedAt)
+      : null;
+  }
   if ("watchedAt" in data) {
     updateValues.watchedAt = data.watchedAt ? parseWatchedAt(data.watchedAt) : null;
   }
-  if (data.status === "watched" && !("watchedAt" in data)) updateValues.watchedAt = new Date();
+  if (data.status === "watched" && !("watchedAt" in data) && !("firstWatchedAt" in data)) {
+    const now = new Date();
+    updateValues.watchedAt = now;
+    if (!existing.firstWatchedAt) updateValues.firstWatchedAt = now;
+  }
+
+  // Marking watched with a date for the first time: seed firstWatchedAt.
+  if (
+    (data.status === "watched" || existing.status === "watched") &&
+    "watchedAt" in data &&
+    !("firstWatchedAt" in data) &&
+    !existing.firstWatchedAt &&
+    (existing.rewatchCount ?? 0) === 0
+  ) {
+    updateValues.firstWatchedAt =
+      updateValues.watchedAt !== undefined
+        ? (updateValues.watchedAt as Date | null)
+        : existing.watchedAt;
+  }
 
   if ("rewatchDates" in data && Array.isArray(data.rewatchDates)) {
     if (data.rewatchDates.length > 200) {
@@ -490,6 +538,23 @@ router.patch("/movies/:id", requireAuth, async (req: any, res): Promise<void> =>
       parsedDates.push(d);
     }
     updateValues.rewatchDates = parsedDates;
+  }
+
+  // Keep last-watched aligned with first + dated rewatches when either changes.
+  if (
+    ("firstWatchedAt" in data || "rewatchDates" in data) &&
+    !("watchedAt" in data)
+  ) {
+    const nextFirst =
+      "firstWatchedAt" in updateValues
+        ? (updateValues.firstWatchedAt as Date | null | undefined) ?? null
+        : existing.firstWatchedAt;
+    const nextRewatches = normalizeRewatchDates(
+      "rewatchDates" in updateValues
+        ? updateValues.rewatchDates
+        : existing.rewatchDates,
+    );
+    updateValues.watchedAt = latestWatchDate(nextFirst, nextRewatches);
   }
 
   const [movie] = await db
@@ -542,6 +607,11 @@ router.post("/movies/:id/rewatch", requireAuth, async (req: any, res): Promise<v
       // Always refresh last-watched so the diary stays current even for undated rewatches.
       watchedAt: now,
     };
+
+    // Preserve the original watch day before overwriting last-watched.
+    if (!existing.firstWatchedAt && existing.watchedAt) {
+      updateValues.firstWatchedAt = existing.watchedAt;
+    }
 
     // Optional dated rewatch: append to history (and use that date as last-watched).
     const rawWatchedAt = body.data.watchedAt;

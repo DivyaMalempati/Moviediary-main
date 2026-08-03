@@ -42,7 +42,8 @@ export const ListMoviesResponseItem = zod.object({
   "originalLanguage": zod.string().nullish(),
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
-  "watchedAt": zod.string().nullish(),
+  "firstWatchedAt": zod.string().nullish().describe('First time the user watched this title (ISO 8601). Stable across\nrewatches. Null means unknown / not sure.'),
+  "watchedAt": zod.string().nullish().describe('Most recent watch day (ISO 8601). Updated when logging a rewatch.\nUse firstWatchedAt for the original watch day.'),
   "createdAt": zod.string(),
   "rewatchCount": zod.number().min(listMoviesResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)'),
   "rewatchDates": zod.array(zod.string()).describe('Optional dates logged for rewatches (ISO 8601). Length may be less than rewatchCount when some rewatches were logged without a date.\n')
@@ -88,7 +89,8 @@ export const CreateMovieResponse = zod.object({
   "originalLanguage": zod.string().nullish(),
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
-  "watchedAt": zod.string().nullish(),
+  "firstWatchedAt": zod.string().nullish().describe('First time the user watched this title (ISO 8601). Stable across\nrewatches. Null means unknown / not sure.'),
+  "watchedAt": zod.string().nullish().describe('Most recent watch day (ISO 8601). Updated when logging a rewatch.\nUse firstWatchedAt for the original watch day.'),
   "createdAt": zod.string(),
   "rewatchCount": zod.number().min(createMovieResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)'),
   "rewatchDates": zod.array(zod.string()).describe('Optional dates logged for rewatches (ISO 8601). Length may be less than rewatchCount when some rewatches were logged without a date.\n')
@@ -142,7 +144,8 @@ export const GetMovieStatsResponse = zod.object({
   "originalLanguage": zod.string().nullish(),
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
-  "watchedAt": zod.string().nullish(),
+  "firstWatchedAt": zod.string().nullish().describe('First time the user watched this title (ISO 8601). Stable across\nrewatches. Null means unknown / not sure.'),
+  "watchedAt": zod.string().nullish().describe('Most recent watch day (ISO 8601). Updated when logging a rewatch.\nUse firstWatchedAt for the original watch day.'),
   "createdAt": zod.string(),
   "rewatchCount": zod.number().min(getMovieStatsResponseRecentlyWatchedItemRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)'),
   "rewatchDates": zod.array(zod.string()).describe('Optional dates logged for rewatches (ISO 8601). Length may be less than rewatchCount when some rewatches were logged without a date.\n')
@@ -184,7 +187,8 @@ export const GetMovieResponse = zod.object({
   "originalLanguage": zod.string().nullish(),
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
-  "watchedAt": zod.string().nullish(),
+  "firstWatchedAt": zod.string().nullish().describe('First time the user watched this title (ISO 8601). Stable across\nrewatches. Null means unknown / not sure.'),
+  "watchedAt": zod.string().nullish().describe('Most recent watch day (ISO 8601). Updated when logging a rewatch.\nUse firstWatchedAt for the original watch day.'),
   "createdAt": zod.string(),
   "rewatchCount": zod.number().min(getMovieResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)'),
   "rewatchDates": zod.array(zod.string()).describe('Optional dates logged for rewatches (ISO 8601). Length may be less than rewatchCount when some rewatches were logged without a date.\n')
@@ -213,7 +217,8 @@ export const UpdateMovieBody = zod.object({
   "originalLanguage": zod.string().nullish(),
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
-  "watchedAt": zod.string().nullish(),
+  "firstWatchedAt": zod.string().nullish().describe('Correct the first watch day (ISO 8601). Independent of rewatchDates.'),
+  "watchedAt": zod.string().nullish().describe('Most recent watch day. Prefer firstWatchedAt / rewatchDates edits;\nthe server recomputes this when those change.'),
   "rewatchDates": zod.array(zod.string()).optional().describe('Replace the dated rewatch history (ISO 8601 date or datetime strings).\nUse to correct a wrong rewatch date. Length may differ from rewatchCount\nwhen some rewatches were logged without a date.')
 })
 
@@ -234,7 +239,8 @@ export const UpdateMovieResponse = zod.object({
   "originalLanguage": zod.string().nullish(),
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
-  "watchedAt": zod.string().nullish(),
+  "firstWatchedAt": zod.string().nullish().describe('First time the user watched this title (ISO 8601). Stable across\nrewatches. Null means unknown / not sure.'),
+  "watchedAt": zod.string().nullish().describe('Most recent watch day (ISO 8601). Updated when logging a rewatch.\nUse firstWatchedAt for the original watch day.'),
   "createdAt": zod.string(),
   "rewatchCount": zod.number().min(updateMovieResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)'),
   "rewatchDates": zod.array(zod.string()).describe('Optional dates logged for rewatches (ISO 8601). Length may be less than rewatchCount when some rewatches were logged without a date.\n')
@@ -275,7 +281,8 @@ export const MatchMovieToTmdbResponse = zod.object({
   "originalLanguage": zod.string().nullish(),
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
-  "watchedAt": zod.string().nullish(),
+  "firstWatchedAt": zod.string().nullish().describe('First time the user watched this title (ISO 8601). Stable across\nrewatches. Null means unknown / not sure.'),
+  "watchedAt": zod.string().nullish().describe('Most recent watch day (ISO 8601). Updated when logging a rewatch.\nUse firstWatchedAt for the original watch day.'),
   "createdAt": zod.string(),
   "rewatchCount": zod.number().min(matchMovieToTmdbResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)'),
   "rewatchDates": zod.array(zod.string()).describe('Optional dates logged for rewatches (ISO 8601). Length may be less than rewatchCount when some rewatches were logged without a date.\n')
@@ -311,7 +318,8 @@ export const RewatchMovieResponse = zod.object({
   "originalLanguage": zod.string().nullish(),
   "genres": zod.array(zod.string()).nullish(),
   "overview": zod.string().nullish(),
-  "watchedAt": zod.string().nullish(),
+  "firstWatchedAt": zod.string().nullish().describe('First time the user watched this title (ISO 8601). Stable across\nrewatches. Null means unknown / not sure.'),
+  "watchedAt": zod.string().nullish().describe('Most recent watch day (ISO 8601). Updated when logging a rewatch.\nUse firstWatchedAt for the original watch day.'),
   "createdAt": zod.string(),
   "rewatchCount": zod.number().min(rewatchMovieResponseRewatchCountMin).describe('Number of rewatches after the first watch (0 = watched once)'),
   "rewatchDates": zod.array(zod.string()).describe('Optional dates logged for rewatches (ISO 8601). Length may be less than rewatchCount when some rewatches were logged without a date.\n')

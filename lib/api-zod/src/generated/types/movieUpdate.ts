@@ -32,6 +32,21 @@ export interface MovieUpdate {
   genres?: string[] | null;
   /** @nullable */
   overview?: string | null;
-  /** @nullable */
+  /**
+     * Correct the first watch day (ISO 8601). Independent of rewatchDates.
+     * @nullable
+     */
+  firstWatchedAt?: string | null;
+  /**
+     * Most recent watch day. Prefer firstWatchedAt / rewatchDates edits;
+     * the server recomputes this when those change.
+     * @nullable
+     */
   watchedAt?: string | null;
+  /**
+     * Replace the dated rewatch history (ISO 8601 date or datetime strings).
+     * Use to correct a wrong rewatch date. Length may differ from rewatchCount
+     * when some rewatches were logged without a date.
+     */
+  rewatchDates?: string[];
 }

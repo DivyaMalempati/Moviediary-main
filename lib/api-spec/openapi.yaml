@@ -499,8 +499,16 @@ components:
             type: string
         overview:
           type: ["string", "null"]
+        firstWatchedAt:
+          type: ["string", "null"]
+          description: >
+            First time the user watched this title (ISO 8601). Stable across
+            rewatches. Null means unknown / not sure.
         watchedAt:
           type: ["string", "null"]
+          description: >
+            Most recent watch day (ISO 8601). Updated when logging a rewatch.
+            Use firstWatchedAt for the original watch day.
         createdAt:
           type: string
         rewatchCount:
@@ -582,8 +590,15 @@ components:
             type: string
         overview:
           type: ["string", "null"]
+        firstWatchedAt:
+          type: ["string", "null"]
+          description: >
+            Correct the first watch day (ISO 8601). Independent of rewatchDates.
         watchedAt:
           type: ["string", "null"]
+          description: >
+            Most recent watch day. Prefer firstWatchedAt / rewatchDates edits;
+            the server recomputes this when those change.
         rewatchDates:
           type: array
           items:

@@ -218,6 +218,7 @@ router.post("/import", requireAuth, async (req: any, res): Promise<void> => {
         // use search result fields
       }
 
+      const watchedAt = row.status === "watched" ? new Date() : null;
       await db.insert(moviesTable).values({
         userId: req.userId,
         title: details.title,
@@ -230,7 +231,8 @@ router.post("/import", requireAuth, async (req: any, res): Promise<void> => {
         originalLanguage: details.originalLanguage ?? null,
         genres: details.genres ?? null,
         overview: details.overview ?? null,
-        watchedAt: row.status === "watched" ? new Date() : null,
+        firstWatchedAt: watchedAt,
+        watchedAt,
       });
 
       if (best.tmdbId) existingIds.add(best.tmdbId);
