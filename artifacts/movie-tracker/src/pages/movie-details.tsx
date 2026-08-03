@@ -421,6 +421,42 @@ export default function MovieDetailsPage() {
     );
   };
 
+  /** Remove a dated rewatch entirely (date + count). */
+  const deleteRewatchDate = (chronoIndex: number, label: string | null) => {
+    if (!id || !movie) return;
+    const dates = [...(movie.rewatchDates ?? [])];
+    if (chronoIndex < 0 || chronoIndex >= dates.length) return;
+    const oldKey = watchDateKey(dates[chronoIndex]);
+    const lastKey = watchDateKey(movie.watchedAt);
+    dates.splice(chronoIndex, 1);
+    const data: {
+      rewatchDates: string[];
+      rewatchCount: number;
+      watchedAt?: string | null;
+    } = {
+      rewatchDates: dates,
+      rewatchCount: Math.max(0, (movie.rewatchCount ?? 0) - 1),
+    };
+    if (oldKey && lastKey && oldKey === lastKey) {
+      data.watchedAt = dates.length > 0 ? dates[dates.length - 1]! : null;
+    }
+    updateMovie.mutate(
+      { id, data },
+      {
+        onSuccess: () => {
+          setEditingRewatchIndex(null);
+          toast.success(
+            label ? `Deleted rewatch · ${label}` : "Deleted rewatch",
+          );
+          queryClient.invalidateQueries({ queryKey: getGetMovieQueryKey(id) });
+          queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
+          queryClient.invalidateQueries({ queryKey: ["movie-stats"] });
+        },
+        onError: () => toast.error("Couldn’t delete rewatch"),
+      },
+    );
+  };
+
   const handleMuteLikeThis = async () => {
     const genres = (movie?.genres ?? []).slice(0, 2);
     if (!genres.length) {
@@ -699,17 +735,38 @@ export default function MovieDetailsPage() {
                             </span>
                           </span>
                           {!editing && (
-                            <button
-                              type="button"
-                              className="text-xs text-primary hover:underline"
-                              onClick={() => {
-                                setEditingWatchDate(false);
-                                setEditingRewatchIndex(chronoIndex);
-                                setRewatchDateDraft(toWatchDateInput(iso));
-                              }}
-                            >
-                              Edit date
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                className="text-xs text-primary hover:underline"
+                                onClick={() => {
+                                  setEditingWatchDate(false);
+                                  setEditingRewatchIndex(chronoIndex);
+                                  setRewatchDateDraft(toWatchDateInput(iso));
+                                }}
+                              >
+                                Edit date
+                              </button>
+                              <button
+                                type="button"
+                                className="text-xs text-destructive hover:underline"
+                                onClick={() => {
+                                  const label = formatWatchDate(iso);
+                                  if (
+                                    !window.confirm(
+                                      label
+                                        ? `Delete rewatch on ${label}? This removes that rewatch from your count.`
+                                        : "Delete this rewatch?",
+                                    )
+                                  ) {
+                                    return;
+                                  }
+                                  deleteRewatchDate(chronoIndex, label);
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </>
                           )}
                         </div>
                         {editing && (
@@ -737,6 +794,26 @@ export default function MovieDetailsPage() {
                               onClick={() => saveRewatchDate(chronoIndex, null)}
                             >
                               Clear date
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 text-destructive"
+                              onClick={() => {
+                                const label = formatWatchDate(iso);
+                                if (
+                                  !window.confirm(
+                                    label
+                                      ? `Delete rewatch on ${label}? This removes that rewatch from your count.`
+                                      : "Delete this rewatch?",
+                                  )
+                                ) {
+                                  return;
+                                }
+                                deleteRewatchDate(chronoIndex, label);
+                              }}
+                            >
+                              Delete
                             </Button>
                             <Button
                               size="sm"
