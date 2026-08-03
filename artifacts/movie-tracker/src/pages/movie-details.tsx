@@ -365,23 +365,17 @@ export default function MovieDetailsPage() {
     );
   };
 
-  const saveRewatchDate = (chronoIndex: number, next: string | null) => {
-    if (!id || !movie) return;
+  const saveRewatchDate = (chronoIndex: number, next: string) => {
+    if (!id || !movie || !next) return;
     const dates = [...(movie.rewatchDates ?? [])];
     if (chronoIndex < 0 || chronoIndex >= dates.length) return;
-    if (next) {
-      dates[chronoIndex] = next;
-    } else {
-      dates.splice(chronoIndex, 1);
-    }
+    dates[chronoIndex] = next;
     updateMovie.mutate(
       { id, data: { rewatchDates: dates } },
       {
         onSuccess: () => {
           setEditingRewatchIndex(null);
-          toast.success(
-            next ? `Rewatch date · ${formatWatchDate(next)}` : "Rewatch date cleared",
-          );
+          toast.success(`Rewatch date · ${formatWatchDate(next)}`);
           queryClient.invalidateQueries({ queryKey: getGetMovieQueryKey(id) });
           queryClient.invalidateQueries({ queryKey: ["/api/movies"] });
           queryClient.invalidateQueries({ queryKey: ["movie-stats"] });
@@ -751,19 +745,12 @@ export default function MovieDetailsPage() {
                             <Button
                               size="sm"
                               className="h-8"
+                              disabled={!rewatchDateDraft}
                               onClick={() =>
-                                saveRewatchDate(chronoIndex, rewatchDateDraft || null)
+                                saveRewatchDate(chronoIndex, rewatchDateDraft)
                               }
                             >
                               Save
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 text-muted-foreground"
-                              onClick={() => saveRewatchDate(chronoIndex, null)}
-                            >
-                              Clear date
                             </Button>
                             <Button
                               size="sm"
@@ -774,8 +761,8 @@ export default function MovieDetailsPage() {
                                 if (
                                   !window.confirm(
                                     label
-                                      ? `Delete rewatch on ${label}? This removes that rewatch from your count.`
-                                      : "Delete this rewatch?",
+                                      ? `Delete rewatch on ${label}? This removes that rewatch from your count. You can log it again with Rewatch.`
+                                      : "Delete this rewatch? You can log it again with Rewatch.",
                                   )
                                 ) {
                                   return;
