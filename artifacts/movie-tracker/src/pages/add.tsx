@@ -124,7 +124,7 @@ export default function AddPage() {
   const preferredProviders = prefs?.preferredProviders ?? [];
   const watchRegion = prefs?.watchRegion ?? "IN";
 
-  // Walkthrough: force the right Add mode so spotlight targets exist.
+  // Walkthrough: force the right Add mode / Discover chip so spotlight targets exist.
   useEffect(() => {
     if (!tourTarget) return;
     if (tourTarget === "add-title-search") {
@@ -136,15 +136,27 @@ export default function AddPage() {
       if (activeTab !== "log") setActiveTab("log");
       return;
     }
-    if (
-      discoverEnabled &&
-      (tourTarget === "add-discover-subtabs" ||
-        tourTarget === "add-discover-mode" ||
-        tourTarget === "add-actor-search")
-    ) {
+    if (!discoverEnabled) return;
+
+    const chipTab = tourTarget.startsWith("add-discover-chip-")
+      ? parseAddTab(tourTarget.slice("add-discover-chip-".length))
+      : null;
+
+    if (chipTab && isDiscoverAddTab(chipTab)) {
+      if (activeTab !== chipTab) setActiveTab(chipTab);
+      return;
+    }
+
+    if (tourTarget === "add-discover-mode" || tourTarget === "add-discover-subtabs") {
       if (!isDiscoverAddTab(activeTab)) {
         setActiveTab(defaultDiscoverTab(lastDiscoverTab.current));
       }
+      return;
+    }
+
+    // Legacy actor-search target (older tour versions / guide links).
+    if (tourTarget === "add-actor-search" && activeTab !== "people") {
+      setActiveTab("people");
     }
   }, [tourTarget, discoverEnabled, activeTab, setActiveTab]);
 
@@ -393,6 +405,7 @@ export default function AddPage() {
                   <button
                     key={tab.id}
                     type="button"
+                    data-tour={`add-discover-chip-${tab.id}`}
                     className={subtabClass(activeTab === tab.id)}
                     onClick={() => setActiveTab(tab.id)}
                   >
