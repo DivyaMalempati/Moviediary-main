@@ -17,6 +17,57 @@ interface ImportRow {
   status: "watched" | "watchlist";
   rating?: string;
   year?: number;
+  /** Optional watch day from the uploaded list (YYYY-MM-DD or ISO). */
+  watchedAt?: string;
+}
+
+/** Date-only → UTC noon so the calendar day is stable across zones. */
+function parseDateOnly(raw: string | null | undefined): Date | null {
+  if (raw == null) return null;
+  const trimmed = String(raw).trim();
+  if (!trimmed) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return new Date(`${trimmed}T12:00:00.000Z`);
+  }
+  if (/^\d{4}$/.test(trimmed)) {
+    return new Date(`${trimmed}-01-01T12:00:00.000Z`);
+  }
+  const d = new Date(trimmed);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function startOfTodayUtc(): Date {
+  const now = new Date();
+  const key = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(now.getUTCDate()).padStart(2, "0")}`;
+  return new Date(`${key}T12:00:00.000Z`);
+}
+
+/** Don't store a future watch day (release dates can be upcoming). */
+function clampToToday(d: Date): Date {
+  const today = startOfTodayUtc();
+  return d.getTime() > today.getTime() ? today : d;
+}
+
+/**
+ * Import lists rarely include a real watch day. Prefer an explicit date from
+ * the row; otherwise backfill from TMDB release day (then year), else today.
+ */
+function resolveImportWatchedAt(opts: {
+  watchedAtRaw?: string;
+  releaseDate?: string | null;
+  releaseYear?: number | null;
+}): Date {
+  const fromRow = parseDateOnly(opts.watchedAtRaw);
+  if (fromRow) return clampToToday(fromRow);
+
+  const fromRelease = parseDateOnly(opts.releaseDate ?? undefined);
+  if (fromRelease) return clampToToday(fromRelease);
+
+  if (opts.releaseYear && opts.releaseYear >= 1900 && opts.releaseYear <= 2100) {
+    return clampToToday(new Date(`${opts.releaseYear}-01-01T12:00:00.000Z`));
+  }
+
+  return new Date();
 }
 
 function parseRows(rows: unknown[]): ImportRow[] {
@@ -44,6 +95,12 @@ function parseRows(rows: unknown[]): ImportRow[] {
         return undefined;
       })(),
       year: r.year ? parseInt(String(r.year), 10) || undefined : undefined,
+      watchedAt: (() => {
+        const raw =
+          r.watchedAt ?? r.watched_at ?? r.watched ?? r.date ?? r.watch_date;
+        if (raw == null || String(raw).trim() === "") return undefined;
+        return String(raw).trim();
+      })(),
     }))
     .filter((r) => r.title.length > 0);
 }
@@ -218,7 +275,14 @@ router.post("/import", requireAuth, async (req: any, res): Promise<void> => {
         // use search result fields
       }
 
-      const watchedAt = row.status === "watched" ? new Date() : null;
+      const watchedAt =
+        row.status === "watched"
+          ? resolveImportWatchedAt({
+              watchedAtRaw: row.watchedAt,
+              releaseDate: details.releaseDate ?? null,
+              releaseYear: details.releaseYear ?? row.year ?? null,
+            })
+          : null;
       await db.insert(moviesTable).values({
         userId: req.userId,
         title: details.title,

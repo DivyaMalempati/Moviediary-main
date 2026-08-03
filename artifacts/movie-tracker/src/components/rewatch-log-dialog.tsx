@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 
 export type RewatchLogPayload = {
   rating: string | null;
-  /** ISO date (YYYY-MM-DD) when set; omit/null to skip date logging. */
+  /** ISO date (YYYY-MM-DD) when set; null = undated rewatch. */
   watchedAt?: string | null;
 };
 
@@ -24,7 +24,7 @@ interface RewatchLogDialogProps {
   onCancel: () => void;
 }
 
-/** Log a rewatch with optional rating and optional watch date. */
+/** Log a rewatch — date defaults to today and can be changed. */
 export function RewatchLogDialog({
   open,
   movieTitle,
@@ -32,13 +32,14 @@ export function RewatchLogDialog({
   onCancel,
 }: RewatchLogDialogProps) {
   const [selected, setSelected] = useState<string | null>(null);
-  const [logDate, setLogDate] = useState(false);
   const [watchedAt, setWatchedAt] = useState(todayInputValue);
+  /** When false, rewatch is logged without a date. */
+  const [includeDate, setIncludeDate] = useState(true);
 
   useEffect(() => {
     if (open) {
       setSelected(null);
-      setLogDate(false);
+      setIncludeDate(true);
       setWatchedAt(todayInputValue());
     }
   }, [open, movieTitle]);
@@ -50,7 +51,7 @@ export function RewatchLogDialog({
   const submit = (rating: string | null) => {
     onConfirm({
       rating,
-      watchedAt: logDate && watchedAt ? watchedAt : null,
+      watchedAt: includeDate && watchedAt ? watchedAt : null,
     });
   };
 
@@ -70,18 +71,24 @@ export function RewatchLogDialog({
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <Label htmlFor="rewatch-date" className="text-sm text-muted-foreground">
-                Rewatch date{" "}
-                <span className="text-muted-foreground/70">(optional)</span>
+                Rewatch date
               </Label>
               <button
                 type="button"
                 className="text-xs text-primary hover:underline"
-                onClick={() => setLogDate((v) => !v)}
+                onClick={() => {
+                  if (includeDate) {
+                    setIncludeDate(false);
+                  } else {
+                    setIncludeDate(true);
+                    setWatchedAt(todayInputValue());
+                  }
+                }}
               >
-                {logDate ? "Clear date" : "Add date"}
+                {includeDate ? "Not sure" : "Add date"}
               </button>
             </div>
-            {logDate && (
+            {includeDate ? (
               <Input
                 id="rewatch-date"
                 type="date"
@@ -90,6 +97,10 @@ export function RewatchLogDialog({
                 onChange={(e) => setWatchedAt(e.target.value)}
                 className="bg-secondary border-border"
               />
+            ) : (
+              <p className="text-xs text-muted-foreground/80">
+                Will log without a date — you can add one later from Watch history.
+              </p>
             )}
           </div>
 
