@@ -6,10 +6,8 @@ import { PreferencesModal } from "@/components/preferences-modal";
 import { ClerkBoundary } from "@/components/clerk-boundary";
 import { FeatureFeedbackDialog } from "@/components/feature-feedback-dialog";
 import { markFeedbackSubmitted } from "@/components/feature-feedback-prompt";
-import { Switch } from "@/components/ui/switch";
 import { isDemoMode, exitDemoToSignIn, clearAppSession, authFetch } from "@/lib/demo-auth";
 import { usePreferences } from "@/lib/preferences";
-import { useSessionSettings } from "@/hooks/use-session-settings";
 import { toast } from "sonner";
 import {
   ChevronRight,
@@ -17,13 +15,10 @@ import {
   LogOut,
   Settings,
   Upload,
-  BookOpen,
   Play,
   Users,
-  PlusCircle,
   Loader2,
   MessageSquareHeart,
-  SlidersHorizontal,
 } from "lucide-react";
 import { Link } from "wouter";
 import { useReplayFeatureTour } from "@/components/feature-walkthrough";
@@ -82,7 +77,6 @@ function ProfileShell({
 }) {
   const { data: prefs } = usePreferences();
   const { replay } = useReplayFeatureTour();
-  const { sentenceLog, setSentenceLog } = useSessionSettings();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   return (
@@ -95,38 +89,6 @@ function ProfileShell({
             <p className="text-sm text-muted-foreground truncate">{subtitle}</p>
           </div>
         </div>
-
-        <section className="rounded-2xl border border-border bg-card/40 px-3 py-3 space-y-3">
-          <div className="flex items-center gap-2 px-1">
-            <SlidersHorizontal className="w-4 h-4 text-muted-foreground" />
-            <div>
-              <p className="text-sm font-medium">Session settings</p>
-              <p className="text-xs text-muted-foreground">
-                Try experimental Add UX on this device only
-              </p>
-            </div>
-          </div>
-          <label className="flex items-center gap-3 px-1 py-2 cursor-pointer">
-            <div className="flex-1 min-w-0">
-              <span className="block text-sm text-foreground/90">Sentence log</span>
-              <span className="block text-xs text-muted-foreground">
-                Fill-in-the-blank diary prompt on Add
-              </span>
-            </div>
-            <Switch
-              checked={sentenceLog}
-              onCheckedChange={(checked) => {
-                setSentenceLog(checked);
-                toast.success(
-                  checked
-                    ? "Sentence log on — open Add to try it"
-                    : "Sentence log off — Add is title search again",
-                );
-              }}
-              aria-label="Toggle sentence log on Add"
-            />
-          </label>
-        </section>
 
         <div className="space-y-1">
           <Link href="/partner">
@@ -142,16 +104,6 @@ function ProfileShell({
                 </span>
               </span>
               <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-            </button>
-          </Link>
-
-          <Link href="/add">
-            <button
-              type="button"
-              className="w-full flex items-center gap-3 px-1 py-3 text-left text-sm hover:text-foreground text-foreground/90 transition-colors"
-            >
-              <PlusCircle className="w-4 h-4 text-muted-foreground" />
-              Add a film
             </button>
           </Link>
 
@@ -172,22 +124,6 @@ function ProfileShell({
               </button>
             }
           />
-
-          <Link href="/guide">
-            <button
-              type="button"
-              className="w-full flex items-center gap-3 px-1 py-3 text-left text-sm hover:text-foreground text-foreground/90 transition-colors"
-            >
-              <BookOpen className="w-4 h-4 text-muted-foreground" />
-              <span className="flex-1 text-left">
-                <span className="block">How Cinevault works</span>
-                <span className="block text-xs text-muted-foreground font-normal">
-                  Feature guide & walkthrough
-                </span>
-              </span>
-              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-            </button>
-          </Link>
 
           <button
             type="button"

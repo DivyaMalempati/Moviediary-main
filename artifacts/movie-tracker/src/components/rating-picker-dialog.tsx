@@ -18,6 +18,10 @@ export type WatchLogPayload = {
    * Callers should send this to the API so log-day ≠ watch-day for backfills.
    */
   watchedAt: string | null;
+  /** Optional “with who” for diary notes (Sentence log). */
+  withWho?: string;
+  /** Optional free-text feeling / review (Sentence log). */
+  felt?: string;
 };
 
 type WatchWhen = "today" | "earlier" | "unknown";
@@ -38,6 +42,11 @@ interface RatingPickerDialogProps {
   skipLabel?: string;
   /** Hide the watch-date controls (e.g. rare flows that only need a rating). */
   hideWatchDate?: boolean;
+  /**
+   * Sentence log: show “with ___” / “and ___” blanks before rating.
+   * Values are optional — empty blanks still log as Watched.
+   */
+  showDiaryBlanks?: boolean;
 }
 
 export function RatingPickerDialog({
@@ -49,10 +58,13 @@ export function RatingPickerDialog({
   titleSuffix = "",
   skipLabel,
   hideWatchDate = false,
+  showDiaryBlanks = false,
 }: RatingPickerDialogProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const [when, setWhen] = useState<WatchWhen>("today");
   const [earlierDate, setEarlierDate] = useState(todayInputValue);
+  const [withWho, setWithWho] = useState("");
+  const [felt, setFelt] = useState("");
 
   // Fresh selection every time the dialog opens for a film.
   useEffect(() => {
@@ -60,6 +72,8 @@ export function RatingPickerDialog({
       setSelected(null);
       setWhen("today");
       setEarlierDate(todayInputValue());
+      setWithWho("");
+      setFelt("");
     }
   }, [open, movieTitle]);
 
@@ -75,7 +89,13 @@ export function RatingPickerDialog({
   };
 
   const submit = (rating: string | null) => {
-    onConfirm({ rating, watchedAt: resolveWatchedAt() });
+    onConfirm({
+      rating,
+      watchedAt: resolveWatchedAt(),
+      ...(showDiaryBlanks
+        ? { withWho: withWho.trim(), felt: felt.trim() }
+        : {}),
+    });
     setSelected(null);
   };
 
@@ -146,6 +166,38 @@ export function RatingPickerDialog({
                 Won’t count toward “watched this month” until you set a date later.
               </p>
             )}
+          </div>
+        )}
+
+        {showDiaryBlanks && (
+          <div data-tour="add-log-diary" className="space-y-3 mt-1">
+            <p className="text-sm text-muted-foreground">
+              Optional diary blanks — stays private.
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="diary-with" className="text-sm text-muted-foreground">
+                with
+              </Label>
+              <Input
+                id="diary-with"
+                value={withWho}
+                onChange={(e) => setWithWho(e.target.value)}
+                placeholder="friends / alone / …"
+                className="bg-secondary border-border"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="diary-felt" className="text-sm text-muted-foreground">
+                and
+              </Label>
+              <Input
+                id="diary-felt"
+                value={felt}
+                onChange={(e) => setFelt(e.target.value)}
+                placeholder="I liked how it was made…"
+                className="bg-secondary border-border"
+              />
+            </div>
           </div>
         )}
 
