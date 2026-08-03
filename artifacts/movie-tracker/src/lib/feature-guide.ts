@@ -12,7 +12,7 @@ import {
 import { isFeatureEnabled } from "@/lib/features";
 
 /** Bump when the tour content changes so returning users see the new version once. */
-export const FEATURE_TOUR_VERSION = 7;
+export const FEATURE_TOUR_VERSION = 8;
 export const FEATURE_TOUR_STORAGE_KEY = `cinevault:feature-tour:v${FEATURE_TOUR_VERSION}`;
 
 export type FeatureGuideItem = {
@@ -93,18 +93,32 @@ export const FEATURE_TOUR_STEPS: FeatureTourStep[] = [
     target: "add-discover-mode",
   },
   {
-    id: "add-discover-chips",
-    title: "Discover chips",
-    tip: "These chips switch what you’re browsing. Start with Actor / Director.",
-    href: "/add?tab=people",
-    target: "add-discover-subtabs",
-  },
-  {
     id: "add-actor",
     title: "Actor / Director",
     tip: "Search any actor — hero, heroine, comedian — or a director, then log from their films.",
     href: "/add?tab=people",
-    target: "add-actor-search",
+    target: "add-discover-chip-people",
+  },
+  {
+    id: "add-foryou",
+    title: "For You",
+    tip: "Picks shaped by your taste — languages, genres, and what you’ve loved.",
+    href: "/add?tab=foryou",
+    target: "add-discover-chip-foryou",
+  },
+  {
+    id: "add-liked",
+    title: "Liked",
+    tip: "More like titles you’ve rated highly — a quick rabbit hole from your diary.",
+    href: "/add?tab=liked",
+    target: "add-discover-chip-liked",
+  },
+  {
+    id: "add-trending",
+    title: "Trending",
+    tip: "What’s popular right now. Filter by language if you want a tighter list.",
+    href: "/add?tab=trending",
+    target: "add-discover-chip-trending",
   },
   {
     id: "profile",
