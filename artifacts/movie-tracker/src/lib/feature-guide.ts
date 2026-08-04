@@ -81,7 +81,7 @@ export const FEATURE_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: "add-title-search",
     title: "Title search",
-    tip: "Search by film title below — India or Global — then mark Watched or save.",
+    tip: "Search by film title — India or Global — then mark Watched (optional diary blanks) or save to Watchlist.",
     href: "/add",
     target: "add-title-search",
   },
@@ -173,7 +173,7 @@ export const FEATURE_GUIDE_SECTIONS: Array<{
         title: "Add",
         summary: "Log a film or browse Discover.",
         detail:
-          "Bottom bar → Add. Primary: Log | Discover. On Log: diary blanks (if Sentence log is on) and title search below. On Discover: Actor, For You, Liked, Trending.",
+          "Bottom bar → Add. Primary: Log | Discover. On Log: search by title, then Watched (optional diary blanks) or Watchlist. On Discover: Actor, For You, Liked, Trending.",
         href: "/add",
         cta: "Add a film",
         icon: PlusCircle,

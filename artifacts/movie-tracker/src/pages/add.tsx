@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { TmdbMovieCard } from "@/components/tmdb-movie-card";
-import { SentenceLogPrompt } from "@/components/sentence-log-prompt";
 import { DiscoverPanels, type DiscoverTabId } from "@/components/discover-content";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -28,10 +27,10 @@ import { toast } from "sonner";
 import { useDebounce } from "@/hooks/use-debounce";
 import { RatingPickerDialog } from "@/components/rating-picker-dialog";
 import { usePreferences } from "@/lib/preferences";
-import { useSessionSettings } from "@/hooks/use-session-settings";
 import { getAuthHeaders } from "@/lib/demo-auth";
 import { cn } from "@/lib/utils";
-import { Link, useLocation, useSearch } from "wouter";
+import { buildDiaryNote } from "@/lib/diary-notes";
+import { useLocation, useSearch } from "wouter";
 import { isFeatureEnabled } from "@/lib/features";
 import { FEATURE_TOUR_STEPS } from "@/lib/feature-guide";
 import { useFeatureTour } from "@/components/feature-tour-context";
@@ -115,9 +114,7 @@ export default function AddPage() {
   const [onMyServices, setOnMyServices] = useState(false);
   const [streamingIds, setStreamingIds] = useState<Set<number> | null>(null);
   const [filteringStreaming, setFilteringStreaming] = useState(false);
-  const [showTitleSearch, setShowTitleSearch] = useState(false);
 
-  const { sentenceLog } = useSessionSettings();
   const { open: tourOpen, step: tourStep } = useFeatureTour();
   const tourTarget = tourOpen ? FEATURE_TOUR_STEPS[tourStep]?.target : undefined;
   const { data: prefs } = usePreferences();
@@ -127,12 +124,11 @@ export default function AddPage() {
   // Walkthrough: force the right Add mode / Discover chip so spotlight targets exist.
   useEffect(() => {
     if (!tourTarget) return;
-    if (tourTarget === "add-title-search") {
-      setShowTitleSearch(true);
-      if (activeTab !== "log") setActiveTab("log");
-      return;
-    }
-    if (tourTarget === "add-primary-modes" || tourTarget === "add-log-diary") {
+    if (
+      tourTarget === "add-title-search" ||
+      tourTarget === "add-primary-modes" ||
+      tourTarget === "add-log-diary"
+    ) {
       if (activeTab !== "log") setActiveTab("log");
       return;
     }
@@ -236,9 +232,12 @@ export default function AddPage() {
     status: "watched" | "watchlist",
     rating?: string | null,
     watchedAt?: string | null,
+    notes?: string | null,
   ) => {
     const existing =
       movie.tmdbId != null ? libraryMap.get(movie.tmdbId) : undefined;
+    const notesPayload =
+      notes != null && notes.trim().length > 0 ? { notes: notes.trim() } : {};
 
     if (status === "watched" && existing?.status === "watchlist") {
       updateMovie.mutate(
@@ -248,6 +247,7 @@ export default function AddPage() {
             status: "watched",
             ...(rating ? { rating } : {}),
             watchedAt: watchedAt ?? null,
+            ...notesPayload,
           },
         },
         {
@@ -269,6 +269,7 @@ export default function AddPage() {
           status,
           ...(rating ? { rating } : {}),
           ...(status === "watched" ? { watchedAt: watchedAt ?? null } : {}),
+          ...notesPayload,
           ...(movie.tmdbId != null && { tmdbId: movie.tmdbId }),
           ...(movie.posterPath != null && { posterPath: movie.posterPath }),
           ...(movie.releaseYear != null && { releaseYear: movie.releaseYear }),
@@ -362,19 +363,9 @@ export default function AddPage() {
           <h1 className="text-3xl font-bold">Add</h1>
           <p className="text-muted-foreground text-sm sm:text-base">
             {primaryMode === "log"
-              ? sentenceLog
-                ? "Fill the diary blanks, or search by title."
-                : "Search by title to log a film."
+              ? "Search a title, then mark Watched or save to Watchlist."
               : "Find something new, then log it from the poster."}
           </p>
-          {sentenceLog && primaryMode === "log" && (
-            <p className="text-xs text-muted-foreground/80">
-              Sentence log on ·{" "}
-              <Link href="/profile" className="underline underline-offset-2 hover:text-foreground">
-                Session settings
-              </Link>
-            </p>
-          )}
         </section>
 
         {discoverEnabled && (
@@ -420,31 +411,8 @@ export default function AddPage() {
 
         <Tabs value={activeTab} onValueChange={onTabChange} className="w-full">
           <TabsContent value="log" className="mt-1 space-y-6">
-            {sentenceLog && (
-              <div data-tour="add-log-diary">
-                <SentenceLogPrompt />
-              </div>
-            )}
-
             <div data-tour="add-title-search" className="space-y-4">
-            {sentenceLog && (
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-muted-foreground">Title search</p>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs"
-                  onClick={() => setShowTitleSearch((v) => !v)}
-                >
-                  {showTitleSearch ? "Hide" : "Show"}
-                </Button>
-              </div>
-            )}
-
-            {(!sentenceLog || showTitleSearch) && (
-              <>
-                <div className="bg-card rounded-2xl border border-border p-4 md:p-6 shadow-sm sticky top-0 z-20 space-y-4">
+              <div className="bg-card rounded-2xl border border-border p-4 md:p-6 shadow-sm sticky top-0 z-20 space-y-4">
                   <div className="relative">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                     <Input
@@ -556,8 +524,6 @@ export default function AddPage() {
                     </div>
                   )}
                 </div>
-              </>
-            )}
             </div>
           </TabsContent>
 
@@ -569,10 +535,13 @@ export default function AddPage() {
         open={!!pendingWatched}
         movieTitle={pendingWatched?.title ?? ""}
         confirmOnSelect
-        onConfirm={({ rating, watchedAt }) => {
+        showDiaryBlanks
+        onConfirm={({ rating, watchedAt, withWho, felt }) => {
           const movie = pendingWatched;
           setPendingWatched(null);
-          if (movie) doAdd(movie, "watched", rating, watchedAt);
+          if (!movie) return;
+          const notes = buildDiaryNote({ withWho, felt });
+          doAdd(movie, "watched", rating, watchedAt, notes || null);
         }}
         onCancel={() => setPendingWatched(null)}
       />
