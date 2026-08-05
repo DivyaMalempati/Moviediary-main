@@ -1,7 +1,7 @@
 import { Clapperboard, Film, Sparkles, Star, Shuffle, Users } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { clearAppSession, disableDemoMode, enableDemoMode } from "@/lib/demo-auth";
+import { clearAppSession, disableDemoMode } from "@/lib/demo-auth";
 
 function clearGuestBeforeAuth() {
   disableDemoMode();
@@ -9,24 +9,6 @@ function clearGuestBeforeAuth() {
 }
 
 export default function LandingPage() {
-  const enterApp = async (path = "/watched") => {
-    try {
-      await enableDemoMode();
-    } catch {
-      // If session creation fails, fall back gracefully
-    }
-    window.location.href =
-      (import.meta.env.BASE_URL || "/").replace(/\/$/, "") + path;
-  };
-
-  const handleDemo = async () => {
-    await enterApp("/watched");
-  };
-
-  const handleTogether = async () => {
-    await enterApp("/partner");
-  };
-
   return (
     <div className="min-h-[100dvh] bg-background text-foreground flex flex-col">
       {/* Nav */}
@@ -91,33 +73,6 @@ export default function LandingPage() {
               Sign in
             </Link>
           </Button>
-
-          <div className="flex items-center gap-3 w-full mt-1">
-            <div className="flex-1 h-px bg-border/50" />
-            <span className="text-xs text-muted-foreground">or</span>
-            <div className="flex-1 h-px bg-border/50" />
-          </div>
-
-          <Button
-            size="lg"
-            variant="ghost"
-            className="w-full text-base h-12 text-muted-foreground hover:text-foreground border border-border/50"
-            onClick={handleDemo}
-          >
-            Continue without signing in
-          </Button>
-          <Button
-            size="lg"
-            variant="ghost"
-            className="w-full text-base h-11 text-foreground border border-white/20 hover:bg-white/5"
-            onClick={handleTogether}
-          >
-            <Users className="w-4 h-4 mr-2" />
-            Open Together
-          </Button>
-          <p className="text-[11px] text-muted-foreground/60 -mt-1">
-            Data is saved on this device
-          </p>
         </div>
       </main>
 

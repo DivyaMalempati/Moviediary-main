@@ -21,6 +21,7 @@ import MovieDetailsPage from "@/pages/movie-details";
 import ImportPage from "@/pages/import";
 import ProfilePage from "@/pages/profile";
 import CollectionsPage from "@/pages/collections";
+import SharedCollectionPage from "@/pages/shared-collection";
 import StatsPage from "@/pages/stats";
 import PartnerPage, { PairInvitePage } from "@/pages/partner";
 import MatchSessionPage from "@/pages/match-session";
@@ -186,6 +187,7 @@ function DemoRouter() {
   return (
     <Switch>
       <Route path="/" component={LandingPage} />
+      <Route path="/c/:token" component={SharedCollectionPage} />
       <Route path="/sign-in/*?" component={() => <AuthUnavailablePage mode="sign-in" />} />
       <Route path="/sign-up/*?" component={() => <AuthUnavailablePage mode="sign-up" />} />
       <Route path="/onboarding" component={() => <Redirect to="/swipe" />} />
@@ -382,6 +384,7 @@ function ClerkRouter() {
   return (
     <Switch>
       <Route path="/" component={HomeRedirect} />
+      <Route path="/c/:token" component={SharedCollectionPage} />
       <Route path="/sign-in/*?" component={SignInPage} />
       <Route path="/sign-up/*?" component={SignUpPage} />
       <Route path="/onboarding" component={() => <Redirect to="/swipe" />} />

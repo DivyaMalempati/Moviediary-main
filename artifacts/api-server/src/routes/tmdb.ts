@@ -33,7 +33,9 @@ import { requireAuth } from "../middlewares/requireAuth.js";
 const router: IRouter = Router();
 
 // TMDB proxy burns shared quota — require guest or signed-in session.
-router.use(requireAuth);
+// Scoped to /tmdb: this router is mounted without a prefix, so an unscoped
+// use() would also gate every router mounted after it (e.g. public share links).
+router.use("/tmdb", requireAuth);
 
 // GET /tmdb/tropes — curated niche keyword / trope catalog
 router.get("/tmdb/tropes", (_req, res): void => {

@@ -29,7 +29,7 @@ import {
 } from "@/lib/movie-utils";
 import { LanguageBadge } from "@/components/language-badge";
 import { MoviePosterCard } from "@/components/movie-card";
-import { Star, Heart, Bookmark, Check, Trash2, ArrowLeft, Loader2, Calendar, Clapperboard, Tv, Eye, BookmarkPlus, Film, FolderOpen, Plus, X, RotateCcw, Ban } from "lucide-react";
+import { Star, Heart, Bookmark, Check, Trash2, ArrowLeft, Loader2, Calendar, Clapperboard, Tv, Eye, BookmarkPlus, Film, FolderOpen, Plus, X, RotateCcw, Ban, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks/use-debounce";
 import { ShareMovieSheet } from "@/components/share-movie-sheet";
@@ -49,6 +49,14 @@ import { RatingPickerDialog } from "@/components/rating-picker-dialog";
 import { RewatchLogDialog } from "@/components/rewatch-log-dialog";
 import { ChangeLanguageDialog } from "@/components/change-language-dialog";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   useCollections,
   useMovieCollections,
@@ -146,6 +154,7 @@ export default function MovieDetailsPage() {
   const [shareOpen, setShareOpen] = useState(false);
   const [sharePayload, setSharePayload] = useState<ShareMovieInput | null>(null);
   const [newColName, setNewColName] = useState("");
+  const [creatingCollection, setCreatingCollection] = useState(false);
 
   // Collections
   const { data: allCollections } = useCollections();
@@ -154,13 +163,33 @@ export default function MovieDetailsPage() {
   const removeFromCollection = useRemoveFromCollection();
   const createCollection   = useCreateCollection();
   const memberSet = new Set(movieColIds ?? []);
+  // Smart collections fill themselves from rules — the API rejects manual adds.
+  const manualCollections = (allCollections ?? []).filter(
+    (col) => !Array.isArray(col.rules) || col.rules.length === 0,
+  );
+  const smartMemberships = (allCollections ?? []).filter(
+    (col) => Array.isArray(col.rules) && col.rules.length > 0 && memberSet.has(col.id),
+  );
+  const memberCollections = manualCollections.filter((col) => memberSet.has(col.id));
+  const addableCollections = manualCollections.filter((col) => !memberSet.has(col.id));
 
-  const handleToggleCollection = async (collectionId: number) => {
+  const handleAddToCollection = async (collectionId: number, name: string) => {
     if (!movie) return;
-    if (memberSet.has(collectionId)) {
-      await removeFromCollection.mutateAsync({ collectionId, movieId: movie.id });
-    } else {
+    try {
       await addToCollection.mutateAsync({ collectionId, movieId: movie.id });
+      toast.success(`Added to "${name}"`);
+    } catch {
+      toast.error(`Couldn't add to "${name}"`);
+    }
+  };
+
+  const handleRemoveFromCollection = async (collectionId: number, name: string) => {
+    if (!movie) return;
+    try {
+      await removeFromCollection.mutateAsync({ collectionId, movieId: movie.id });
+      toast.success(`Removed from "${name}"`);
+    } catch {
+      toast.error(`Couldn't remove from "${name}"`);
     }
   };
 
@@ -170,6 +199,7 @@ export default function MovieDetailsPage() {
       const col = await createCollection.mutateAsync({ name: newColName.trim() });
       await addToCollection.mutateAsync({ collectionId: col.id, movieId: movie.id });
       setNewColName("");
+      setCreatingCollection(false);
       toast.success(`Added to "${col.name}"`);
     } catch {
       toast.error("Failed to create collection");
@@ -949,48 +979,104 @@ export default function MovieDetailsPage() {
                 <label className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
                   <FolderOpen className="w-3.5 h-3.5" /> Collections
                 </label>
-                <div className="flex flex-wrap gap-2">
-                  {allCollections?.map((col) => {
-                    const isMember = memberSet.has(col.id);
-                    return (
+                <div className="flex flex-wrap items-center gap-2">
+                  {memberCollections.map((col) => (
+                    <span
+                      key={col.id}
+                      className="flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-full text-xs font-medium border bg-white text-black border-white"
+                    >
+                      <Check className="w-3 h-3" />
+                      {col.name}
                       <button
-                        key={col.id}
-                        onClick={() => handleToggleCollection(col.id)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
-                          isMember
-                            ? "bg-white text-black border-white"
-                            : "bg-background border-border text-muted-foreground hover:border-white/30 hover:text-foreground"
-                        }`}
+                        onClick={() => handleRemoveFromCollection(col.id, col.name)}
+                        aria-label={`Remove from ${col.name}`}
+                        className="rounded-full p-0.5 hover:bg-black/10"
                       >
-                        {isMember && <Check className="w-3 h-3" />}
-                        {col.name}
+                        <X className="w-3 h-3" />
                       </button>
-                    );
-                  })}
-                  {(!allCollections || allCollections.length === 0) && (
-                    <p className="text-xs text-muted-foreground italic">No collections yet.</p>
+                    </span>
+                  ))}
+                  {smartMemberships.map((col) => (
+                    <span
+                      key={col.id}
+                      title="Smart collection — membership follows its rules"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-primary/20 bg-primary/10 text-primary"
+                    >
+                      <Zap className="w-3 h-3" />
+                      {col.name}
+                    </span>
+                  ))}
+                  {memberCollections.length === 0 && smartMemberships.length === 0 && (
+                    <p className="text-xs text-muted-foreground italic">Not in any collection yet.</p>
                   )}
                 </div>
-                {/* New collection inline */}
-                <div className="flex gap-2 pt-1">
-                  <Input
-                    value={newColName}
-                    onChange={(e) => setNewColName(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") handleCreateAndAdd(); }}
-                    placeholder="New collection…"
-                    className="h-8 text-xs bg-background border-border"
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 px-3 text-xs gap-1 shrink-0"
-                    onClick={handleCreateAndAdd}
-                    disabled={!newColName.trim() || createCollection.isPending}
-                  >
-                    {createCollection.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
-                    Create & add
-                  </Button>
-                </div>
+
+                {creatingCollection ? (
+                  <div className="flex gap-2 pt-1">
+                    <Input
+                      autoFocus
+                      value={newColName}
+                      onChange={(e) => setNewColName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleCreateAndAdd();
+                        if (e.key === "Escape") { setNewColName(""); setCreatingCollection(false); }
+                      }}
+                      placeholder="New collection…"
+                      className="h-8 text-xs bg-background border-border"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 px-3 text-xs gap-1 shrink-0"
+                      onClick={handleCreateAndAdd}
+                      disabled={!newColName.trim() || createCollection.isPending}
+                    >
+                      {createCollection.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                      Create & add
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 px-2 text-xs shrink-0"
+                      onClick={() => { setNewColName(""); setCreatingCollection(false); }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" variant="outline" className="h-8 px-3 text-xs gap-1.5">
+                        <Plus className="w-3 h-3" />
+                        Add to collection
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto w-56">
+                      {addableCollections.length > 0 && (
+                        <>
+                          <DropdownMenuLabel className="text-xs">Your collections</DropdownMenuLabel>
+                          {addableCollections.map((col) => (
+                            <DropdownMenuItem
+                              key={col.id}
+                              className="text-xs"
+                              onSelect={() => handleAddToCollection(col.id, col.name)}
+                            >
+                              {col.name}
+                            </DropdownMenuItem>
+                          ))}
+                          <DropdownMenuSeparator />
+                        </>
+                      )}
+                      <DropdownMenuItem
+                        className="text-xs gap-1.5"
+                        onSelect={() => { setNewColName(""); setCreatingCollection(true); }}
+                      >
+                        <Plus className="w-3 h-3" />
+                        Create new collection…
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
             </div>
           </section>
