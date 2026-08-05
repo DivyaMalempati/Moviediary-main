@@ -94,7 +94,7 @@ function useAddTab(): [AddTabId, (tab: AddTabId) => void] {
 export default function AddPage() {
   const discoverEnabled = isFeatureEnabled("discover");
   const [activeTab, setActiveTab] = useAddTab();
-  const lastDiscoverTab = useRef<DiscoverTabId>("people");
+  const lastDiscoverTab = useRef<DiscoverTabId>("search");
 
   useEffect(() => {
     if (isDiscoverAddTab(activeTab)) lastDiscoverTab.current = activeTab;
@@ -151,8 +151,8 @@ export default function AddPage() {
     }
 
     // Legacy actor-search target (older tour versions / guide links).
-    if (tourTarget === "add-actor-search" && activeTab !== "people") {
-      setActiveTab("people");
+    if (tourTarget === "add-actor-search" && activeTab !== "search") {
+      setActiveTab("search");
     }
   }, [tourTarget, discoverEnabled, activeTab, setActiveTab]);
 

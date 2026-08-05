@@ -22,9 +22,12 @@ import {
   getAllGenres,
   getOnboardingSeedMovies,
   getUpcomingReleases,
+  discoverByKeyword,
+  discoverByGenresAnd,
   type PersonDepartment,
 } from "../lib/tmdb.js";
-import { TROPE_KEYWORDS } from "../lib/tropes.js";
+import { TROPE_KEYWORDS, tropeBySlug, tropeKeywordIdsOr, tropeGenreIdsAnd } from "../lib/tropes.js";
+import { INDIAN_CINEMA_LANGUAGES } from "../lib/languageDefaults.js";
 import { requireAuth } from "../middlewares/requireAuth.js";
 
 const router: IRouter = Router();
@@ -35,6 +38,74 @@ router.use(requireAuth);
 // GET /tmdb/tropes — curated niche keyword / trope catalog
 router.get("/tmdb/tropes", (_req, res): void => {
   res.json(TROPE_KEYWORDS);
+});
+
+/**
+ * GET /tmdb/trope-movies?trope=investigative-thriller&page=1
+ * India-first vibe browse: seeds → genre AND (when configured) → keyword hits.
+ * Never falls back to unfiltered popular (that mixed in titles like RRR).
+ */
+router.get("/tmdb/trope-movies", async (req, res): Promise<void> => {
+  const slug = String(req.query.trope ?? "").trim();
+  const trope = tropeBySlug(slug);
+  if (!trope) {
+    res.status(400).json({ error: `Unknown trope: ${slug || "(empty)"}` });
+    return;
+  }
+  const pageRaw = parseInt(String(req.query.page ?? "1"), 10);
+  const page = Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : 1;
+
+  try {
+    const keywordIds = tropeKeywordIdsOr(trope);
+    const genreIds = tropeGenreIdsAnd(trope);
+    const indiaLangs = [...INDIAN_CINEMA_LANGUAGES];
+
+    const [seedRows, genreHits, genreMore, indiaHits, indiaMore] = await Promise.all([
+      Promise.all(
+        trope.indiaSeedTmdbIds.map(async (id) => {
+          try {
+            return await getMovieDetails(id);
+          } catch {
+            return null;
+          }
+        }),
+      ),
+      genreIds.length > 0
+        ? discoverByGenresAnd(genreIds, indiaLangs, page, undefined, undefined, {
+            voteCountGte: 20,
+          }).catch(() => [])
+        : Promise.resolve([]),
+      genreIds.length > 0
+        ? discoverByGenresAnd(genreIds, indiaLangs, page + 1, undefined, undefined, {
+            voteCountGte: 20,
+          }).catch(() => [])
+        : Promise.resolve([]),
+      discoverByKeyword(keywordIds, indiaLangs, page, undefined, undefined, undefined, {
+        voteCountGte: 5,
+      }).catch(() => []),
+      discoverByKeyword(keywordIds, indiaLangs, page + 1, undefined, undefined, undefined, {
+        voteCountGte: 5,
+      }).catch(() => []),
+    ]);
+
+    const seen = new Set<number>();
+    const out: Array<Awaited<ReturnType<typeof getMovieDetails>>> = [];
+    for (const film of [
+      ...seedRows.filter((s): s is NonNullable<typeof s> => !!s),
+      ...genreHits,
+      ...genreMore,
+      ...indiaHits,
+      ...indiaMore,
+    ]) {
+      if (seen.has(film.tmdbId)) continue;
+      seen.add(film.tmdbId);
+      out.push(film);
+      if (out.length >= 24) break;
+    }
+    res.json(out);
+  } catch {
+    res.status(502).json({ error: "Failed to load trope movies" });
+  }
 });
 
 // GET /tmdb/onboarding-seed — dense popular posters for taste seeding

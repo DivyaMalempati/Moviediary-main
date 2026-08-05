@@ -29,7 +29,11 @@ router.get("/discover/swipe", requireAuth, async (req: any, res): Promise<void> 
   let keywordId = keywordIdRaw ? parseInt(keywordIdRaw, 10) || undefined : undefined;
   if (tropeSlug) {
     const trope = tropeBySlug(tropeSlug);
-    if (trope) keywordId = trope.keywordId;
+    if (!trope) {
+      res.status(400).json({ error: `Unknown trope: ${tropeSlug}` });
+      return;
+    }
+    keywordId = trope.keywordId;
   }
 
   const excludeIdsRaw = req.query.excludeIds as string | undefined;

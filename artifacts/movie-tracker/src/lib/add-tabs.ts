@@ -13,16 +13,18 @@ export const DISCOVER_SUBTABS: Array<{
   label: string;
   shortLabel: string;
 }> = [
-  { id: "people", label: "Actor / Director", shortLabel: "Actor" },
+  { id: "search", label: "Search", shortLabel: "Search" },
   { id: "foryou", label: "For You", shortLabel: "For You" },
-  { id: "liked", label: "Liked", shortLabel: "Liked" },
   { id: "trending", label: "Trending", shortLabel: "Trending" },
 ];
 
 export function parseAddTab(value: string | null | undefined): AddTabId {
   if (value === "log" || !value) return "log";
   // Convenience alias used by sidebar / deep links wanting Discover default.
-  if (value === "discover") return "people";
+  if (value === "discover") return "search";
+  // Legacy deep links from older Actor / Liked tabs.
+  if (value === "people") return "search";
+  if (value === "liked") return "foryou";
   if (isDiscoverTab(value)) return value;
   return "log";
 }
@@ -46,8 +48,8 @@ export function primaryModeForTab(tab: AddTabId): AddPrimaryMode {
 }
 
 export function defaultDiscoverTab(
-  preferred: DiscoverTabId | null | undefined = "people",
+  preferred: DiscoverTabId | null | undefined = "search",
 ): DiscoverTabId {
   if (preferred && DISCOVER_TAB_IDS.includes(preferred)) return preferred;
-  return "people";
+  return "search";
 }

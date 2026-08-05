@@ -90,12 +90,13 @@ export type NavItem = {
   feature: AppFeature;
 };
 
-/** Desktop sidebar — Discover near the top; Together lives under Profile. */
+/** Desktop sidebar — Add (Log) + Discover; Together lives under Profile. */
 export const SIDEBAR_NAV: NavItem[] = [
   { href: "/watched", label: "Watched", feature: "watched" },
   { href: "/watchlist", label: "Watchlist", feature: "watchlist" },
   { href: "/swipe", label: "Swipe", feature: "swipe" },
-  { href: "/add?tab=people", label: "Discover", feature: "discover" },
+  { href: "/add", label: "Add", feature: "add" },
+  { href: "/add?tab=search", label: "Discover", feature: "discover" },
   { href: "/upcoming", label: "Upcoming", feature: "upcoming" },
   { href: "/guide", label: "Guide", feature: "guide" },
   // Labs

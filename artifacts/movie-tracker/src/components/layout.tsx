@@ -27,13 +27,18 @@ import { isDiscoverTab } from "@/components/discover-content";
 function navItemActive(location: string, href: string): boolean {
   const [hrefPath, hrefSearch] = href.split("?");
   const locPath = location.split("?")[0] || "/";
-  // Sidebar Discover deep-links into Add tabs.
+  const tab =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("tab")
+      : null;
+
+  // Sidebar Discover deep-links into Add discover tabs.
   if (hrefPath === "/add" && hrefSearch?.includes("tab=")) {
-    const tab =
-      typeof window !== "undefined"
-        ? new URLSearchParams(window.location.search).get("tab")
-        : null;
     return locPath === "/add" && isDiscoverTab(tab);
+  }
+  // Plain Add = Log mode only (not Discover sub-tabs).
+  if (hrefPath === "/add" && !hrefSearch) {
+    return locPath === "/add" && !isDiscoverTab(tab);
   }
   return locPath === hrefPath || (hrefPath !== "/" && locPath.startsWith(`${hrefPath}/`));
 }
@@ -54,6 +59,7 @@ function iconForHref(href: string): LucideIcon {
       return Shuffle;
     case "/add":
       return PlusCircle;
+    case "/add?tab=search":
     case "/add?tab=people":
       return Sparkles;
     case "/guide":

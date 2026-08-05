@@ -68,17 +68,6 @@ const GENRES = [
 
 type GenreId = (typeof GENRES)[number]["id"];
 
-/** Curated TMDB keyword tropes (Step 3.3). */
-const TROPES = [
-  { label: "Any trope", slug: null },
-  { label: "Treasure Hunt", slug: "treasure-hunt" },
-  { label: "Serial Killer", slug: "serial-killer" },
-  { label: "Heist", slug: "heist" },
-  { label: "Twist Ending", slug: "twist-ending" },
-] as const;
-
-type TropeSlug = (typeof TROPES)[number]["slug"];
-
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface SwipeFilm {
   tmdbId: number;
@@ -163,7 +152,6 @@ async function fetchSwipeBatch(
   genreId?: number | null,
   excludeIds?: Set<number>,
   onMyServices = false,
-  tropeSlug?: string | null,
 ): Promise<SwipeBatchResult> {
   try {
     await ensureClerkApiSession();
@@ -171,7 +159,6 @@ async function fetchSwipeBatch(
     if (genreId != null) params.set("genreId", String(genreId));
     if (excludeIds && excludeIds.size > 0) params.set("excludeIds", [...excludeIds].join(","));
     if (onMyServices) params.set("onMyServices", "1");
-    if (tropeSlug) params.set("trope", tropeSlug);
     const res = await authFetch(`${BASE}/api/discover/swipe?${params}`);
     if (res.status === 401 || res.status === 403) return { films: [], status: "auth" };
     if (!res.ok) return { films: [], status: "error" };
@@ -277,7 +264,6 @@ async function fillDeck(
   excludeIds: Set<number>,
   target = DECK_SIZE,
   onMyServices = false,
-  tropeSlug: TropeSlug = null,
 ): Promise<{ films: SwipeFilm[]; nextPage: number; status: SwipeBatchResult["status"] }> {
   const collected: SwipeFilm[] = [];
   const seen = new Set(excludeIds);
@@ -285,7 +271,7 @@ async function fillDeck(
   let lastStatus: SwipeBatchResult["status"] = "empty";
 
   for (let attempt = 0; attempt < 4 && collected.length < target; attempt++) {
-    const batch = await fetchSwipeBatch(page, genreId, seen, onMyServices, tropeSlug);
+    const batch = await fetchSwipeBatch(page, genreId, seen, onMyServices);
     page += 1;
     lastStatus = batch.status;
     if (batch.status === "auth" || batch.status === "error") {
@@ -839,7 +825,6 @@ function SwipeDeck() {
   const [, setLocation] = useLocation();
 
   const [selectedGenreId, setSelectedGenreId] = useState<GenreId>(null);
-  const [selectedTrope, setSelectedTrope] = useState<TropeSlug>(null);
   const [onMyServices, setOnMyServices] = useState(false);
   const { data: prefs } = usePreferences();
   const preferredProviders = prefs?.preferredProviders ?? [];
@@ -885,7 +870,6 @@ function SwipeDeck() {
       seenRef.current,
       DECK_SIZE,
       onMyServices,
-      selectedTrope,
     );
     setQueue(films);
     // Never fake a full deck size when the API returned nothing — that showed
@@ -895,7 +879,7 @@ function SwipeDeck() {
     setApiPage(nextPage);
     setLoading(false);
     if (films.length === 0) setExhausted(true);
-  }, [onMyServices, selectedTrope]);
+  }, [onMyServices]);
 
   // Always keep library + "Not interested" IDs in the exclude set.
   useEffect(() => {
@@ -915,7 +899,6 @@ function SwipeDeck() {
   }, [
     libraryFetched,
     selectedGenreId,
-    selectedTrope,
     onMyServices,
     prefs?.dismissedTmdbIds,
     startDeck,
@@ -1159,8 +1142,8 @@ function SwipeDeck() {
           : {
               title: "No matches right now",
               body: onMyServices
-                ? "Nothing matched your streaming services + filters. Turn off “On my streaming services” or widen genres/tropes."
-                : "No new films match these filters. Try another genre/trope, or clear filters.",
+                ? "Nothing matched your streaming services + filters. Turn off “On my streaming services” or widen genres."
+                : "No new films match these filters. Try another genre, or clear filters.",
             };
 
   return (
@@ -1229,22 +1212,6 @@ function SwipeDeck() {
               </button>
             ))}
           </div>
-          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none px-0.5">
-            {TROPES.map((t) => (
-              <button
-                key={String(t.slug)}
-                onClick={() => setSelectedTrope(t.slug as TropeSlug)}
-                className={cn(
-                  "shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-all",
-                  selectedTrope === t.slug
-                    ? "bg-amber-300 text-black border-amber-300"
-                    : "bg-transparent text-muted-foreground border-white/20 hover:border-white/40 hover:text-foreground"
-                )}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
           <div className="flex flex-wrap gap-1.5 px-0.5">
             <button
               type="button"
@@ -1298,12 +1265,11 @@ function SwipeDeck() {
               >
                 <Shuffle className="w-4 h-4" /> Retry deck
               </Button>
-              {(selectedGenreId != null || selectedTrope != null || onMyServices) && (
+              {(selectedGenreId != null || onMyServices) && (
                 <Button
                   variant="outline"
                   onClick={() => {
                     setSelectedGenreId(null);
-                    setSelectedTrope(null);
                     setOnMyServices(false);
                   }}
                 >

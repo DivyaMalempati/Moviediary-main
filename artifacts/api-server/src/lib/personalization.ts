@@ -6,6 +6,7 @@ import {
   discoverHiddenGems,
   discoverStreamingHighlights,
   discoverByKeyword,
+  discoverByGenresAnd,
   getMovieDetails,
   getSimilarMovies,
   getRecommendations,
@@ -13,7 +14,7 @@ import {
   type WatchFilter,
 } from "./tmdb.js";
 import { INDIAN_CINEMA_LANGUAGES } from "./languageDefaults.js";
-import { tropeByKeywordId, tropeKeywordIdsOr } from "./tropes.js";
+import { tropeByKeywordId, tropeKeywordIdsOr, tropeGenreIdsAnd } from "./tropes.js";
 import { logger } from "./logger.js";
 
 const INDIAN_LANG_SET = new Set<string>(INDIAN_CINEMA_LANGUAGES);
@@ -205,8 +206,9 @@ const MIX_TROPE = { safe: 0.5, streaming: 0.2, wildcard: 0.3 };
 /**
  * India-first trope discovery:
  * 1) curated Indian seed titles (often missing TMDB trope tags)
- * 2) Indian-language hits for primary + related keywords
- * 3) English fill only when `en` is in the effective language allowlist
+ * 2) genre AND discover when the trope defines genreIdsAnd (Crime∧Thriller etc.)
+ * 3) Indian-language hits for primary + related keywords
+ * 4) English fill only when `en` is in the effective language allowlist
  */
 async function fetchIndiaFirstTropeFilms(opts: {
   keywordId: number;
@@ -219,6 +221,7 @@ async function fetchIndiaFirstTropeFilms(opts: {
   const { keywordId, effectiveLanguages, page, genreIdFilter, watch, certification } = opts;
   const trope = tropeByKeywordId(keywordId);
   const keywordIds = trope ? tropeKeywordIdsOr(trope) : [keywordId];
+  const genreIdsAnd = trope ? tropeGenreIdsAnd(trope) : [];
 
   const indiaLangs = effectiveLanguages.filter((l) => INDIAN_LANG_SET.has(l));
   // English fill only when prefs/cold-start allow it — never sneak in ko/ja/fr.
@@ -226,7 +229,7 @@ async function fetchIndiaFirstTropeFilms(opts: {
 
   const seedIds = [...(trope?.indiaSeedTmdbIds ?? [])];
 
-  const [seedRows, indiaHits, indiaMore, fillHits] = await Promise.all([
+  const [seedRows, genreHits, genreMore, indiaHits, indiaMore, fillHits] = await Promise.all([
     Promise.all(
       seedIds.map(async (id) => {
         try {
@@ -247,6 +250,16 @@ async function fetchIndiaFirstTropeFilms(opts: {
         }
       }),
     ),
+    indiaLangs.length > 0 && genreIdsAnd.length > 0
+      ? discoverByGenresAnd(genreIdsAnd, indiaLangs, page, watch, certification, {
+          voteCountGte: 20,
+        }).catch(() => [])
+      : Promise.resolve([]),
+    indiaLangs.length > 0 && genreIdsAnd.length > 0
+      ? discoverByGenresAnd(genreIdsAnd, indiaLangs, page + 1, watch, certification, {
+          voteCountGte: 20,
+        }).catch(() => [])
+      : Promise.resolve([]),
     indiaLangs.length > 0
       ? discoverByKeyword(
           keywordIds,
@@ -294,7 +307,7 @@ async function fetchIndiaFirstTropeFilms(opts: {
 
   const seen = new Set<number>();
   const out: SwipeCandidate[] = [];
-  for (const film of [...seeds, ...indiaHits, ...indiaMore, ...fillHits]) {
+  for (const film of [...seeds, ...genreHits, ...genreMore, ...indiaHits, ...indiaMore, ...fillHits]) {
     if (seen.has(film.tmdbId)) continue;
     seen.add(film.tmdbId);
     out.push(film);
