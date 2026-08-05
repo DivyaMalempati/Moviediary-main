@@ -12,7 +12,11 @@ export const collectionsTable = pgTable("collections", {
   id: serial("id").primaryKey(),
   userId: text("user_id").notNull(),
   name: text("name").notNull(),
-  rules: jsonb("rules").$type<SmartRule[]>().default(null),
+  rules: jsonb("rules").$type<SmartRule[] | null>(),
+  /** private = owner only; public = viewable via shareToken link. */
+  visibility: text("visibility").notNull().default("private"),
+  /** Opaque share token for /c/:token. Null when private. */
+  shareToken: text("share_token").unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

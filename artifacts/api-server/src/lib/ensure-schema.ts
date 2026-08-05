@@ -77,5 +77,19 @@ export async function ensureSchema(): Promise<void> {
       AND "watched_at" IS NOT NULL;
   `);
 
+  // Collection share: private/public + opaque share token.
+  await pool.query(`
+    ALTER TABLE "collections"
+      ADD COLUMN IF NOT EXISTS "visibility" text DEFAULT 'private' NOT NULL;
+  `);
+  await pool.query(`
+    ALTER TABLE "collections"
+      ADD COLUMN IF NOT EXISTS "share_token" text;
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "collections_share_token_unique"
+      ON "collections" ("share_token");
+  `);
+
   logger.info("Schema ensure complete");
 }

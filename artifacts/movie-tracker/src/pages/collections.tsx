@@ -24,11 +24,12 @@ import {
   useCollectionMovies,
   useCreateCollection,
   useUpdateCollection,
-  useRenameCollection,
   useDeleteCollection,
+  collectionShareUrl,
   type SmartRule,
   type SmartRuleField,
   type CollectionSummary,
+  type CollectionVisibility,
 } from "@/lib/collections-api";
 import { toast } from "sonner";
 import {
@@ -54,7 +55,20 @@ import {
   Zap,
   X,
   Settings2,
+  Globe,
+  Lock,
+  Link2,
 } from "lucide-react";
+
+async function copyShareLink(token: string) {
+  const url = collectionShareUrl(token);
+  try {
+    await navigator.clipboard.writeText(url);
+    toast.success("Share link copied");
+  } catch {
+    toast.error("Couldn’t copy link", { description: url });
+  }
+}
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -289,10 +303,48 @@ function RuleEditor({ rules, onChange }: RuleEditorProps) {
 
 // ── Create collection dialog ──────────────────────────────────────────────────
 
+function VisibilityToggle({
+  value,
+  onChange,
+}: {
+  value: CollectionVisibility;
+  onChange: (v: CollectionVisibility) => void;
+}) {
+  return (
+    <div className="flex gap-2">
+      <button
+        type="button"
+        onClick={() => onChange("private")}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm transition-colors ${
+          value === "private"
+            ? "border-primary bg-primary/10 text-primary"
+            : "border-border text-muted-foreground hover:border-white/20"
+        }`}
+      >
+        <Lock className="w-3.5 h-3.5" />
+        Private
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("public")}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm transition-colors ${
+          value === "public"
+            ? "border-primary bg-primary/10 text-primary"
+            : "border-border text-muted-foreground hover:border-white/20"
+        }`}
+      >
+        <Globe className="w-3.5 h-3.5" />
+        Public
+      </button>
+    </div>
+  );
+}
+
 function CreateCollectionDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [name, setName] = useState("");
   const [isSmart, setIsSmart] = useState(false);
   const [rules, setRules] = useState<SmartRule[]>([]);
+  const [visibility, setVisibility] = useState<CollectionVisibility>("private");
   const createCollection = useCreateCollection();
 
   const handleCreate = async () => {
@@ -301,11 +353,13 @@ function CreateCollectionDialog({ open, onClose }: { open: boolean; onClose: () 
       await createCollection.mutateAsync({
         name: name.trim(),
         rules: isSmart && rules.length > 0 ? rules : null,
+        visibility,
       });
       toast.success("Collection created");
       setName("");
       setIsSmart(false);
       setRules([]);
+      setVisibility("private");
       onClose();
     } catch (e: any) {
       toast.error(e.message ?? "Failed to create collection");
@@ -327,6 +381,16 @@ function CreateCollectionDialog({ open, onClose }: { open: boolean; onClose: () 
             onKeyDown={(e) => e.key === "Enter" && !isSmart && handleCreate()}
             autoFocus
           />
+
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Visibility</p>
+            <VisibilityToggle value={visibility} onChange={setVisibility} />
+            <p className="text-[11px] text-muted-foreground">
+              {visibility === "public"
+                ? "Anyone with the share link can view titles and posters."
+                : "Only you can see this collection."}
+            </p>
+          </div>
 
           {/* Smart toggle */}
           <div className="flex items-center gap-3">
@@ -381,6 +445,9 @@ function EditCollectionDialog({
 }) {
   const [name, setName] = useState(collection.name);
   const [rules, setRules] = useState<SmartRule[]>(collection.rules ?? []);
+  const [visibility, setVisibility] = useState<CollectionVisibility>(
+    collection.visibility ?? "private",
+  );
   const updateCollection = useUpdateCollection();
 
   const isSmart = rules.length > 0;
@@ -388,12 +455,16 @@ function EditCollectionDialog({
   const handleSave = async () => {
     if (!name.trim()) return;
     try {
-      await updateCollection.mutateAsync({
+      const updated = (await updateCollection.mutateAsync({
         id: collection.id,
         name: name.trim(),
         rules: rules.length > 0 ? rules : null,
-      });
+        visibility,
+      })) as CollectionSummary;
       toast.success("Collection updated");
+      if (visibility === "public" && updated?.shareToken) {
+        // Keep dialog closed; owner can copy from detail header.
+      }
       onClose();
     } catch (e: any) {
       toast.error(e.message ?? "Failed to update collection");
@@ -413,6 +484,16 @@ function EditCollectionDialog({
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
+
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Visibility</p>
+            <VisibilityToggle value={visibility} onChange={setVisibility} />
+            <p className="text-[11px] text-muted-foreground">
+              {visibility === "public"
+                ? "Share link works. Making it private revokes the link."
+                : "Make public to get a share link."}
+            </p>
+          </div>
 
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
@@ -518,6 +599,15 @@ function CollectionList() {
                           <Zap className="w-2.5 h-2.5" /> Smart
                         </Badge>
                       )}
+                      {(col.visibility ?? "private") === "public" ? (
+                        <Badge variant="secondary" className="gap-1 text-[10px] px-1.5 py-0 h-4 shrink-0">
+                          <Globe className="w-2.5 h-2.5" /> Public
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="gap-1 text-[10px] px-1.5 py-0 h-4 shrink-0 text-muted-foreground">
+                          <Lock className="w-2.5 h-2.5" /> Private
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {col.movieCount} film{col.movieCount !== 1 ? "s" : ""}
@@ -603,6 +693,15 @@ function CollectionDetail({ id }: { id: number }) {
                     <Zap className="w-3 h-3" /> Smart
                   </Badge>
                 )}
+                {(collection?.visibility ?? "private") === "public" ? (
+                  <Badge variant="secondary" className="gap-1.5">
+                    <Globe className="w-3 h-3" /> Public
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="gap-1.5 text-muted-foreground">
+                    <Lock className="w-3 h-3" /> Private
+                  </Badge>
+                )}
               </div>
               <p className="text-muted-foreground mt-1">
                 {collection?.movieCount ?? 0} film{(collection?.movieCount ?? 0) !== 1 ? "s" : ""}
@@ -610,15 +709,39 @@ function CollectionDetail({ id }: { id: number }) {
               </p>
             </div>
             {collection && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2 shrink-0"
-                onClick={() => setEditingCollection(collection)}
-              >
-                <Settings2 className="w-3.5 h-3.5" />
-                {isSmart ? "Edit rules" : "Edit"}
-              </Button>
+              <div className="flex items-center gap-2 shrink-0">
+                {(collection.visibility ?? "private") === "public" && collection.shareToken ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => void copyShareLink(collection.shareToken!)}
+                  >
+                    <Link2 className="w-3.5 h-3.5" />
+                    Copy share link
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 text-muted-foreground"
+                    disabled
+                    title="Make public to share"
+                  >
+                    <Link2 className="w-3.5 h-3.5" />
+                    Make public to share
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => setEditingCollection(collection)}
+                >
+                  <Settings2 className="w-3.5 h-3.5" />
+                  {isSmart ? "Edit rules" : "Edit"}
+                </Button>
+              </div>
             )}
           </div>
 

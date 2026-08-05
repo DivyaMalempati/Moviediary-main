@@ -17,6 +17,20 @@ async function apiFetch(path: string, opts?: RequestInit) {
   return res.json();
 }
 
+/** Public shared fetch — no guest/Clerk headers required for view. */
+async function publicFetch(path: string, opts?: RequestInit) {
+  const res = await fetch(`${BASE}${path}`, {
+    ...opts,
+    credentials: "include",
+    headers: { ...(opts?.headers ?? {}) },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as any).error ?? `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type SmartRuleField = "genre" | "language" | "status" | "rating" | "yearFrom" | "yearTo";
@@ -26,6 +40,8 @@ export interface SmartRule {
   value: string;
 }
 
+export type CollectionVisibility = "private" | "public";
+
 export interface CollectionSummary {
   id: number;
   name: string;
@@ -33,6 +49,8 @@ export interface CollectionSummary {
   posters: (string | null)[];
   movieIds: number[];
   rules: SmartRule[] | null;
+  visibility: CollectionVisibility;
+  shareToken: string | null;
   createdAt: string;
 }
 
@@ -49,10 +67,41 @@ export interface CollectionMovie {
   createdAt: string;
 }
 
+export interface SharedCollectionItem {
+  tmdbId: number;
+  title: string;
+  posterPath: string | null;
+  releaseYear: number | null;
+  mediaType: string;
+}
+
+export interface SharedCollection {
+  name: string;
+  visibility: "public";
+  itemCount: number;
+  items: SharedCollectionItem[];
+}
+
+export interface SharedCopyResult {
+  added: number;
+  skipped: number;
+  missing: number;
+}
+
+export function collectionSharePath(token: string): string {
+  return `/c/${token}`;
+}
+
+export function collectionShareUrl(token: string): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  return `${origin}${BASE}${collectionSharePath(token)}`;
+}
+
 // ── Query keys ────────────────────────────────────────────────────────────────
 export const collectionsKey = () => ["collections"] as const;
 export const collectionMoviesKey = (id: number) => ["collections", id, "movies"] as const;
 export const movieCollectionsKey = (movieId: number) => ["movies", movieId, "collections"] as const;
+export const sharedCollectionKey = (token: string) => ["collections", "shared", token] as const;
 
 // ── Hooks ─────────────────────────────────────────────────────────────────────
 export function useCollections() {
@@ -81,14 +130,32 @@ export function useMovieCollections(movieId: number, enabled = true) {
   });
 }
 
+export function useSharedCollection(token: string, enabled = true) {
+  return useQuery<SharedCollection>({
+    queryKey: sharedCollectionKey(token),
+    queryFn: () => publicFetch(`/api/collections/shared/${encodeURIComponent(token)}`),
+    enabled: enabled && !!token,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
 export function useCreateCollection() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ name, rules }: { name: string; rules?: SmartRule[] | null }) =>
+    mutationFn: ({
+      name,
+      rules,
+      visibility,
+    }: {
+      name: string;
+      rules?: SmartRule[] | null;
+      visibility?: CollectionVisibility;
+    }) =>
       apiFetch("/api/collections", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, rules: rules ?? null }),
+        body: JSON.stringify({ name, rules: rules ?? null, visibility: visibility ?? "private" }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: collectionsKey() }),
   });
@@ -97,11 +164,21 @@ export function useCreateCollection() {
 export function useUpdateCollection() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, name, rules }: { id: number; name: string; rules?: SmartRule[] | null }) =>
+    mutationFn: ({
+      id,
+      name,
+      rules,
+      visibility,
+    }: {
+      id: number;
+      name: string;
+      rules?: SmartRule[] | null;
+      visibility?: CollectionVisibility;
+    }) =>
       apiFetch(`/api/collections/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, rules }),
+        body: JSON.stringify({ name, rules, visibility }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: collectionsKey() }),
   });
@@ -154,6 +231,22 @@ export function useRemoveFromCollection() {
       qc.invalidateQueries({ queryKey: collectionsKey() });
       qc.invalidateQueries({ queryKey: collectionMoviesKey(collectionId) });
       qc.invalidateQueries({ queryKey: movieCollectionsKey(movieId) });
+    },
+  });
+}
+
+export function useCopySharedCollection(token: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { tmdbIds?: number[]; all?: boolean }) =>
+      apiFetch(`/api/collections/shared/${encodeURIComponent(token)}/copy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }) as Promise<SharedCopyResult>,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["movies"] });
+      qc.invalidateQueries({ queryKey: ["watchlist"] });
     },
   });
 }

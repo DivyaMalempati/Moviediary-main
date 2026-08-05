@@ -86,7 +86,10 @@ export function MoviePosterCard({
         )}
 
         {overlayAction && (
-          <div className="absolute inset-0 z-30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+          // Hidden overlay must stay inert, and only hover-capable pointers may
+          // reveal it. Otherwise a tap in the middle of the poster hits an
+          // invisible button instead of opening the film.
+          <div className="absolute inset-0 z-30 flex items-center justify-center opacity-0 pointer-events-none transition-opacity [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-hover:pointer-events-auto">
             {overlayAction}
           </div>
         )}
