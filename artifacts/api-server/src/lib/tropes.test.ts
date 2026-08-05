@@ -30,6 +30,23 @@ describe("trope keyword catalog", () => {
     expect(seeds).toEqual(expect.arrayContaining([401285, 412197, 891445]));
   });
 
+  it("maps investigative / suspense vibes to live TMDB keywords", () => {
+    expect(tropeBySlug("forensic-investigation")?.keywordId).toBe(160313);
+    expect(tropeBySlug("investigative-thriller")?.keywordId).toBe(158927);
+    expect(tropeBySlug("crime-thriller")?.keywordId).toBe(355372);
+    expect(tropeBySlug("suspense")?.keywordId).toBe(288394);
+  });
+
+  it("uses Crime∧Thriller genres for crime-thriller India coverage", () => {
+    expect(tropeBySlug("crime-thriller")?.genreIdsAnd).toEqual([80, 53]);
+    expect(tropeBySlug("investigative-thriller")?.genreIdsAnd).toEqual([80, 9648]);
+  });
+
+  it("seeds known Indian crime / investigative titles", () => {
+    const crimeSeeds = tropeBySlug("crime-thriller")?.indiaSeedTmdbIds ?? [];
+    expect(crimeSeeds).toEqual(expect.arrayContaining([247652, 534780, 84332]));
+  });
+
   it("uses unique primary keyword ids", () => {
     const ids = TROPE_KEYWORDS.map((t) => t.keywordId);
     expect(new Set(ids).size).toBe(ids.length);

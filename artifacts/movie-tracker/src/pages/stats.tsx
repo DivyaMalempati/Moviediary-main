@@ -205,7 +205,7 @@ export default function StatsPage() {
             {hasData && (
               <div className="mt-5">
                 <Button asChild size="sm" variant="outline" className="bg-transparent gap-2">
-                  <Link href="/add?tab=people">
+                  <Link href="/add?tab=search">
                     <Sparkles className="w-3.5 h-3.5" />
                     Find something new
                   </Link>

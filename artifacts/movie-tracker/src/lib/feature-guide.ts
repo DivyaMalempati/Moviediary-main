@@ -12,7 +12,7 @@ import {
 import { isFeatureEnabled } from "@/lib/features";
 
 /** Bump when the tour content changes so returning users see the new version once. */
-export const FEATURE_TOUR_VERSION = 8;
+export const FEATURE_TOUR_VERSION = 9;
 export const FEATURE_TOUR_STORAGE_KEY = `cinevault:feature-tour:v${FEATURE_TOUR_VERSION}`;
 
 export type FeatureGuideItem = {
@@ -88,16 +88,16 @@ export const FEATURE_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: "add-discover",
     title: "Discover",
-    tip: "Tap Discover to browse — then use Actor, For You, Liked, or Trending.",
-    href: "/add?tab=people",
+    tip: "Tap Discover to browse — then use Search, For You, or Trending.",
+    href: "/add?tab=search",
     target: "add-discover-mode",
   },
   {
-    id: "add-actor",
-    title: "Actor / Director",
-    tip: "Search any actor — hero, heroine, comedian — or a director, then log from their films.",
-    href: "/add?tab=people",
-    target: "add-discover-chip-people",
+    id: "add-search",
+    title: "Search",
+    tip: "Actor, Film, Like this, or Vibe — find something, then log or save.",
+    href: "/add?tab=search",
+    target: "add-discover-chip-search",
   },
   {
     id: "add-foryou",
@@ -105,13 +105,6 @@ export const FEATURE_TOUR_STEPS: FeatureTourStep[] = [
     tip: "Picks shaped by your taste — languages, genres, and what you’ve loved.",
     href: "/add?tab=foryou",
     target: "add-discover-chip-foryou",
-  },
-  {
-    id: "add-liked",
-    title: "Liked",
-    tip: "More like titles you’ve rated highly — a quick rabbit hole from your diary.",
-    href: "/add?tab=liked",
-    target: "add-discover-chip-liked",
   },
   {
     id: "add-trending",
@@ -163,7 +156,7 @@ export const FEATURE_GUIDE_SECTIONS: Array<{
         title: "Swipe (solo)",
         summary: "Your private recommendation deck.",
         detail:
-          "Left = skip · Right = Watchlist · Up = Watched. Filters: genre / trope / streaming. Not used for movie night.",
+          "Left = skip · Right = Watchlist · Up = Watched. Filters: genre / streaming. Tropes live under Discover → Search → Vibe. Not used for movie night.",
         href: "/swipe",
         cta: "Open Swipe",
         icon: Shuffle,
@@ -173,7 +166,7 @@ export const FEATURE_GUIDE_SECTIONS: Array<{
         title: "Add",
         summary: "Log a film or browse Discover.",
         detail:
-          "Bottom bar → Add. Primary: Log | Discover. On Log: search by title, then Watched (optional diary blanks) or Watchlist. On Discover: Actor, For You, Liked, Trending.",
+          "Bottom bar → Add. Primary: Log | Discover. On Log: search by title, then Watched (optional diary blanks) or Watchlist. On Discover: Search, For You, Trending.",
         href: "/add",
         cta: "Add a film",
         icon: PlusCircle,
@@ -206,10 +199,10 @@ export const FEATURE_GUIDE_SECTIONS: Array<{
       {
         id: "action-discover",
         title: "Discover",
-        summary: "Actor / Director search plus India picks — on Add → Discover.",
+        summary: "Search, For You, and Trending — on Add → Discover.",
         detail:
-          "Add → Discover (or sidebar Discover). Sub-tabs: Actor / Director (any actor — hero, heroine, comedian), For You, Liked, Trending.",
-        href: "/add?tab=people",
+          "Add → Discover (or sidebar Discover). Sub-tabs: Search (Actor / Film / Like this / Vibe), For You, Trending.",
+        href: "/add?tab=search",
         cta: "Open Discover",
         icon: Clapperboard,
         feature: "discover",
@@ -286,6 +279,7 @@ export function tourTargetForHref(href: string): string | undefined {
       return "nav-profile";
     case "/add":
       return "nav-add";
+    case "/add?tab=search":
     case "/add?tab=people":
       return "nav-discover";
     case "/suggestions":

@@ -3,13 +3,11 @@ import { TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { LanguageBadge } from "@/components/language-badge";
 import { RatingPickerDialog } from "@/components/rating-picker-dialog";
-import { PersonFilmographySearch } from "@/components/person-filmography-search";
+import { DiscoverSearch } from "@/components/discover-search";
 import { getPosterUrl, RATING_LABELS } from "@/lib/movie-utils";
 import {
   useGetTrendingIndia,
   getGetTrendingIndiaQueryKey,
-  useGetBecauseYouLiked,
-  getGetBecauseYouLikedQueryKey,
   useGetAiSuggestions,
   useDiscoverIndian,
   getDiscoverIndianQueryKey,
@@ -25,6 +23,7 @@ import {
 import { toast } from "sonner";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { useDismissFilm, useMuteGenres, usePreferences } from "@/lib/preferences";
+import { buildDiaryNote } from "@/lib/diary-notes";
 
 // Legacy browser-only dismissals (pre server sync) — migrated once into prefs.
 const LEGACY_DISMISS_KEY = "cinevault:dismissed";
@@ -304,22 +303,16 @@ function AiFriendCard({
 // ---------------------------------------------------------------------------
 // Discover panels — embeddable on Add (parent owns Tabs + tab list)
 // ---------------------------------------------------------------------------
-export type DiscoverTabId = "people" | "foryou" | "liked" | "trending";
+export type DiscoverTabId = "search" | "foryou" | "trending";
 
 export const DISCOVER_TAB_IDS: readonly DiscoverTabId[] = [
-  "people",
+  "search",
   "foryou",
-  "liked",
   "trending",
 ] as const;
 
 export function isDiscoverTab(value: string | null | undefined): value is DiscoverTabId {
-  return (
-    value === "people" ||
-    value === "foryou" ||
-    value === "liked" ||
-    value === "trending"
-  );
+  return value === "search" || value === "foryou" || value === "trending";
 }
 
 type DiscoverPanelsProps = {
@@ -388,9 +381,6 @@ export function DiscoverPanels({ activeTab }: DiscoverPanelsProps) {
     { language: trendingLang },
     { query: { enabled: activeTab === "trending" && trendingLang !== "all", queryKey: getDiscoverIndianQueryKey({ language: trendingLang }) } }
   );
-  const { data: becauseLiked, isLoading: isLoadingLiked } = useGetBecauseYouLiked({
-    query: { enabled: activeTab === "liked", queryKey: getGetBecauseYouLikedQueryKey() },
-  });
 
   const getAiSuggestions = useGetAiSuggestions();
   const [aiResults, setAiResults] = useState<any[] | null>(null);
@@ -430,7 +420,7 @@ export function DiscoverPanels({ activeTab }: DiscoverPanelsProps) {
       toast.success(`Won't recommend ${genres.join(" / ")} films`, {
         description: "Manage muted genres anytime in Profile → Preferences.",
       });
-      queryClient.invalidateQueries({ queryKey: getGetBecauseYouLikedQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetTrendingIndiaQueryKey() });
       setAiResults(null);
     } catch {
       toast.error("Couldn't update preferences");
@@ -441,9 +431,12 @@ export function DiscoverPanels({ activeTab }: DiscoverPanelsProps) {
     status: "watched" | "watchlist",
     rating?: string | null,
     watchedAt?: string | null,
+    notes?: string | null,
   ) => {
     const safeRating =
       rating && rating in RATING_LABELS ? rating : null;
+    const notesPayload =
+      notes != null && notes.trim().length > 0 ? { notes: notes.trim() } : {};
 
     createMovie.mutate({
       data: {
@@ -458,6 +451,7 @@ export function DiscoverPanels({ activeTab }: DiscoverPanelsProps) {
         }),
         ...(status === "watched" && safeRating ? { rating: safeRating } : {}),
         ...(status === "watched" ? { watchedAt: watchedAt ?? null } : {}),
+        ...notesPayload,
       },
     }, {
       onSuccess: () => {
@@ -487,13 +481,12 @@ export function DiscoverPanels({ activeTab }: DiscoverPanelsProps) {
   const notDismissed = (m: any) => !dismissed.has(m.tmdbId);
   const notInLibrary = (m: any) => !m.tmdbId || !inLibrarySet.has(m.tmdbId);
   const visibleTrending = trendingData?.filter((m) => notDismissed(m) && notInLibrary(m)) ?? [];
-  const visibleLiked = becauseLiked?.filter((m) => notDismissed(m) && notInLibrary(m)) ?? [];
   const visibleAi = aiResults?.filter((m) => notDismissed(m) && notInLibrary(m)) ?? [];
 
   return (
     <>
-      <TabsContent value="people" className="mt-6">
-        <PersonFilmographySearch />
+      <TabsContent value="search" className="mt-6">
+        <DiscoverSearch />
       </TabsContent>
 
           {/* ── AI Curated ── */}
@@ -565,34 +558,6 @@ export function DiscoverPanels({ activeTab }: DiscoverPanelsProps) {
             )}
           </TabsContent>
 
-          {/* ── Because You Liked ── */}
-          <TabsContent value="liked" className="mt-6 space-y-4">
-            {isLoadingLiked ? (
-              <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
-            ) : !becauseLiked?.length ? (
-              <div className="text-center py-20">
-                <p className="text-muted-foreground">Rate some movies "Loved" or "Great" to get recommendations.</p>
-              </div>
-            ) : visibleLiked.length === 0 ? (
-              <div className="text-center py-20 text-muted-foreground text-sm">
-                All suggestions hidden. <button onClick={handleClearDismissed} className="underline underline-offset-2 hover:text-foreground">Restore them</button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {visibleLiked.map((movie) => (
-                  <SuggestionPosterCard
-                    key={movie.tmdbId}
-                    movie={movie}
-                    inLibrary={!!movie.tmdbId && inLibrarySet.has(movie.tmdbId)}
-                    onAdd={handleAdd}
-                    onDismiss={handleDismiss}
-                    onMuteLikeThis={handleMuteLikeThis}
-                  />
-                ))}
-              </div>
-            )}
-          </TabsContent>
-
           {/* ── Trending India ── */}
           <TabsContent value="trending" className="mt-6 space-y-4">
             <ScrollArea className="w-full whitespace-nowrap">
@@ -638,11 +603,14 @@ export function DiscoverPanels({ activeTab }: DiscoverPanelsProps) {
         open={!!pendingWatched}
         movieTitle={pendingWatched?.title ?? ""}
         confirmOnSelect
+        showDiaryBlanks
         onCancel={() => setPendingWatched(null)}
-        onConfirm={({ rating, watchedAt }) => {
+        onConfirm={({ rating, watchedAt, withWho, felt }) => {
           const movie = pendingWatched;
           setPendingWatched(null);
-          if (movie) doAdd(movie, "watched", rating, watchedAt);
+          if (!movie) return;
+          const notes = buildDiaryNote({ withWho, felt });
+          doAdd(movie, "watched", rating, watchedAt, notes || null);
         }}
       />
     </>

@@ -475,7 +475,10 @@ export async function discoverMovies(
   if (region) {
     params.region = region;
   }
-  if (genreId) {
+  if (extras?.genreIdsAnd?.length) {
+    // Comma = AND (TMDB discover). Used for Crime∧Thriller style vibes.
+    params.with_genres = extras.genreIdsAnd.join(",");
+  } else if (genreId) {
     params.with_genres = String(genreId);
   }
   applyWatchFilter(params, watch);
@@ -493,6 +496,8 @@ export type DiscoverExtras = {
   keywordId?: number;
   /** Multiple keyword IDs OR'd together (`with_keywords=a|b|c`). */
   keywordIdsOr?: number[];
+  /** Multiple genre IDs ANDed (`with_genres=a,b`). Overrides single genreId. */
+  genreIdsAnd?: number[];
   certification?: CertificationFilter;
   /** ISO date `YYYY-MM-DD` — TMDB primary_release_date.gte */
   primaryReleaseDateGte?: string;
@@ -581,6 +586,25 @@ export async function discoverByKeyword(
     sortBy: "popularity.desc",
     voteCountGte: options?.voteCountGte ?? 30,
     ...(ids.length === 1 ? { keywordId: ids[0] } : { keywordIdsOr: ids }),
+    certification,
+  });
+}
+
+/** Discover with genre IDs ANDed (e.g. Crime ∧ Thriller for India vibes). */
+export async function discoverByGenresAnd(
+  genreIds: number[],
+  languages?: string[],
+  page = 1,
+  watch?: WatchFilter,
+  certification?: CertificationFilter,
+  options?: { voteCountGte?: number },
+) {
+  const ids = genreIds.filter((id) => Number.isFinite(id) && id > 0);
+  if (ids.length === 0) return [];
+  return discoverMovies(languages, undefined, page, undefined, watch, {
+    sortBy: "popularity.desc",
+    voteCountGte: options?.voteCountGte ?? 20,
+    genreIdsAnd: ids,
     certification,
   });
 }
