@@ -122,6 +122,10 @@ export function DiscoverSearch() {
   const [vibeLoading, setVibeLoading] = useState(false);
   const [pendingWatched, setPendingWatched] = useState<TmdbMovie | null>(null);
 
+  type FilmSort = "newest" | "oldest" | "rated" | "az";
+  const [filmFilter, setFilmFilter] = useState("");
+  const [filmSort, setFilmSort] = useState<FilmSort>("newest");
+
   const queryClient = useQueryClient();
   const createMovie = useCreateMovie();
   const { data: library } = useListMovies(undefined, {
@@ -205,6 +209,28 @@ export function DiscoverSearch() {
     }
     return out;
   }, [similar, recommendations, likeSeed?.tmdbId]);
+
+  const filteredFilmography = useMemo(() => {
+    let films = filmography ?? [];
+    if (filmFilter.trim()) {
+      const q = filmFilter.toLowerCase();
+      films = films.filter((m) => m.title.toLowerCase().includes(q));
+    }
+    return [...films].sort((a, b) => {
+      switch (filmSort) {
+        case "newest":
+          return (b.releaseDate ?? "").localeCompare(a.releaseDate ?? "");
+        case "oldest":
+          return (a.releaseDate ?? "").localeCompare(b.releaseDate ?? "");
+        case "rated":
+          return (b.voteAverage ?? 0) - (a.voteAverage ?? 0);
+        case "az":
+          return a.title.localeCompare(b.title);
+        default:
+          return 0;
+      }
+    });
+  }, [filmography, filmFilter, filmSort]);
 
   useEffect(() => {
     if (mode !== "vibe" || !vibe) {
@@ -350,6 +376,8 @@ export function DiscoverSearch() {
             setPersonRole(v as PersonRole);
             setSelectedPerson(null);
             setQuery("");
+            setFilmFilter("");
+            setFilmSort("newest");
           }}
           className="justify-start"
         >
@@ -369,7 +397,11 @@ export function DiscoverSearch() {
             variant="ghost"
             size="sm"
             className="gap-1.5 shrink-0"
-            onClick={() => setSelectedPerson(null)}
+            onClick={() => {
+              setSelectedPerson(null);
+              setFilmFilter("");
+              setFilmSort("newest");
+            }}
           >
             <ArrowLeft className="w-4 h-4" />
             Back
@@ -444,7 +476,49 @@ export function DiscoverSearch() {
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
           ) : filmography && filmography.length > 0 ? (
-            renderMovieGrid(filmography)
+            <div className="space-y-3">
+              {/* Filter + sort strip */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Filter films…"
+                  className="w-full pl-9 pr-3 h-9 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  value={filmFilter}
+                  onChange={(e) => setFilmFilter(e.target.value)}
+                />
+              </div>
+              <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+                {(["newest", "oldest", "rated", "az"] as const).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setFilmSort(s)}
+                    className={cn(
+                      "shrink-0 rounded-full px-3 py-1 text-xs font-medium border transition-colors",
+                      filmSort === s
+                        ? "bg-foreground text-background border-foreground"
+                        : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/40",
+                    )}
+                  >
+                    {s === "newest"
+                      ? "Newest"
+                      : s === "oldest"
+                        ? "Oldest"
+                        : s === "rated"
+                          ? "Highest Rated"
+                          : "A–Z"}
+                  </button>
+                ))}
+              </div>
+              {filteredFilmography.length > 0 ? (
+                renderMovieGrid(filteredFilmography)
+              ) : (
+                <p className="text-center text-muted-foreground py-16">
+                  No films match "{filmFilter}"
+                </p>
+              )}
+            </div>
           ) : (
             <p className="text-center text-muted-foreground py-16">
               No films found for {selectedPerson.name}
