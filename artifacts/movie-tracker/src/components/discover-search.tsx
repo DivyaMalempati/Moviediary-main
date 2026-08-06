@@ -210,14 +210,14 @@ export function DiscoverSearch() {
     return out;
   }, [similar, recommendations, likeSeed?.tmdbId]);
 
-  const filteredFilmography = useMemo(() => {
-    let films = filmography ?? [];
-    if (filmFilter.trim()) {
-      const q = filmFilter.toLowerCase();
-      films = films.filter((m) => m.title.toLowerCase().includes(q));
+  const applyFilterSort = (films: TmdbMovie[], filter: string, sort: FilmSort) => {
+    let result = films;
+    if (filter.trim()) {
+      const q = filter.toLowerCase();
+      result = result.filter((m) => m.title.toLowerCase().includes(q));
     }
-    return [...films].sort((a, b) => {
-      switch (filmSort) {
+    return [...result].sort((a, b) => {
+      switch (sort) {
         case "newest":
           return (b.releaseDate ?? "").localeCompare(a.releaseDate ?? "");
         case "oldest":
@@ -230,7 +230,22 @@ export function DiscoverSearch() {
           return 0;
       }
     });
-  }, [filmography, filmFilter, filmSort]);
+  };
+
+  const filteredFilmography = useMemo(
+    () => applyFilterSort(filmography ?? [], filmFilter, filmSort),
+    [filmography, filmFilter, filmSort],
+  );
+
+  const filteredLikeResults = useMemo(
+    () => applyFilterSort(likeResults, filmFilter, filmSort),
+    [likeResults, filmFilter, filmSort],
+  );
+
+  const filteredVibeFilms = useMemo(
+    () => applyFilterSort(vibeFilms, filmFilter, filmSort),
+    [vibeFilms, filmFilter, filmSort],
+  );
 
   useEffect(() => {
     if (mode !== "vibe" || !vibe) {
@@ -420,7 +435,11 @@ export function DiscoverSearch() {
             variant="ghost"
             size="sm"
             className="gap-1.5 shrink-0"
-            onClick={() => setLikeSeed(null)}
+            onClick={() => {
+              setLikeSeed(null);
+              setFilmFilter("");
+              setFilmSort("newest");
+            }}
           >
             <ArrowLeft className="w-4 h-4" />
             Back
@@ -436,7 +455,11 @@ export function DiscoverSearch() {
             <button
               key={v.slug}
               type="button"
-              onClick={() => setVibe(v.slug)}
+              onClick={() => {
+                setVibe(v.slug);
+                setFilmFilter("");
+                setFilmSort("newest");
+              }}
               className={cn(
                 "rounded-full px-3 py-1.5 text-sm font-medium border transition-colors",
                 vibe === v.slug
@@ -572,7 +595,42 @@ export function DiscoverSearch() {
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
           ) : likeResults.length > 0 ? (
-            renderMovieGrid(likeResults)
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Filter films…"
+                  className="w-full pl-9 pr-3 h-9 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  value={filmFilter}
+                  onChange={(e) => setFilmFilter(e.target.value)}
+                />
+              </div>
+              <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+                {(["newest", "oldest", "rated", "az"] as const).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setFilmSort(s)}
+                    className={cn(
+                      "shrink-0 rounded-full px-3 py-1 text-xs font-medium border transition-colors",
+                      filmSort === s
+                        ? "bg-foreground text-background border-foreground"
+                        : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/40",
+                    )}
+                  >
+                    {s === "newest" ? "Newest" : s === "oldest" ? "Oldest" : s === "rated" ? "Highest Rated" : "A–Z"}
+                  </button>
+                ))}
+              </div>
+              {filteredLikeResults.length > 0 ? (
+                renderMovieGrid(filteredLikeResults)
+              ) : (
+                <p className="text-center text-muted-foreground py-16">
+                  No films match "{filmFilter}"
+                </p>
+              )}
+            </div>
           ) : (
             <p className="text-center text-muted-foreground py-16">
               No similar films found for {likeSeed.title}
@@ -609,7 +667,42 @@ export function DiscoverSearch() {
           </div>
         ) : vibe ? (
           vibeFilms.length > 0 ? (
-            renderMovieGrid(vibeFilms)
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Filter films…"
+                  className="w-full pl-9 pr-3 h-9 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  value={filmFilter}
+                  onChange={(e) => setFilmFilter(e.target.value)}
+                />
+              </div>
+              <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+                {(["newest", "oldest", "rated", "az"] as const).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setFilmSort(s)}
+                    className={cn(
+                      "shrink-0 rounded-full px-3 py-1 text-xs font-medium border transition-colors",
+                      filmSort === s
+                        ? "bg-foreground text-background border-foreground"
+                        : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/40",
+                    )}
+                  >
+                    {s === "newest" ? "Newest" : s === "oldest" ? "Oldest" : s === "rated" ? "Highest Rated" : "A–Z"}
+                  </button>
+                ))}
+              </div>
+              {filteredVibeFilms.length > 0 ? (
+                renderMovieGrid(filteredVibeFilms)
+              ) : (
+                <p className="text-center text-muted-foreground py-16">
+                  No films match "{filmFilter}"
+                </p>
+              )}
+            </div>
           ) : (
             <p className="text-center text-muted-foreground py-16">
               No films for that vibe right now — try another.
