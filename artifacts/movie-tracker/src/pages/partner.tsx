@@ -14,6 +14,7 @@ import {
   Users,
   Link2,
   Copy,
+  Share2,
   Shuffle,
   Unlink,
   ArrowRight,
@@ -25,6 +26,53 @@ import {
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function inviteUrl(path: string) {
+  const prefix = BASE && BASE !== "/" ? BASE : "";
+  return `${window.location.origin}${prefix}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const el = document.createElement("textarea");
+      el.value = text;
+      el.setAttribute("readonly", "");
+      el.style.position = "fixed";
+      el.style.left = "-9999px";
+      document.body.appendChild(el);
+      el.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(el);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
+async function shareOrCopyLink(url: string, title: string): Promise<"shared" | "copied" | "shown"> {
+  let inIframe = false;
+  try {
+    inIframe = window.self !== window.top;
+  } catch {
+    inIframe = true;
+  }
+
+  if (!inIframe && typeof navigator !== "undefined" && typeof navigator.share === "function") {
+    try {
+      await navigator.share({ title, text: title, url });
+      return "shared";
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return "shown";
+    }
+  }
+  const copied = await copyText(url);
+  return copied ? "copied" : "shown";
+}
 
 type PartnerInfo = {
   partnerLinkId: number;
@@ -59,10 +107,6 @@ type Contact = {
   sessions: ActiveSession[];
   updatedAt: string;
 };
-
-function inviteUrl(path: string) {
-  return `${window.location.origin}${BASE}${path}`;
-}
 
 export default function PartnerPage() {
   const [, setLocation] = useLocation();
@@ -132,7 +176,11 @@ export default function PartnerPage() {
     }
     setBusy(true);
     try {
-      await ensureClerkApiSession();
+      const sessionOk = await ensureClerkApiSession();
+      if (!sessionOk) {
+        toast.error("Sign in again to create a Together invite");
+        return;
+      }
       const res = await authFetch(`${BASE}/api/partners/invite`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -155,7 +203,18 @@ export default function PartnerPage() {
       const data = (await res.json()) as Invite;
       setInvite(data);
       setRecipientName("");
-      toast.success(`Invite ready for ${data.recipientName ?? name}`);
+      const url = inviteUrl(data.path);
+      const result = await shareOrCopyLink(
+        url,
+        `Join me on Cinevault for movie night`,
+      );
+      if (result === "shared") {
+        toast.success(`Invite ready for ${data.recipientName ?? name} — shared`);
+      } else if (result === "copied") {
+        toast.success(`Invite link copied for ${data.recipientName ?? name}`);
+      } else {
+        toast.success(`Invite ready for ${data.recipientName ?? name} — copy the link below`);
+      }
       await refresh();
     } catch (err) {
       console.error("[together] createInvite", err);
@@ -251,22 +310,18 @@ export default function PartnerPage() {
     const p = path ?? invite?.path;
     if (!p) return;
     const url = inviteUrl(p);
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success("Invite link copied");
-    } catch {
-      toast.message(url);
-    }
+    const result = await shareOrCopyLink(url, "Join me on Cinevault for movie night");
+    if (result === "shared") toast.success("Invite shared");
+    else if (result === "copied") toast.success("Invite link copied");
+    else toast.message(url);
   };
 
   const copySession = async (path: string) => {
     const url = inviteUrl(path);
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success("Movie-night link copied");
-    } catch {
-      toast.message(url);
-    }
+    const result = await shareOrCopyLink(url, "Join our Cinevault movie night");
+    if (result === "shared") toast.success("Movie-night link shared");
+    else if (result === "copied") toast.success("Movie-night link copied");
+    else toast.message(url);
   };
 
   if (loading) {
@@ -430,13 +485,33 @@ export default function PartnerPage() {
                   Invite for {invite.recipientName ?? "friend"}
                 </p>
                 <p className="font-mono text-lg tracking-wide">{invite.code}</p>
-                <p className="text-xs text-muted-foreground break-all">
-                  {typeof window !== "undefined" ? inviteUrl(invite.path) : invite.path}
-                </p>
-                <Button size="sm" variant="secondary" onClick={() => copyInvite()} className="gap-2">
-                  <Copy className="w-3.5 h-3.5" />
-                  Copy invite link
-                </Button>
+                <Input
+                  readOnly
+                  value={typeof window !== "undefined" ? inviteUrl(invite.path) : invite.path}
+                  className="font-mono text-xs h-9"
+                  onFocus={(e) => e.currentTarget.select()}
+                  aria-label="Invite link"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => copyInvite()} className="gap-2">
+                    <Share2 className="w-3.5 h-3.5" />
+                    Share / copy link
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      const url = inviteUrl(invite.path);
+                      const ok = await copyText(url);
+                      if (ok) toast.success("Invite link copied");
+                      else toast.message(url);
+                    }}
+                    className="gap-2"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    Copy
+                  </Button>
+                </div>
               </div>
             )}
           </div>

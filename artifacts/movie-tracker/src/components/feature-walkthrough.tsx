@@ -8,11 +8,20 @@ import {
   isFeatureTourDone,
   markFeatureTourDone,
   resetFeatureTour,
+  type FeatureTourStep,
 } from "@/lib/feature-guide";
 import { useFeatureTour } from "@/components/feature-tour-context";
 import { cn } from "@/lib/utils";
+import { isFeatureEnabled } from "@/lib/features";
 
 type Rect = { top: number; left: number; width: number; height: number };
+
+function activeTourSteps(): FeatureTourStep[] {
+  return FEATURE_TOUR_STEPS.filter((step) => {
+    if (step.id === "collections" && !isFeatureEnabled("collections")) return false;
+    return true;
+  });
+}
 
 function readTargetRect(target: string): Rect | null {
   const nodes = document.querySelectorAll(`[data-tour="${target}"]`);
@@ -70,17 +79,23 @@ function useSpotlightRect(target: string, active: boolean): Rect | null {
 export function FeatureWalkthrough() {
   const [, setLocation] = useLocation();
   const { open, step, setStep, closeTour } = useFeatureTour();
-  const total = FEATURE_TOUR_STEPS.length;
-  const current = FEATURE_TOUR_STEPS[Math.min(step, total - 1)];
+  const steps = activeTourSteps();
+  const total = steps.length;
+  const current = steps[Math.min(step, Math.max(total - 1, 0))];
   const isLast = step >= total - 1;
-  const rect = useSpotlightRect(current.target, open);
+  const rect = useSpotlightRect(current?.target ?? "", open && !!current);
   const pad = 8;
 
   // Navigate so the highlighted destination is on screen.
   useEffect(() => {
-    if (!open) return;
+    if (!open || !current) return;
     setLocation(current.href);
-  }, [open, current.href, setLocation]);
+  }, [open, current?.href, setLocation]);
+
+  // Clamp step if feature filtering shortened the list (e.g. collections off).
+  useEffect(() => {
+    if (open && step > total - 1 && total > 0) setStep(total - 1);
+  }, [open, step, total, setStep]);
 
   const finish = useCallback(
     (goHref?: string) => {
@@ -162,7 +177,7 @@ export function FeatureWalkthrough() {
       }
     : null;
 
-  if (!open) return null;
+  if (!open || !current) return null;
 
   return (
     <div className="fixed inset-0 z-[200]" role="dialog" aria-modal="true" aria-label="App walkthrough">
@@ -255,7 +270,7 @@ export function FeatureWalkthrough() {
           <p className="text-sm text-foreground/85 mt-1.5 leading-snug">{current.tip}</p>
 
           <div className="mt-3 flex items-center gap-1.5">
-            {FEATURE_TOUR_STEPS.map((s, i) => (
+            {steps.map((s, i) => (
               <span
                 key={s.id}
                 className={cn(
@@ -311,7 +326,8 @@ export function FeatureWalkthrough() {
 }
 
 /**
- * Auto-opens the spotlight walkthrough once after taste onboarding.
+ * Auto-opens the spotlight walkthrough once after first login (taste onboarding).
+ * Never re-opens on later visits unless the user taps Replay (Profile / Guide).
  * Mount once at App root (outside Layout) so overlays cover the full viewport.
  */
 export function FeatureWalkthroughHost() {
