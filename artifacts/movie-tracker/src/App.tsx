@@ -412,7 +412,7 @@ function ClerkProviderWithRoutes() {
       signUpFallbackRedirectUrl={absoluteAppUrl("/watched")}
       localization={{
         signIn: { start: { title: "Welcome back", subtitle: "Sign in to your Cinevault" } },
-        signUp: { start: { title: "Create your vault", subtitle: "Start tracking Indian cinema" } },
+        signUp: { start: { title: "Create your vault", subtitle: "Track every film you love" } },
       }}
       routerPush={(to) => setLocation(stripBase(to))}
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}

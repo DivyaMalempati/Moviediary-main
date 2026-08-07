@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/"
-title = "Indian Cinema Tracker"
+title = "Cinevault"
 version = "1.0.0"
 id = "artifacts/movie-tracker"
 router = "path"
