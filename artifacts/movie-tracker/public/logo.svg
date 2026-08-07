@@ -1,10 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
-  <rect width="48" height="48" rx="12" fill="#ffffff"/>
-  <rect x="8" y="14" width="32" height="22" rx="3" fill="#0a0a0a"/>
-  <rect x="8" y="14" width="32" height="4" rx="1" fill="#ffffff" opacity="0.15"/>
-  <rect x="11" y="11" width="4" height="6" rx="1" fill="#ffffff"/>
-  <rect x="33" y="11" width="4" height="6" rx="1" fill="#ffffff"/>
-  <rect x="19" y="11" width="4" height="4" rx="1" fill="#ffffff" opacity="0.5"/>
-  <rect x="25" y="11" width="4" height="4" rx="1" fill="#ffffff" opacity="0.5"/>
-  <path d="M20 26l8-4-8-4v8z" fill="#ffffff"/>
+  <!-- white rounded background matching the nav header -->
+  <rect width="48" height="48" rx="10" fill="#ffffff"/>
+  <!-- film body -->
+  <rect x="8" y="15" width="32" height="20" rx="2.5" fill="#0a0a0a"/>
+  <!-- clapperboard top bar -->
+  <rect x="8" y="14" width="32" height="5" rx="2" fill="#1a1a1a"/>
+  <!-- hinge teeth -->
+  <rect x="11" y="9" width="4" height="8" rx="1.5" fill="#1a1a1a"/>
+  <rect x="19" y="9" width="4" height="5" rx="1.5" fill="#1a1a1a" opacity="0.45"/>
+  <rect x="27" y="9" width="4" height="5" rx="1.5" fill="#1a1a1a" opacity="0.45"/>
+  <rect x="33" y="9" width="4" height="8" rx="1.5" fill="#1a1a1a"/>
+  <!-- play triangle -->
+  <path d="M21 26.5l7.5-3.5-7.5-3.5v7z" fill="#ffffff"/>
 </svg>
