@@ -37,12 +37,12 @@ const MVP_FEATURES: ReadonlySet<AppFeature> = new Set([
   "upcoming",
   "discover",
   "collections",
+  "import",
 ]);
 
 /** Lab / secondary features — hidden from nav until their own branch is ready. */
 const LAB_FEATURES: ReadonlySet<AppFeature> = new Set([
   "stats",
-  "import",
 ]);
 
 export function isFeatureEnabled(feature: AppFeature): boolean {
