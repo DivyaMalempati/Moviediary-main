@@ -472,7 +472,7 @@ Dune Part Two`}
           </div>
           <span className="text-xs text-muted-foreground">
             {preview.source === "list"
-              ? "Applies to all titles (add a "Watchlist" heading to override per-section)"
+              ? 'Applies to all titles (add a "Watchlist" heading to override per-section)'
               : preview.source === "generic" || preview.source === "cinevault"
               ? "Applies to rows without a status column"
               : "Applies to all titles without an explicit status"}
