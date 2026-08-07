@@ -8,10 +8,12 @@ import {
 } from "framer-motion";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { getPosterUrl, RATING_LABELS } from "@/lib/movie-utils";
-import { authFetch, ensureClerkApiSession, getAuthHeaders } from "@/lib/demo-auth";
+import { authFetch, ensureClerkApiSession, getAuthHeaders, isDemoMode, exitDemoToSignIn } from "@/lib/demo-auth";
 import { usePreferences, PreferencesAuthError } from "@/lib/preferences";
 import { invalidateLibrary } from "@/lib/queryClient";
+import { absoluteAppUrl } from "@/lib/app-url";
 import {
   dequeueOffline,
   enqueueOffline,
@@ -39,6 +41,13 @@ import {
   Users,
   Undo2,
   Shuffle,
+  Link2,
+  Copy,
+  Share2,
+  Play,
+  Unlink,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
@@ -1234,14 +1243,6 @@ function SwipeDeck() {
               <Tv className="w-3 h-3" />
               On my streaming services
             </button>
-            <button
-              type="button"
-              onClick={() => setLocation("/partner")}
-              className="shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-all inline-flex items-center gap-1.5 bg-transparent text-muted-foreground border-white/20 hover:border-white/40 hover:text-foreground"
-            >
-              <Users className="w-3 h-3" />
-              Watch together
-            </button>
           </div>
         </div>
 
@@ -1374,59 +1375,334 @@ function SwipeDeck() {
   );
 }
 
+// ── Together tab ───────────────────────────────────────────────────────────────
+
+async function copyText(text: string): Promise<boolean> {
+  try { await navigator.clipboard.writeText(text); return true; } catch { /* fall through */ }
+  try {
+    const el = document.createElement("textarea");
+    el.value = text; el.setAttribute("readonly", ""); el.style.position = "fixed"; el.style.left = "-9999px";
+    document.body.appendChild(el); el.select();
+    const ok = document.execCommand("copy"); document.body.removeChild(el); return ok;
+  } catch { return false; }
+}
+
+async function shareOrCopyLink(url: string, title: string): Promise<"shared" | "copied" | "shown"> {
+  let inIframe = false;
+  try { inIframe = window.self !== window.top; } catch { inIframe = true; }
+  if (!inIframe && typeof navigator?.share === "function") {
+    try { await navigator.share({ title, text: `${title}\n${url}`, url }); return "shared"; }
+    catch (err) { if (err instanceof DOMException && err.name === "AbortError") return "shown"; }
+  }
+  return (await copyText(url)) ? "copied" : "shown";
+}
+
+type PartnerInfo = { partnerLinkId: number; partnerUserId: string; displayName?: string | null; status: string; createdAt: string } | null;
+type TogetherSession = { id: number; status: string; deckSize: number; createdAt: string; path: string };
+type TogetherContact = { id: number; displayName: string; partnerUserId: string | null; status: "pending" | "paired" | "expired"; pendingInvite: { code: string; expiresAt: string; path: string } | null; sessions: TogetherSession[]; updatedAt: string };
+type Invite = { code: string; expiresAt: string; path: string; recipientName?: string };
+
+function TogetherTab() {
+  const [, setLocation] = useLocation();
+  const [partner, setPartner] = useState<PartnerInfo>(null);
+  const [invite, setInvite] = useState<Invite | null>(null);
+  const [sessions, setSessions] = useState<TogetherSession[]>([]);
+  const [contacts, setContacts] = useState<TogetherContact[]>([]);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [recipientName, setRecipientName] = useState("");
+  const [joinCode, setJoinCode] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [sessionShareUrl, setSessionShareUrl] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      await ensureClerkApiSession();
+      const [partnerRes, sessionsRes, contactsRes] = await Promise.all([
+        authFetch(`${BASE}/api/partners`),
+        authFetch(`${BASE}/api/match-sessions`),
+        authFetch(`${BASE}/api/partners/contacts`),
+      ]);
+      if (partnerRes.status === 401 || partnerRes.status === 403) { setPartner(null); setSessions([]); setContacts([]); setLoading(false); return; }
+      if (!partnerRes.ok) throw new Error("Failed to load partner");
+      setPartner(((await partnerRes.json()) as { partner: PartnerInfo }).partner);
+      if (sessionsRes.ok) setSessions(((await sessionsRes.json()) as { sessions: TogetherSession[] }).sessions ?? []);
+      if (contactsRes.ok) setContacts(((await contactsRes.json()) as { contacts: TogetherContact[] }).contacts ?? []);
+    } catch { toast.error("Couldn't load Together"); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { void refresh(); }, [refresh]);
+
+  const createInvite = async () => {
+    if (isDemoMode()) { exitDemoToSignIn(); return; }
+    const name = recipientName.trim();
+    if (!name) { toast.error("Add a name for who you're inviting"); return; }
+    setBusy(true);
+    try {
+      if (!(await ensureClerkApiSession())) { toast.error("Sign in again to create an invite"); return; }
+      const res = await authFetch(`${BASE}/api/partners/invite`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ recipientName: name }) });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); toast.error((e as any).error ?? "Couldn't create invite"); return; }
+      const data = (await res.json()) as Invite;
+      setInvite(data); setRecipientName("");
+      const url = absoluteAppUrl(data.path);
+      const result = await shareOrCopyLink(url, "Join me on Cinevault for movie night");
+      toast.success(result === "shared" ? `Invite ready for ${data.recipientName ?? name} — shared` : result === "copied" ? `Invite link copied for ${data.recipientName ?? name}` : `Invite ready — copy the link below`);
+      await refresh();
+    } catch { toast.error("Couldn't create invite"); }
+    finally { setBusy(false); }
+  };
+
+  const join = async (code?: string) => {
+    if (isDemoMode()) { exitDemoToSignIn(); return; }
+    const raw = (code ?? joinCode).trim(); if (!raw) return;
+    setBusy(true);
+    try {
+      await ensureClerkApiSession();
+      const res = await authFetch(`${BASE}/api/partners/join`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: raw.toLowerCase() }) });
+      const e = await res.json().catch(() => ({}));
+      if (!res.ok) { toast.error((e as any).error ?? "Couldn't join"); return; }
+      toast.success("You're in — start a movie night when you're ready"); setJoinCode(""); setInvite(null); await refresh();
+    } catch { toast.error("Couldn't join with that code"); }
+    finally { setBusy(false); }
+  };
+
+  const unlink = async () => {
+    setBusy(true);
+    try {
+      const res = await authFetch(`${BASE}/api/partners`, { method: "DELETE" });
+      if (!res.ok && res.status !== 204) throw new Error();
+      toast.success("Movie-night pair cleared"); setPartner(null); setSessions([]); setSessionShareUrl(null); await refresh();
+    } catch { toast.error("Couldn't clear pair"); }
+    finally { setBusy(false); }
+  };
+
+  const startMatch = async () => {
+    if (isDemoMode()) { exitDemoToSignIn(); return; }
+    setBusy(true);
+    try {
+      await ensureClerkApiSession();
+      const res = await authFetch(`${BASE}/api/match-sessions`, { method: "POST", headers: { "Content-Type": "application/json" } });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); toast.error((e as any).error ?? "Couldn't start movie night"); return; }
+      const data = (await res.json()) as { id: number };
+      const url = absoluteAppUrl(`/match/${data.id}`);
+      setSessionShareUrl(url);
+      try { await navigator.clipboard.writeText(url); toast.success("Movie-night link copied — share it so you can both swipe"); } catch { toast.success("Deck ready — share the link below so they can join"); }
+      setLocation(`/match/${data.id}`);
+    } catch { toast.error("Couldn't start movie night"); }
+    finally { setBusy(false); }
+  };
+
+  const copyInviteLink = async (path?: string) => {
+    const p = path ?? invite?.path; if (!p) return;
+    const url = absoluteAppUrl(p);
+    const r = await shareOrCopyLink(url, "Join me on Cinevault for movie night");
+    if (r === "shared") toast.success("Invite shared"); else if (r === "copied") toast.success("Invite link copied"); else toast.message(url);
+  };
+
+  const copySessionLink = async (path: string) => {
+    const url = absoluteAppUrl(path);
+    const r = await shareOrCopyLink(url, "Join our Cinevault movie night");
+    if (r === "shared") toast.success("Link shared"); else if (r === "copied") toast.success("Link copied"); else toast.message(url);
+  };
+
+  if (loading) return <div className="flex justify-center py-16"><Loader2 className="w-7 h-7 animate-spin text-muted-foreground" /></div>;
+
+  const partnerLabel = partner?.displayName?.trim() || "your partner";
+
+  return (
+    <div className="max-w-lg mx-auto px-4 py-6 space-y-7 pb-28">
+
+      {isDemoMode() && (
+        <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 space-y-2">
+          <p className="text-sm text-sky-50">Movie night needs a signed-in account on both devices.</p>
+          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => exitDemoToSignIn()}>Sign in to use Together</Button>
+        </div>
+      )}
+
+      {/* Paired — start movie night */}
+      {partner && (
+        <section className="space-y-5">
+          <div className="rounded-2xl border-2 border-primary/40 bg-primary/10 p-5 space-y-4">
+            <div className="space-y-1">
+              <p className="text-xs uppercase tracking-widest text-primary flex items-center gap-1.5 font-semibold">
+                <Heart className="w-3.5 h-3.5" /> Paired with {partnerLabel}
+              </p>
+              <p className="text-sm text-foreground/80 leading-relaxed">
+                Start a shared deck — you'll both swipe the same films and see your mutual likes.
+              </p>
+            </div>
+            <Button size="lg" onClick={startMatch} disabled={busy} className="w-full h-12 text-base gap-2 bg-white text-black hover:bg-white/90">
+              {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5" />}
+              Start movie night &amp; swipe
+            </Button>
+          </div>
+
+          {sessions.length > 0 && (
+            <div className="space-y-2">
+              <h2 className="text-sm font-semibold">Recent sessions with {partnerLabel}</h2>
+              <ul className="space-y-2">
+                {sessions.map((s) => (
+                  <li key={s.id} className="flex items-center gap-2 rounded-lg border border-border bg-secondary/30 px-3 py-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">Deck · {s.deckSize} films</p>
+                      <p className="text-[11px] text-muted-foreground">{new Date(s.createdAt).toLocaleString()}</p>
+                    </div>
+                    <Button size="sm" variant="secondary" onClick={() => copySessionLink(s.path)} className="gap-1"><Copy className="w-3 h-3" />Share</Button>
+                    <Button size="sm" onClick={() => setLocation(s.path)} className="gap-1"><Shuffle className="w-3 h-3" />Swipe</Button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {sessionShareUrl && (
+            <div className="rounded-xl border border-border bg-card p-4 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Send this so they can swipe the same deck</p>
+              <p className="text-xs break-all text-muted-foreground">{sessionShareUrl}</p>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={unlink} disabled={busy} className="gap-2"><Unlink className="w-4 h-4" />Clear pair</Button>
+          </div>
+        </section>
+      )}
+
+      {/* Invite section */}
+      <section className="space-y-4">
+        <div className="space-y-1">
+          <h2 className="text-sm font-semibold flex items-center gap-2"><Link2 className="w-4 h-4" />{partner ? "Invite someone else" : "Invite someone"}</h2>
+          <p className="text-xs text-muted-foreground">Name who you're sending this to — we'll keep their sessions here.{partner ? " Joining a new invite clears your current pair." : ""}</p>
+        </div>
+        <div className="flex gap-2">
+          <Input value={recipientName} onChange={(e) => setRecipientName(e.target.value)} placeholder="Their name (e.g. Priya)" maxLength={60} onKeyDown={(e) => e.key === "Enter" && void createInvite()} />
+          <Button onClick={createInvite} disabled={busy || !recipientName.trim()}>Invite</Button>
+        </div>
+        {invite && (
+          <div className="rounded-xl border border-border bg-secondary/40 p-4 space-y-3">
+            <p className="text-sm font-medium">Invite for {invite.recipientName ?? "friend"}</p>
+            <p className="font-mono text-lg tracking-wide">{invite.code}</p>
+            <Input readOnly value={typeof window !== "undefined" ? absoluteAppUrl(invite.path) : invite.path} className="font-mono text-xs h-9" onFocus={(e) => e.currentTarget.select()} />
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="secondary" onClick={() => copyInviteLink()} className="gap-2"><Share2 className="w-3.5 h-3.5" />Share / copy</Button>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Join with code */}
+      {!partner && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold">Or enter their invite code</h2>
+          <div className="flex gap-2">
+            <Input value={joinCode} onChange={(e) => setJoinCode(e.target.value)} placeholder="reel-a1b2c3d4" className="font-mono" onKeyDown={(e) => e.key === "Enter" && void join()} />
+            <Button onClick={() => join()} disabled={busy || !joinCode.trim()}>Join</Button>
+          </div>
+        </section>
+      )}
+
+      {/* Contacts */}
+      {contacts.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold">People you've invited</h2>
+          <ul className="space-y-2">
+            {contacts.map((c) => {
+              const open = expandedId === c.id;
+              return (
+                <li key={c.id} className="rounded-xl border border-border bg-card overflow-hidden">
+                  <button type="button" className="w-full flex items-center gap-2 px-3 py-3 text-left hover:bg-secondary/40 transition-colors" onClick={() => setExpandedId(open ? null : c.id)}>
+                    {open ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{c.displayName}</p>
+                      <p className="text-[11px] text-muted-foreground capitalize">{c.status}{c.sessions.length ? ` · ${c.sessions.length} session${c.sessions.length === 1 ? "" : "s"}` : ""}</p>
+                    </div>
+                    {c.pendingInvite && (
+                      <Button size="sm" variant="secondary" className="h-7 text-xs gap-1" onClick={(e) => { e.stopPropagation(); void copyInviteLink(c.pendingInvite!.path); }}>
+                        <Copy className="w-3 h-3" />Link
+                      </Button>
+                    )}
+                  </button>
+                  {open && (
+                    <div className="px-3 pb-3 space-y-2 border-t border-border/60 pt-2">
+                      {c.sessions.length === 0 ? (
+                        <p className="text-xs text-muted-foreground pl-6">{c.status === "pending" ? "Waiting for them to open the invite." : "No sessions yet."}</p>
+                      ) : c.sessions.map((s) => (
+                        <div key={s.id} className="flex items-center gap-2 rounded-lg bg-secondary/30 px-3 py-2 ml-6">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium">{s.status === "active" ? "Active" : "Past"} · {s.deckSize} films</p>
+                            <p className="text-[10px] text-muted-foreground">{new Date(s.createdAt).toLocaleString()}</p>
+                          </div>
+                          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setLocation(s.path)}>Open</Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+    </div>
+  );
+}
+
+// ── SwipePage shell with Solo / Together tabs ──────────────────────────────────
 export default function SwipePage() {
+  const [mode, setMode] = useState<"solo" | "together">("solo");
   const { data: prefs, isLoading, isError, error, refetch } = usePreferences();
 
   if (isLoading) {
     return (
-      <>
-        <div className="flex items-center justify-center py-24 text-muted-foreground">
-          <Loader2 className="w-6 h-6 animate-spin" />
-        </div>
-      </>
+      <div className="flex items-center justify-center py-24 text-muted-foreground">
+        <Loader2 className="w-6 h-6 animate-spin" />
+      </div>
     );
   }
 
   if (isError) {
     const authFailed = error instanceof PreferencesAuthError;
     return (
-      <>
-        <div className="flex flex-col items-center justify-center gap-3 py-24 px-6 text-center">
-          <p className="text-sm text-muted-foreground max-w-sm">
-            {authFailed
-              ? "Couldn't sync your account session for Swipe. Retry, or refresh if it keeps failing."
-              : "Couldn't load your preferences. Try again."}
-          </p>
-          <button
-            type="button"
-            className="text-sm underline text-foreground"
-            onClick={() => void refetch()}
-          >
-            Retry
-          </button>
-          {authFailed && (
+      <div className="flex flex-col items-center justify-center gap-3 py-24 px-6 text-center">
+        <p className="text-sm text-muted-foreground max-w-sm">
+          {authFailed ? "Couldn't sync your account session for Swipe. Retry, or refresh if it keeps failing." : "Couldn't load your preferences. Try again."}
+        </p>
+        <button type="button" className="text-sm underline text-foreground" onClick={() => void refetch()}>Retry</button>
+        {authFailed && <button type="button" className="text-xs text-muted-foreground underline" onClick={() => window.location.reload()}>Refresh page</button>}
+      </div>
+    );
+  }
+
+  if (!prefs?.onboardingCompletedAt && mode === "solo") {
+    return <OnboardingPreferences onComplete={() => void refetch()} />;
+  }
+
+  return (
+    <>
+      {/* Solo / Together tab bar */}
+      <div className="flex items-center justify-center gap-1 pt-4 pb-1">
+        <div className="inline-flex rounded-full border border-border bg-secondary/40 p-0.5">
+          {(["solo", "together"] as const).map((m) => (
             <button
+              key={m}
               type="button"
-              className="text-xs text-muted-foreground underline"
-              onClick={() => window.location.reload()}
+              onClick={() => setMode(m)}
+              className={cn(
+                "px-5 py-1.5 rounded-full text-sm font-medium transition-all capitalize flex items-center gap-1.5",
+                mode === m
+                  ? "bg-white text-black shadow"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
             >
-              Refresh page
+              {m === "together" && <Users className="w-3.5 h-3.5" />}
+              {m === "solo" ? "Solo" : "Together"}
             </button>
-          )}
+          ))}
         </div>
-      </>
-    );
-  }
+      </div>
 
-  if (!prefs?.onboardingCompletedAt) {
-    return (
-      <OnboardingPreferences
-        onComplete={() => {
-          void refetch();
-        }}
-      />
-    );
-  }
-
-  return <SwipeDeck />;
+      {mode === "solo" ? <SwipeDeck /> : <TogetherTab />}
+    </>
+  );
 }
