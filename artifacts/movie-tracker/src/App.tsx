@@ -78,10 +78,12 @@ if (!clerkPubKey && !isDemoMode() && import.meta.env.PROD) {
 const clerkAppearance = {
   baseTheme: dark,
   cssLayerName: "clerk",
-  options: {
+  layout: {
     logoPlacement: "inside" as const,
     logoLinkUrl: basePath || "/",
     logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
+    /** Hide the orange "Development mode" footer on Clerk components (dev instance keys). */
+    unsafe_disableDevelopmentModeWarnings: true,
   },
   variables: {
     colorPrimary: "#ffffff",
@@ -92,17 +94,23 @@ const clerkAppearance = {
     colorInput: "#1a1a1a",
     colorInputForeground: "#f0f0f0",
     colorNeutral: "#333333",
+    colorText: "#f0f0f0",
+    colorTextSecondary: "#888888",
     fontFamily: "'Outfit', sans-serif",
     borderRadius: "0.75rem",
   },
   elements: {
-    rootBox: "w-full flex justify-center",
-    cardBox: "bg-[#111111] rounded-2xl w-[440px] max-w-full overflow-hidden border border-white/10",
+    rootBox: "w-full flex justify-center px-4",
+    cardBox:
+      "bg-[#111111] rounded-2xl w-full max-w-[min(100%,440px)] overflow-hidden border border-white/10 mx-auto",
     card: "!shadow-none !border-0 !bg-transparent !rounded-none",
     footer: "!shadow-none !border-0 !bg-transparent !rounded-none",
     headerTitle: "text-white font-bold",
     headerSubtitle: "text-[#888888]",
-    socialButtonsBlockButtonText: "text-[#f0f0f0]",
+    socialButtonsBlockButton:
+      "border-white/25 hover:border-white/45 !bg-white/10 hover:!bg-white/15 !text-[#f0f0f0]",
+    socialButtonsBlockButtonText: "!text-[#f0f0f0] font-medium",
+    socialButtonsProviderIcon__google: "brightness-100",
     formFieldLabel: "text-[#aaaaaa]",
     footerActionLink: "text-white hover:text-white/80",
     footerActionText: "text-[#666666]",
@@ -112,7 +120,6 @@ const clerkAppearance = {
     alertText: "text-[#f0f0f0]",
     logoBox: "flex justify-center",
     logoImage: "h-10 w-10",
-    socialButtonsBlockButton: "border-white/20 hover:border-white/40 bg-white/5 hover:bg-white/10",
     formButtonPrimary: "bg-white text-black hover:bg-white/90",
     formFieldInput: "bg-[#1a1a1a] border-white/20 text-white",
     footerAction: "bg-transparent",
