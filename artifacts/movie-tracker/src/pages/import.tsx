@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Upload, FileText, CheckCircle2, XCircle, AlertCircle,
-  Loader2, Download, Copy, RefreshCw,
+  Loader2, Download, Copy, RefreshCw, Film,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -19,7 +19,6 @@ interface ImportRow {
   status: string;
   rating?: string;
   year?: number;
-  /** Optional watch day from CSV (YYYY-MM-DD). */
   watchedAt?: string;
 }
 
@@ -36,9 +35,8 @@ interface ImportResult {
   results: ResultRow[];
 }
 
-// ── CSV parser (client-side) ─────────────────────────────────────────────────
+// ── CSV parser ───────────────────────────────────────────────────────────────
 
-/** Split one CSV line into fields, respecting double-quoted values. */
 function splitCSVLine(line: string): string[] {
   const cols: string[] = [];
   let cur = "";
@@ -52,17 +50,29 @@ function splitCSVLine(line: string): string[] {
   return cols;
 }
 
-function parseCSV(text: string): ImportRow[] {
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  if (lines.length === 0) return [];
+/** Letterboxd exports ratings on a 0.5–5 scale. Map to our 1–10 equivalents. */
+function scaleLetterboxdRating(raw: string): string | undefined {
+  const n = parseFloat(raw);
+  if (isNaN(n)) return undefined;
+  // Multiply by 2 so the backend's 1-10 numeric mapper picks the right label
+  return String(Math.round(n * 2 * 10) / 10);
+}
 
-  // Detect header
+function isLetterboxdCsv(headerCols: string[]): boolean {
+  // Letterboxd diary/ratings exports always have "name" and "letterboxd uri"
+  return headerCols.includes("name") && headerCols.includes("letterboxd uri");
+}
+
+function parseCSV(text: string): { rows: ImportRow[]; source: "letterboxd" | "cinevault" | "generic" } {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length === 0) return { rows: [], source: "generic" };
+
   const first = lines[0].toLowerCase();
-  const hasHeader = first.includes("title") || first.includes("status") || first.includes("rating");
+  const hasHeader =
+    first.includes("title") || first.includes("status") ||
+    first.includes("rating") || first.includes("name");
 
   if (hasHeader) {
-    // Use named columns so any column order works (handles both import template
-    // and the CSV exported from the Watched page).
     const headerCols = splitCSVLine(lines[0]).map((c) => c.toLowerCase().trim());
     const idx = (...names: string[]) => {
       for (const name of names) {
@@ -71,13 +81,39 @@ function parseCSV(text: string): ImportRow[] {
       }
       return -1;
     };
-    const titleIdx  = idx("title");
-    const statusIdx = idx("status");
-    const ratingIdx = idx("rating");
-    const yearIdx   = idx("year");
-    const watchedIdx = idx("watched_at", "watchedat", "watched", "date", "watch_date");
 
-    return lines.slice(1).map((line) => {
+    // ── Letterboxd format ────────────────────────────────────────────────────
+    if (isLetterboxdCsv(headerCols)) {
+      const nameIdx    = idx("name");
+      const yearIdx    = idx("year");
+      const ratingIdx  = idx("rating");
+      const watchedIdx = idx("watched date", "watch date", "date");
+
+      const rows = lines.slice(1).map((line) => {
+        const cols = splitCSVLine(line);
+        const title = (nameIdx >= 0 ? cols[nameIdx] : cols[0]) ?? "";
+        const yearRaw = (yearIdx >= 0 ? cols[yearIdx] : "") ?? "";
+        const year = yearRaw ? parseInt(yearRaw, 10) || undefined : undefined;
+        const ratingRaw = (ratingIdx >= 0 ? cols[ratingIdx] : "") ?? "";
+        const rating = ratingRaw ? scaleLetterboxdRating(ratingRaw) : undefined;
+        const watchedRaw = (watchedIdx >= 0 ? cols[watchedIdx] : "") ?? "";
+        const watchedAt = watchedRaw.trim() || undefined;
+        return { title, status: "watched" as const, rating, year, watchedAt };
+      }).filter((r) => r.title.length > 0);
+
+      return { rows, source: "letterboxd" };
+    }
+
+    // ── Cinevault / generic CSV with header ──────────────────────────────────
+    const titleIdx   = idx("title", "name");
+    const statusIdx  = idx("status");
+    const ratingIdx  = idx("rating");
+    const yearIdx    = idx("year");
+    const watchedIdx = idx("watched_at", "watchedat", "watched date", "watch date", "watched", "date", "watch_date");
+
+    const isCinevault = headerCols.includes("status");
+
+    const rows = lines.slice(1).map((line) => {
       const cols = splitCSVLine(line);
       const title = (titleIdx >= 0 ? cols[titleIdx] : cols[0]) ?? "";
       const statusRaw = (statusIdx >= 0 ? cols[statusIdx] : "") ?? "";
@@ -92,10 +128,12 @@ function parseCSV(text: string): ImportRow[] {
       const watchedAt = watchedRaw.trim() || undefined;
       return { title, status, rating, year, watchedAt };
     }).filter((r) => r.title.length > 0);
+
+    return { rows, source: isCinevault ? "cinevault" : "generic" };
   }
 
-  // No header — fall back to positional (title, status, rating, year, watched_at)
-  return lines.map((line) => {
+  // No header — positional fallback
+  const rows = lines.map((line) => {
     const cols = splitCSVLine(line);
     const title = cols[0] ?? "";
     const status = (["watched", "watchlist"].includes(cols[1]?.toLowerCase())
@@ -106,9 +144,12 @@ function parseCSV(text: string): ImportRow[] {
     const watchedAt = cols[4]?.trim() || undefined;
     return { title, status, rating, year, watchedAt };
   }).filter((r) => r.title.length > 0);
+
+  return { rows, source: "generic" };
 }
 
-// Strip emoji characters from a string
+// ── Plain title list ─────────────────────────────────────────────────────────
+
 function stripEmoji(s: string): string {
   return s
     .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")
@@ -119,7 +160,6 @@ function stripEmoji(s: string): string {
     .trim();
 }
 
-// Normalise a line to a potential status heading, e.g. "# Watched", "Watchlist:", "WATCHLIST"
 function asStatusHeading(line: string): "watched" | "watchlist" | null {
   const norm = line.replace(/^#+\s*/, "").replace(/:$/, "").trim().toLowerCase();
   if (norm === "watched") return "watched";
@@ -127,32 +167,18 @@ function asStatusHeading(line: string): "watched" | "watchlist" | null {
   return null;
 }
 
-// Plain title list (one per line, no commas needed).
-// Supports:
-//   - Optional section headings: "Watched" / "Watchlist"
-//   - Numbered lists: "1. Title", "1) Title"
-//   - Emojis (stripped automatically)
-//   - Parenthetical notes after the title are preserved for the search to handle
 function parseTitleList(text: string): ImportRow[] {
   let currentStatus: "watched" | "watchlist" = "watched";
   const results: ImportRow[] = [];
-
-  // Detect if this is a numbered list (e.g. "1. Title")
   const isNumbered = /^\s*\d+[.)]\s+\S/.test(text);
 
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line) continue;
-
-    // Status heading?
     const heading = asStatusHeading(stripEmoji(line));
     if (heading) { currentStatus = heading; continue; }
-
-    // Plain comment
     if (line.startsWith("//")) continue;
-
     if (isNumbered) {
-      // Only process lines that match "N. Title" or "N) Title" — skip prose headers/footers
       const match = line.match(/^\d+[.)]\s+(.+)$/);
       if (!match) continue;
       const title = stripEmoji(match[1]).trim();
@@ -165,51 +191,62 @@ function parseTitleList(text: string): ImportRow[] {
   return results.filter((r) => r.title.length > 0);
 }
 
-// ── Template CSV content ─────────────────────────────────────────────────────
-const TEMPLATE_CSV = `title,status,rating,year,language,watched_at
-"Baahubali 2: The Conclusion",watched,very_good,2017,te,2017-04-28
-"RRR",watched,loved,2022,te,
-"The Dark Knight",watched,loved,2008,en,2008-07-18
-"Parasite",watched,loved,2019,ko,
-"My watchlist film",watchlist,,2025,en,`;
+// ── Parse entry point ─────────────────────────────────────────────────────────
 
+function parseInput(raw: string): { rows: ImportRow[]; source: "letterboxd" | "cinevault" | "generic" | "list" } {
+  const hasCsv = raw.includes(",");
+  if (hasCsv) return parseCSV(raw);
+  return { rows: parseTitleList(raw), source: "list" };
+}
+
+// ── Template ─────────────────────────────────────────────────────────────────
+const TEMPLATE_CSV = `title,status,rating,year,watched_at
+"Baahubali 2: The Conclusion",watched,very_good,2017,2017-04-28
+"RRR",watched,loved,2022,
+"The Dark Knight",watched,loved,2008,2008-07-18
+"Parasite",watched,loved,2019,
+"My watchlist film",watchlist,,2025,`;
+
+// ── Status display ────────────────────────────────────────────────────────────
 const STATUS_ICON: Record<ResultRow["status"], React.ReactNode> = {
-  added: <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />,
-  updated: <CheckCircle2 className="w-4 h-4 text-blue-400 flex-shrink-0" />,
-  duplicate: <AlertCircle className="w-4 h-4 text-yellow-400 flex-shrink-0" />,
-  not_found: <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />,
-  error: <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />,
+  added:     <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />,
+  updated:   <CheckCircle2 className="w-4 h-4 text-blue-400 flex-shrink-0" />,
+  duplicate: <AlertCircle  className="w-4 h-4 text-yellow-400 flex-shrink-0" />,
+  not_found: <XCircle      className="w-4 h-4 text-red-400 flex-shrink-0" />,
+  error:     <XCircle      className="w-4 h-4 text-red-400 flex-shrink-0" />,
 };
 
 const STATUS_LABEL: Record<ResultRow["status"], string> = {
-  added: "Added",
-  updated: "Rating updated",
+  added:     "Added",
+  updated:   "Rating updated",
   duplicate: "Already in library",
-  not_found: "Not found on TMDB",
-  error: "Error",
+  not_found: "Not found",
+  error:     "Error",
 };
+
+const CHUNK_SIZE = 25;
 
 // ── Component ────────────────────────────────────────────────────────────────
 export default function ImportPage() {
   const [text, setText] = useState("");
   const [dragging, setDragging] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
-  const [preview, setPreview] = useState<ImportRow[]>([]);
+  const [preview, setPreview] = useState<{ rows: ImportRow[]; source: string }>({ rows: [], source: "" });
   const fileRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
 
   const parse = useCallback((raw: string) => {
-    const hasCsv = raw.includes(",");
-    const rows = hasCsv ? parseCSV(raw) : parseTitleList(raw);
-    setPreview(rows);
-    return rows;
+    const parsed = parseInput(raw);
+    setPreview(parsed);
+    return parsed;
   }, []);
 
   const handleText = (val: string) => {
     setText(val);
     if (val.trim()) parse(val);
-    else setPreview([]);
+    else setPreview({ rows: [], source: "" });
   };
 
   const handleFile = (file: File) => {
@@ -227,45 +264,62 @@ export default function ImportPage() {
   };
 
   const runImport = async () => {
-    const rows = parse(text);
-    if (rows.length === 0) { toast.error("Nothing to import — paste titles or upload a CSV"); return; }
+    const { rows } = parse(text);
+    if (rows.length === 0) {
+      toast.error("Nothing to import — paste titles or upload a CSV");
+      return;
+    }
 
     setImporting(true);
     setResult(null);
+    setProgress({ done: 0, total: rows.length });
+
+    const allResults: ResultRow[] = [];
+    const summary = { added: 0, updated: 0, duplicates: 0, notFound: 0, errors: 0 };
+
     try {
       const headers = await getAuthHeaders({ "Content-Type": "application/json" });
 
-      const res = await fetch(`${BASE}/api/import`, {
-        method: "POST",
-        headers,
-        credentials: "include",
-        body: JSON.stringify({ rows }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as any).error ?? `HTTP ${res.status}`);
-      }
-      const data: ImportResult = await res.json();
-      setResult(data);
+      // Send in chunks so the user sees progress
+      for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+        const chunk = rows.slice(i, i + CHUNK_SIZE);
+        const res = await fetch(`${BASE}/api/import`, {
+          method: "POST",
+          headers,
+          credentials: "include",
+          body: JSON.stringify({ rows: chunk }),
+        });
 
-      // Invalidate library + stats queries
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error((err as any).error ?? `HTTP ${res.status}`);
+        }
+
+        const data: ImportResult = await res.json();
+        allResults.push(...data.results);
+        summary.added      += data.summary.added;
+        summary.updated    += data.summary.updated ?? 0;
+        summary.duplicates += data.summary.duplicates;
+        summary.notFound   += data.summary.notFound;
+        summary.errors     += data.summary.errors;
+
+        setProgress({ done: Math.min(i + CHUNK_SIZE, rows.length), total: rows.length });
+      }
+
+      setResult({ summary, results: allResults });
       qc.invalidateQueries({ queryKey: getListMoviesQueryKey() });
       qc.invalidateQueries({ queryKey: getGetMovieStatsQueryKey() });
 
-      const added = data.summary.added;
-      const updated = data.summary.updated ?? 0;
-      if (added > 0 || updated > 0) {
-        const parts: string[] = [];
-        if (added > 0) parts.push(`${added} movie${added !== 1 ? "s" : ""} added`);
-        if (updated > 0) parts.push(`${updated} rating${updated !== 1 ? "s" : ""} updated`);
-        toast.success(parts.join(", "));
-      } else {
-        toast.info("No new movies were added");
-      }
+      const parts: string[] = [];
+      if (summary.added   > 0) parts.push(`${summary.added} added`);
+      if (summary.updated > 0) parts.push(`${summary.updated} rating${summary.updated !== 1 ? "s" : ""} updated`);
+      if (parts.length > 0) toast.success(parts.join(", "));
+      else toast.info("No new movies were added");
     } catch (err) {
       toast.error(String(err));
     } finally {
       setImporting(false);
+      setProgress(null);
     }
   };
 
@@ -286,180 +340,212 @@ export default function ImportPage() {
     }
   };
 
-  return (
-    <>
-      <div className="p-4 md:p-8 max-w-3xl mx-auto space-y-8">
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold mb-1">Import Movies</h1>
-          <p className="text-muted-foreground text-sm">
-            Paste a list of titles or upload a CSV. Each title is looked up on TMDB automatically.
-            If a watched title has no date, we use the film’s release date.
-          </p>
-        </div>
+  const sourceLabel: Record<string, string> = {
+    letterboxd: "Letterboxd export detected ✓",
+    cinevault:  "Cinevault export detected ✓",
+    generic:    "CSV detected",
+    list:       "Title list detected",
+  };
 
-        {/* Format hint */}
-        <div className="rounded-xl border border-border bg-card/50 p-4 space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Accepted formats</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-            <div className="space-y-1">
-              <p className="font-medium text-foreground/80">Plain list with headings</p>
-              <pre className="text-xs text-muted-foreground bg-background/60 rounded-lg p-3 font-mono">
+  return (
+    <div className="p-4 md:p-8 max-w-3xl mx-auto space-y-8">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold mb-1">Import Movies</h1>
+        <p className="text-muted-foreground text-sm">
+          Paste a list of titles, upload a CSV, or drop your Letterboxd export.
+          Each title is matched on TMDB automatically.
+        </p>
+      </div>
+
+      {/* Format cards */}
+      <div className="rounded-xl border border-border bg-card/50 p-4 space-y-4">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Accepted formats</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+
+          {/* Letterboxd */}
+          <div className="space-y-1.5">
+            <p className="font-medium text-foreground/90 flex items-center gap-1.5">
+              <Film className="w-3.5 h-3.5 text-primary" /> Letterboxd
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Export your diary from{" "}
+              <span className="font-mono text-[11px]">letterboxd.com → Settings → Import &amp; Export</span>.
+              Drop the <span className="font-mono text-[11px]">diary.csv</span> or{" "}
+              <span className="font-mono text-[11px]">ratings.csv</span> file here — ratings and dates import automatically.
+            </p>
+          </div>
+
+          {/* Plain list */}
+          <div className="space-y-1.5">
+            <p className="font-medium text-foreground/90">Plain list</p>
+            <pre className="text-xs text-muted-foreground bg-background/60 rounded-lg p-2.5 font-mono leading-relaxed">
 {`Watched
 RRR
 The Dark Knight
-Parasite
 
 Watchlist
-Dune Part Two
-Oppenheimer`}
-              </pre>
-              <p className="text-xs text-muted-foreground">Heading sets the destination — "Watched" or "Watchlist". No heading = Watched.</p>
-            </div>
-            <div className="space-y-1">
-              <p className="font-medium text-foreground/80">CSV with metadata</p>
-              <pre className="text-xs text-muted-foreground bg-background/60 rounded-lg p-3 font-mono">
-{`title,status,rating,year,watched_at
-"RRR",watched,loved,2022,
-"Parasite",watched,loved,2019,2019-05-30`}
-              </pre>
-              <p className="text-xs text-muted-foreground">
-                Ratings: loved · great · very_good · good · ok · avg · meh.
-                Optional <span className="font-mono">watched_at</span> (YYYY-MM-DD); blank → release date.
-              </p>
-            </div>
+Dune Part Two`}
+            </pre>
+            <p className="text-xs text-muted-foreground">Heading sets destination. No heading = Watched.</p>
           </div>
-          <div className="flex gap-2 pt-1">
-            <Button variant="outline" size="sm" onClick={downloadTemplate} className="gap-1.5 text-xs h-7">
-              <Download className="w-3 h-3" /> Download template
-            </Button>
-            <Button variant="outline" size="sm" onClick={copyTemplate} className="gap-1.5 text-xs h-7">
-              <Copy className="w-3 h-3" /> Copy template
-            </Button>
+
+          {/* CSV */}
+          <div className="space-y-1.5">
+            <p className="font-medium text-foreground/90">CSV with metadata</p>
+            <pre className="text-xs text-muted-foreground bg-background/60 rounded-lg p-2.5 font-mono leading-relaxed">
+{`title,status,rating,year
+"RRR",watched,loved,2022
+"Dune",watchlist,,2021`}
+            </pre>
+            <p className="text-xs text-muted-foreground">
+              Ratings: loved · great · very_good · good · ok · avg · meh
+            </p>
           </div>
         </div>
 
-        {/* Drop zone + textarea */}
-        <div
-          className={cn(
-            "relative rounded-xl border-2 border-dashed transition-colors",
-            dragging ? "border-primary bg-primary/5" : "border-border"
-          )}
-          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={handleDrop}
-        >
-          {text.trim().length === 0 && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none select-none py-8">
-              <Upload className="w-8 h-8 text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">
-                Drop a .csv or .txt file here, or paste below
-              </p>
-            </div>
-          )}
-          <Textarea
-            value={text}
-            onChange={(e) => handleText(e.target.value)}
-            placeholder=""
-            className="min-h-[200px] bg-transparent border-0 focus-visible:ring-0 resize-y font-mono text-sm"
-          />
+        <div className="flex gap-2 pt-1">
+          <Button variant="outline" size="sm" onClick={downloadTemplate} className="gap-1.5 text-xs h-7">
+            <Download className="w-3 h-3" /> Download template
+          </Button>
+          <Button variant="outline" size="sm" onClick={copyTemplate} className="gap-1.5 text-xs h-7">
+            <Copy className="w-3 h-3" /> Copy template
+          </Button>
         </div>
+      </div>
 
-        {/* File picker */}
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".csv,.txt"
-          className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+      {/* Drop zone + textarea */}
+      <div
+        className={cn(
+          "relative rounded-xl border-2 border-dashed transition-colors",
+          dragging ? "border-primary bg-primary/5" : "border-border"
+        )}
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={handleDrop}
+      >
+        {text.trim().length === 0 && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none select-none py-8">
+            <Upload className="w-8 h-8 text-muted-foreground/40" />
+            <p className="text-sm text-muted-foreground">
+              Drop a .csv or .txt file here, or paste below
+            </p>
+          </div>
+        )}
+        <Textarea
+          value={text}
+          onChange={(e) => handleText(e.target.value)}
+          placeholder=""
+          className="min-h-[200px] bg-transparent border-0 focus-visible:ring-0 resize-y font-mono text-sm"
         />
+      </div>
 
-        {/* Actions row */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <Button
-            variant="outline"
-            onClick={() => fileRef.current?.click()}
-            className="gap-2"
-          >
-            <FileText className="w-4 h-4" /> Browse file
-          </Button>
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".csv,.txt"
+        className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+      />
 
-          {preview.length > 0 && (
-            <span className="text-sm text-muted-foreground">
-              {preview.length} row{preview.length !== 1 ? "s" : ""} detected
-            </span>
-          )}
+      {/* Actions row */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <Button variant="outline" onClick={() => fileRef.current?.click()} className="gap-2">
+          <FileText className="w-4 h-4" /> Browse file
+        </Button>
 
-          <Button
-            onClick={runImport}
-            disabled={importing || preview.length === 0}
-            className="ml-auto gap-2 bg-white text-black hover:bg-white/90"
-          >
-            {importing ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> Importing…</>
-            ) : (
-              <><Upload className="w-4 h-4" /> Import {preview.length > 0 ? preview.length : ""} movies</>
+        {preview.rows.length > 0 && (
+          <span className="text-sm text-muted-foreground">
+            {sourceLabel[preview.source] && (
+              <span className="text-primary font-medium mr-1">{sourceLabel[preview.source]}</span>
             )}
-          </Button>
-        </div>
+            {preview.rows.length} row{preview.rows.length !== 1 ? "s" : ""} ready
+          </span>
+        )}
 
-        {/* Results */}
-        {result && (
-          <div className="space-y-4">
-            {/* Summary */}
-            <div className="grid grid-cols-5 gap-3">
-              {[
-                { label: "Added", value: result.summary.added, color: "text-green-400" },
-                { label: "Updated", value: result.summary.updated ?? 0, color: "text-blue-400" },
-                { label: "Duplicates", value: result.summary.duplicates, color: "text-yellow-400" },
-                { label: "Not found", value: result.summary.notFound, color: "text-red-400" },
-                { label: "Errors", value: result.summary.errors, color: "text-red-400" },
-              ].map(({ label, value, color }) => (
-                <div key={label} className="rounded-xl border border-border bg-card/50 p-3 text-center">
-                  <p className={cn("text-2xl font-bold font-mono", color)}>{value}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+        <Button
+          onClick={runImport}
+          disabled={importing || preview.rows.length === 0}
+          className="ml-auto gap-2 bg-white text-black hover:bg-white/90"
+        >
+          {importing ? (
+            <><Loader2 className="w-4 h-4 animate-spin" /> Importing…</>
+          ) : (
+            <><Upload className="w-4 h-4" /> Import {preview.rows.length > 0 ? preview.rows.length : ""} movies</>
+          )}
+        </Button>
+      </div>
+
+      {/* Progress bar */}
+      {importing && progress && (
+        <div className="space-y-2">
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>Matching movies on TMDB…</span>
+            <span>{progress.done} / {progress.total}</span>
+          </div>
+          <div className="h-2 rounded-full bg-secondary overflow-hidden">
+            <div
+              className="h-full bg-primary transition-all duration-500 rounded-full"
+              style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Results */}
+      {result && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-5 gap-3">
+            {[
+              { label: "Added",      value: result.summary.added,               color: "text-green-400" },
+              { label: "Updated",    value: result.summary.updated ?? 0,        color: "text-blue-400" },
+              { label: "Duplicates", value: result.summary.duplicates,          color: "text-yellow-400" },
+              { label: "Not found",  value: result.summary.notFound,            color: "text-red-400" },
+              { label: "Errors",     value: result.summary.errors,              color: "text-red-400" },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="rounded-xl border border-border bg-card/50 p-3 text-center">
+                <p className={cn("text-2xl font-bold font-mono", color)}>{value}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-xl border border-border overflow-hidden">
+            <div className="px-4 py-2.5 bg-card/50 border-b border-border flex items-center justify-between">
+              <p className="text-sm font-medium">Results</p>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 h-7 text-xs"
+                onClick={() => { setText(""); setPreview({ rows: [], source: "" }); setResult(null); }}
+              >
+                <RefreshCw className="w-3 h-3" /> Start over
+              </Button>
+            </div>
+            <div className="divide-y divide-border max-h-96 overflow-y-auto">
+              {result.results.map((r, i) => (
+                <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+                  {STATUS_ICON[r.status]}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm truncate">{r.movieTitle ?? r.title}</p>
+                    {r.movieTitle && r.movieTitle !== r.title && (
+                      <p className="text-xs text-muted-foreground truncate">searched: {r.title}</p>
+                    )}
+                  </div>
+                  <span className={cn(
+                    "text-xs shrink-0",
+                    r.status === "added"     ? "text-green-400"  :
+                    r.status === "updated"   ? "text-blue-400"   :
+                    r.status === "duplicate" ? "text-yellow-400" : "text-red-400"
+                  )}>
+                    {STATUS_LABEL[r.status]}
+                  </span>
                 </div>
               ))}
             </div>
-
-            {/* Row details */}
-            <div className="rounded-xl border border-border overflow-hidden">
-              <div className="px-4 py-2.5 bg-card/50 border-b border-border flex items-center justify-between">
-                <p className="text-sm font-medium">Results</p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="gap-1.5 h-7 text-xs"
-                  onClick={() => { setText(""); setPreview([]); setResult(null); }}
-                >
-                  <RefreshCw className="w-3 h-3" /> Start over
-                </Button>
-              </div>
-              <div className="divide-y divide-border max-h-96 overflow-y-auto">
-                {result.results.map((r, i) => (
-                  <div key={i} className="flex items-center gap-3 px-4 py-2.5">
-                    {STATUS_ICON[r.status]}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate">{r.movieTitle ?? r.title}</p>
-                      {r.movieTitle && r.movieTitle !== r.title && (
-                        <p className="text-xs text-muted-foreground truncate">searched: {r.title}</p>
-                      )}
-                    </div>
-                    <span className={cn(
-                      "text-xs shrink-0",
-                      r.status === "added" ? "text-green-400" :
-                      r.status === "updated" ? "text-blue-400" :
-                      r.status === "duplicate" ? "text-yellow-400" : "text-red-400"
-                    )}>
-                      {STATUS_LABEL[r.status]}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
-        )}
-      </div>
-    </>
+        </div>
+      )}
+    </div>
   );
 }

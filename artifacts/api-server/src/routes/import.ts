@@ -214,8 +214,8 @@ router.post("/import", requireAuth, async (req: any, res): Promise<void> => {
     res.status(400).json({ error: "Body must be { rows: [...] } with at least one entry" });
     return;
   }
-  if (rawRows.length > 200) {
-    res.status(400).json({ error: "Max 200 rows per import" });
+  if (rawRows.length > 500) {
+    res.status(400).json({ error: "Max 500 rows per import" });
     return;
   }
 
@@ -232,80 +232,76 @@ router.post("/import", requireAuth, async (req: any, res): Promise<void> => {
     .where(eq(moviesTable.userId, req.userId));
   const existingIds = new Set(existing.map((e) => e.tmdbId).filter(Boolean));
 
-  const results: Array<{
+  type RowResult = {
     title: string;
-    status: "added" | "duplicate" | "not_found" | "error";
+    status: "added" | "updated" | "duplicate" | "not_found" | "error";
     movieTitle?: string;
     tmdbId?: number;
     error?: string;
-  }> = [];
+  };
 
-  for (const row of rows) {
-    try {
-      const best = await searchWithFallback(row.title, row.year);
+  // Process rows in parallel batches of 5 to stay within TMDB rate limits
+  const BATCH = 5;
+  const results: RowResult[] = [];
 
-      if (!best) {
-        results.push({ title: row.title, status: "not_found" });
-        continue;
-      }
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const batch = rows.slice(i, i + BATCH);
+    const batchResults = await Promise.all(
+      batch.map(async (row): Promise<RowResult> => {
+        try {
+          const best = await searchWithFallback(row.title, row.year);
 
-      if (best.tmdbId && existingIds.has(best.tmdbId)) {
-        // If the import row has a rating, update the existing record
-        if (row.rating) {
-          await db
-            .update(moviesTable)
-            .set({ rating: row.rating })
-            .where(
-              and(
-                eq(moviesTable.userId, req.userId),
-                eq(moviesTable.tmdbId, best.tmdbId),
-              ),
-            );
-          results.push({ title: row.title, status: "updated" as any, movieTitle: best.title, tmdbId: best.tmdbId });
-        } else {
-          results.push({ title: row.title, status: "duplicate", movieTitle: best.title, tmdbId: best.tmdbId });
+          if (!best) return { title: row.title, status: "not_found" };
+
+          if (best.tmdbId && existingIds.has(best.tmdbId)) {
+            if (row.rating) {
+              await db
+                .update(moviesTable)
+                .set({ rating: row.rating })
+                .where(and(eq(moviesTable.userId, req.userId), eq(moviesTable.tmdbId, best.tmdbId)));
+              return { title: row.title, status: "updated", movieTitle: best.title, tmdbId: best.tmdbId };
+            }
+            return { title: row.title, status: "duplicate", movieTitle: best.title, tmdbId: best.tmdbId };
+          }
+
+          // Fetch full details for genres/overview
+          let details = best;
+          try { details = await getMovieDetails(best.tmdbId); } catch { /* use search fields */ }
+
+          const watchedAt =
+            row.status === "watched"
+              ? resolveImportWatchedAt({
+                  watchedAtRaw: row.watchedAt,
+                  releaseDate: details.releaseDate ?? null,
+                  releaseYear: details.releaseYear ?? row.year ?? null,
+                })
+              : null;
+
+          await db.insert(moviesTable).values({
+            userId: req.userId,
+            title: details.title,
+            status: row.status,
+            rating: row.rating ?? null,
+            tmdbId: details.tmdbId,
+            posterPath: details.posterPath ?? null,
+            releaseYear: details.releaseYear ?? null,
+            releaseDate: details.releaseDate ?? null,
+            originalLanguage: details.originalLanguage ?? null,
+            genres: details.genres ?? null,
+            overview: details.overview ?? null,
+            firstWatchedAt: watchedAt,
+            watchedAt,
+          });
+
+          if (best.tmdbId) existingIds.add(best.tmdbId);
+          return { title: row.title, status: "added", movieTitle: details.title, tmdbId: details.tmdbId ?? undefined };
+        } catch (err) {
+          logger.warn({ err, title: row.title }, "Import row failed");
+          return { title: row.title, status: "error", error: String(err) };
         }
-        continue;
-      }
-
-      // Fetch full details for genres/overview
-      let details = best;
-      try {
-        details = await getMovieDetails(best.tmdbId);
-      } catch {
-        // use search result fields
-      }
-
-      const watchedAt =
-        row.status === "watched"
-          ? resolveImportWatchedAt({
-              watchedAtRaw: row.watchedAt,
-              releaseDate: details.releaseDate ?? null,
-              releaseYear: details.releaseYear ?? row.year ?? null,
-            })
-          : null;
-      await db.insert(moviesTable).values({
-        userId: req.userId,
-        title: details.title,
-        status: row.status,
-        rating: row.rating ?? null,
-        tmdbId: details.tmdbId,
-        posterPath: details.posterPath ?? null,
-        releaseYear: details.releaseYear ?? null,
-        releaseDate: details.releaseDate ?? null,
-        originalLanguage: details.originalLanguage ?? null,
-        genres: details.genres ?? null,
-        overview: details.overview ?? null,
-        firstWatchedAt: watchedAt,
-        watchedAt,
-      });
-
-      if (best.tmdbId) existingIds.add(best.tmdbId);
-      results.push({ title: row.title, status: "added", movieTitle: details.title, tmdbId: details.tmdbId ?? undefined });
-    } catch (err) {
-      logger.warn({ err, title: row.title }, "Import row failed");
-      results.push({ title: row.title, status: "error", error: String(err) });
-    }
+      })
+    );
+    results.push(...batchResults);
   }
 
   const summary = {
