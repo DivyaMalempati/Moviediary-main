@@ -393,7 +393,7 @@ The Dark Knight
 Watchlist
 Dune Part Two`}
             </pre>
-            <p className="text-xs text-muted-foreground">Heading sets destination. No heading = Watched.</p>
+            <p className="text-xs text-muted-foreground">Heading sets destination. No heading = uses the default above.</p>
           </div>
 
           {/* CSV */}
