@@ -94,7 +94,10 @@ export function RewatchLogDialog({
                 type="date"
                 value={watchedAt}
                 max={todayInputValue()}
-                onChange={(e) => setWatchedAt(e.target.value)}
+                onChange={(e) => {
+                  const today = todayInputValue();
+                  setWatchedAt(e.target.value > today ? today : e.target.value);
+                }}
                 className="bg-secondary border-border"
               />
             ) : (

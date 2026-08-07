@@ -157,7 +157,10 @@ export function RatingPickerDialog({
                 type="date"
                 value={earlierDate}
                 max={todayInputValue()}
-                onChange={(e) => setEarlierDate(e.target.value)}
+                onChange={(e) => {
+                  const today = todayInputValue();
+                  setEarlierDate(e.target.value > today ? today : e.target.value);
+                }}
                 className="bg-secondary border-border"
               />
             )}
