@@ -1,38 +1,25 @@
 ---
-name: Clerk auth setup — Cinevault
-description: How Clerk auth is wired into this project and key decisions made during setup.
+name: Clerk auth setup
+description: Clerk wiring details, migration history, and styling gotchas for the Cinevault / Indian Cinema Tracker app.
 ---
 
-## Setup summary
+## Status
+Now uses **Replit-managed Clerk** (migrated from external Clerk with `pk_test_YW1h…` dev keys).
 
-- Clerk provisioned via `setupClerkWhitelabelAuth()` — keys auto-set as `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, `VITE_CLERK_PUBLISHABLE_KEY`
-- Proxy middleware at `artifacts/api-server/src/middlewares/clerkProxyMiddleware.ts` (copied from skill template)
-- Server: `@clerk/express` + `clerkMiddleware` in `app.ts`; `requireAuth` inline in each route file using `getAuth(req)`
-- Frontend: `@clerk/react` + `@clerk/themes` (dark theme); `ClerkProvider` wraps the app in `App.tsx`
+## Key behavior
+- Root `/` is the landing page (unauthenticated OK). `/watched` is the authenticated home.
+- Google login enabled by default.
+- Per-user movie scoping enforced via Clerk session on the API server.
 
-## DB change
+## Styling gotcha — social button background
+The `dark` base theme overrides Tailwind class strings on `socialButtonsBlockButton` even when `cssLayerName: "clerk"` is set. Use **CSS object syntax** (inline styles) for this element so they always win specificity:
 
-- Added `user_id text` column to `movies` table (nullable — existing rows have null and are invisible to all users)
-- All movie routes now scope every query with `eq(moviesTable.userId, req.userId)`
-- Duplicate guard in POST /movies also scoped per-user
+```ts
+socialButtonsBlockButton: { backgroundColor: "#ffffff", borderColor: "rgba(255,255,255,0.2)" },
+socialButtonsBlockButtonText: { color: "#111111", fontWeight: "500" },
+```
 
-## Routing
+**Why:** Clerk's bundled dark-theme stylesheet has higher specificity than the `@layer clerk` block that Tailwind class strings land in. CSS objects produce inline `style` attributes, which always override stylesheet rules.
 
-- `/` → landing page (unauthenticated) OR redirect to `/watched` (authenticated)
-- `/sign-in/*?` and `/sign-up/*?` — required wildcard suffix for Clerk OAuth callbacks
-- `/watched`, `/watchlist`, `/add`, `/suggestions`, `/movie/:id` — all protected, redirect to `/` if signed out
-- Layout nav links use `/watched` as home (not `/`)
-
-**Why:** Root `/` can't be the authenticated home — it must be the landing page for unauthenticated users per Clerk skill requirement (never drop unauthenticated users onto sign-in with no context).
-
-## Google login
-
-- Google OAuth enabled by default on Replit-managed Clerk dev instances — visible on sign-in page immediately
-- No additional config needed in code
-
-## Appearance
-
-- `dark` base theme from `@clerk/themes`
-- B&W variables: white primary, `#0d0d0d` background, `#1a1a1a` inputs
-- Logo: `public/logo.svg` (film clapper icon, white on black)
-- Custom localization: "Welcome back / Sign in to your Cinevault", "Create your vault / Start tracking Indian cinema"
+## Hardcoded key removal
+Old external `pk_test_*` keys were in `.replit` `[userenv.shared]`. They are now removed — keys come entirely from Replit Secrets (`CLERK_PUBLISHABLE_KEY`, `VITE_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`).
