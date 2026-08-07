@@ -256,7 +256,36 @@ export default function ImportPage() {
   };
 
   const handleFile = (file: File) => {
+    const name = file.name.toLowerCase();
+    const isTextLike =
+      file.type.startsWith("text/") ||
+      file.type === "application/csv" ||
+      name.endsWith(".csv") ||
+      name.endsWith(".txt");
+
+    if (!isTextLike) {
+      const ext = name.includes(".") ? name.split(".").pop() : "file";
+      toast.error(
+        ext === "numbers"
+          ? "Numbers files can't be imported directly — open Numbers → tap the share icon → Export to → CSV, then upload that file."
+          : ext === "xlsx" || ext === "xls"
+          ? "Excel files can't be imported directly — save as CSV first (File → Save As → CSV), then upload that file."
+          : `"${file.name}" isn't a CSV or text file. Export your list as CSV first, then upload it here.`,
+        { duration: 8000 }
+      );
+      return;
+    }
+
     file.text().then((content) => {
+      // Sanity-check: if binary garbage slipped through, the content won't be
+      // printable ASCII/UTF-8 — detect by looking for null bytes.
+      if (content.includes("\x00")) {
+        toast.error(
+          "This file doesn't look like a CSV — it may be a Numbers or Excel binary format. Export it as CSV first.",
+          { duration: 8000 }
+        );
+        return;
+      }
       setText(content);
       parse(content, defaultStatus);
     });
