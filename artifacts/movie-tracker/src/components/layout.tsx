@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useUser } from "@clerk/react";
 import {
@@ -15,6 +15,7 @@ import {
   Users,
   BookOpen,
   CalendarClock,
+  MessageSquarePlus,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,7 @@ import { BOTTOM_NAV, SIDEBAR_NAV, enabledNav } from "@/lib/features";
 import { tourTargetForHref } from "@/lib/feature-guide";
 import { isDiscoverTab } from "@/components/discover-content";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { FeatureFeedbackDialog } from "@/components/feature-feedback-dialog";
 
 function navItemActive(location: string, href: string): boolean {
   const [hrefPath, hrefSearch] = href.split("?");
@@ -140,6 +142,7 @@ export function Layout({ children }: LayoutProps) {
   const isMobile = useIsMobile();
   const sidebarItems = enabledNav(SIDEBAR_NAV);
   const bottomItems = enabledNav(BOTTOM_NAV);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   return (
     <div
@@ -243,6 +246,29 @@ export function Layout({ children }: LayoutProps) {
         })}
       </nav>
       )}
+
+      {/* Floating feedback button */}
+      <button
+        type="button"
+        onClick={() => setFeedbackOpen(true)}
+        title="Share feature request"
+        className={cn(
+          "fixed z-40 flex items-center justify-center rounded-full shadow-lg transition-all duration-200",
+          "bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95",
+          "w-12 h-12",
+          isMobile
+            ? "bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4"
+            : "bottom-6 right-6",
+        )}
+      >
+        <MessageSquarePlus className="w-5 h-5" />
+      </button>
+
+      <FeatureFeedbackDialog
+        open={feedbackOpen}
+        onOpenChange={setFeedbackOpen}
+        source="prompt"
+      />
     </div>
   );
 }
