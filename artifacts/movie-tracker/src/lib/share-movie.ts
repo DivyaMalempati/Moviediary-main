@@ -454,6 +454,22 @@ function shareImageFilename(title: string, blob: Blob): string {
   return `${slugify(title)}-cinevault.${ext}`;
 }
 
+/**
+ * Returns true when running inside an iframe (e.g. the Replit preview pane).
+ * Some Chromium builds fire a window-level SecurityError *in addition to*
+ * rejecting the navigator.share() promise when called from a cross-origin
+ * iframe, which bypasses our try-catch and shows as an "(unknown runtime error)".
+ * Skipping share in iframes avoids this — real sharing happens in the deployed
+ * browser tab, not an embedded preview.
+ */
+function isInIframe(): boolean {
+  try {
+    return window.self !== window.top;
+  } catch {
+    return true; // cross-origin iframe; accessing window.top throws SecurityError
+  }
+}
+
 export async function nativeShareMovie(
   text: string,
   title: string,
@@ -462,6 +478,10 @@ export async function nativeShareMovie(
   if (typeof navigator === "undefined" || typeof navigator.share !== "function") {
     return "unsupported";
   }
+  // Skip in iframes — navigator.share in a cross-origin iframe can fire both a
+  // promise rejection AND a window-level error event, producing an uncatchable
+  // "(unknown runtime error)" in Vite/browser consoles.
+  if (isInIframe()) return "unsupported";
   try {
     // WhatsApp often surfaces `title` as the message when an image is attached.
     const shareTitle = `I'd recommend ${title} — worth a watch`;
@@ -509,6 +529,7 @@ export async function downloadShareCard(
   const file = new File([blob], filename, { type: blob.type || "image/jpeg" });
 
   if (
+    !isInIframe() &&
     isAppleTouchDevice() &&
     typeof navigator.share === "function" &&
     typeof navigator.canShare === "function" &&

@@ -277,9 +277,13 @@ export default function ImportPage() {
     a.click();
   };
 
-  const copyTemplate = () => {
-    navigator.clipboard.writeText(TEMPLATE_CSV);
-    toast.success("Template copied to clipboard");
+  const copyTemplate = async () => {
+    try {
+      await navigator.clipboard.writeText(TEMPLATE_CSV);
+      toast.success("Template copied to clipboard");
+    } catch {
+      toast.error("Couldn't copy — try downloading the template instead");
+    }
   };
 
   return (
