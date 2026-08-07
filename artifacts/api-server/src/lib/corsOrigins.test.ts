@@ -41,6 +41,12 @@ describe("isOriginAllowed", () => {
     expect(isOriginAllowed("https://evil.example.com")).toBe(false);
   });
 
+  it("allows known Cinevault production hosts", () => {
+    process.env.NODE_ENV = "production";
+    expect(isOriginAllowed("https://cinevault.me")).toBe(true);
+    expect(isOriginAllowed("https://www.mustwatch.it.com")).toBe(true);
+  });
+
   it("allows configured CORS_ORIGINS", () => {
     process.env.NODE_ENV = "production";
     process.env.CORS_ORIGINS = "https://cinevault.example,https://other.example";

@@ -8,6 +8,7 @@ import {
   isDemoMode,
   exitDemoToSignIn,
 } from "@/lib/demo-auth";
+import { absoluteAppUrl } from "@/lib/app-url";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -26,11 +27,6 @@ import {
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
-function inviteUrl(path: string) {
-  const prefix = BASE && BASE !== "/" ? BASE : "";
-  return `${window.location.origin}${prefix}${path.startsWith("/") ? path : `/${path}`}`;
-}
 
 async function copyText(text: string): Promise<boolean> {
   try {
@@ -64,7 +60,8 @@ async function shareOrCopyLink(url: string, title: string): Promise<"shared" | "
 
   if (!inIframe && typeof navigator !== "undefined" && typeof navigator.share === "function") {
     try {
-      await navigator.share({ title, text: title, url });
+      // Put the full URL in `text` too — some apps ignore or replace `url`.
+      await navigator.share({ title, text: `${title}\n${url}`, url });
       return "shared";
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return "shown";
@@ -203,7 +200,7 @@ export default function PartnerPage() {
       const data = (await res.json()) as Invite;
       setInvite(data);
       setRecipientName("");
-      const url = inviteUrl(data.path);
+      const url = absoluteAppUrl(data.path);
       const result = await shareOrCopyLink(
         url,
         `Join me on Cinevault for movie night`,
@@ -290,7 +287,7 @@ export default function PartnerPage() {
         return;
       }
       const data = (await res.json()) as { id: number };
-      const url = inviteUrl(`/match/${data.id}`);
+      const url = absoluteAppUrl(`/match/${data.id}`);
       setSessionShareUrl(url);
       try {
         await navigator.clipboard.writeText(url);
@@ -309,7 +306,7 @@ export default function PartnerPage() {
   const copyInvite = async (path?: string) => {
     const p = path ?? invite?.path;
     if (!p) return;
-    const url = inviteUrl(p);
+    const url = absoluteAppUrl(p);
     const result = await shareOrCopyLink(url, "Join me on Cinevault for movie night");
     if (result === "shared") toast.success("Invite shared");
     else if (result === "copied") toast.success("Invite link copied");
@@ -317,7 +314,7 @@ export default function PartnerPage() {
   };
 
   const copySession = async (path: string) => {
-    const url = inviteUrl(path);
+    const url = absoluteAppUrl(path);
     const result = await shareOrCopyLink(url, "Join our Cinevault movie night");
     if (result === "shared") toast.success("Movie-night link shared");
     else if (result === "copied") toast.success("Movie-night link copied");
@@ -487,7 +484,7 @@ export default function PartnerPage() {
                 <p className="font-mono text-lg tracking-wide">{invite.code}</p>
                 <Input
                   readOnly
-                  value={typeof window !== "undefined" ? inviteUrl(invite.path) : invite.path}
+                  value={typeof window !== "undefined" ? absoluteAppUrl(invite.path) : invite.path}
                   className="font-mono text-xs h-9"
                   onFocus={(e) => e.currentTarget.select()}
                   aria-label="Invite link"
@@ -501,7 +498,7 @@ export default function PartnerPage() {
                     size="sm"
                     variant="outline"
                     onClick={async () => {
-                      const url = inviteUrl(invite.path);
+                      const url = absoluteAppUrl(invite.path);
                       const ok = await copyText(url);
                       if (ok) toast.success("Invite link copied");
                       else toast.message(url);

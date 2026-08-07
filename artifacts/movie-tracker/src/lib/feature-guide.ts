@@ -131,7 +131,7 @@ export const FEATURE_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: "profile-together",
     title: "Together",
-    tip: "Invite someone by name, then start a movie night and swipe the same deck.",
+    tip: "Invite someone by name, then start a movie night — swipe left if you’re not interested, right if you are.",
     href: "/profile",
     target: "profile-together",
   },
@@ -213,7 +213,7 @@ export const FEATURE_GUIDE_SECTIONS: Array<{
         title: "Together",
         summary: "Movie night with named people you invite.",
         detail:
-          "Profile → Together. Name who you’re inviting (e.g. Priya), share the link, then Start movie night & swipe the same deck. People you’ve invited lists each person → pending/paired → swipe sessions.",
+          "Profile → Together. Name who you’re inviting (e.g. Priya), share the link, then Start movie night. Swipe left = not interested, right = interested on the same deck. People you’ve invited lists each person → pending/paired → swipe sessions.",
         href: "/partner",
         cta: "Open Together",
         icon: Users,
