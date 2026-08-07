@@ -407,7 +407,7 @@ function ClerkProfile() {
   return (
     <ProfileShell
       name={user?.fullName || user?.emailAddresses?.[0]?.emailAddress || "Account"}
-      subtitle={user?.fullName ? (user?.emailAddresses?.[0]?.emailAddress ?? "") : "Signed in"}
+      subtitle={user?.emailAddresses?.[0]?.emailAddress ?? "Signed in"}
       signOutLabel="Sign out"
       onSignOut={() => {
         clearAppSession();
