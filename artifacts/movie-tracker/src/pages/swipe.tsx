@@ -1391,7 +1391,7 @@ async function shareOrCopyLink(url: string, title: string): Promise<"shared" | "
   let inIframe = false;
   try { inIframe = window.self !== window.top; } catch { inIframe = true; }
   if (!inIframe && typeof navigator?.share === "function") {
-    try { await navigator.share({ title, text: `${title}\n${url}`, url }); return "shared"; }
+    try { await navigator.share({ title, text: title, url }); return "shared"; }
     catch (err) { if (err instanceof DOMException && err.name === "AbortError") return "shown"; }
   }
   return (await copyText(url)) ? "copied" : "shown";
