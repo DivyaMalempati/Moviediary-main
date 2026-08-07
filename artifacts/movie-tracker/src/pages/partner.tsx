@@ -117,6 +117,7 @@ export default function PartnerPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [sessionShareUrl, setSessionShareUrl] = useState<string | null>(null);
+  const [showResumePrompt, setShowResumePrompt] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -269,11 +270,7 @@ export default function PartnerPage() {
     }
   };
 
-  const startMatch = async () => {
-    if (isDemoMode()) {
-      exitDemoToSignIn();
-      return;
-    }
+  const doCreateNewSession = async () => {
     setBusy(true);
     try {
       await ensureClerkApiSession();
@@ -283,7 +280,7 @@ export default function PartnerPage() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        toast.error((err as { error?: string }).error ?? "Couldn’t start movie night");
+        toast.error((err as { error?: string }).error ?? "Couldn't start movie night");
         return;
       }
       const data = (await res.json()) as { id: number };
@@ -296,11 +293,26 @@ export default function PartnerPage() {
         toast.success("Deck ready — share the link below so they can join");
       }
       setLocation(`/match/${data.id}`);
+      await refresh();
     } catch {
-      toast.error("Couldn’t start movie night");
+      toast.error("Couldn't start movie night");
     } finally {
       setBusy(false);
+      setShowResumePrompt(false);
     }
+  };
+
+  const startMatch = async () => {
+    if (isDemoMode()) {
+      exitDemoToSignIn();
+      return;
+    }
+    // If there's already an active session, prompt the user to resume or start fresh.
+    if (sessions.length > 0) {
+      setShowResumePrompt(true);
+      return;
+    }
+    await doCreateNewSession();
   };
 
   const copyInvite = async (path?: string) => {
@@ -335,6 +347,48 @@ export default function PartnerPage() {
 
   return (
     <>
+      {/* Resume-or-start-fresh dialog */}
+      {showResumePrompt && sessions.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-border bg-background p-6 space-y-4 shadow-2xl">
+            <div className="space-y-1.5">
+              <h2 className="text-base font-semibold">Unfinished session</h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                You have an unfinished movie-night deck with {partnerLabel}. Resume where you left
+                off, or start a new one?
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Button
+                className="w-full gap-2"
+                onClick={() => {
+                  setShowResumePrompt(false);
+                  setLocation(sessions[0].path);
+                }}
+              >
+                <Play className="w-4 h-4" />
+                Resume session
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full"
+                disabled={busy}
+                onClick={() => void doCreateNewSession()}
+              >
+                {busy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                Start fresh
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full text-muted-foreground"
+                onClick={() => setShowResumePrompt(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="max-w-lg mx-auto px-4 py-8 space-y-8 pb-28">
         <div>
           <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground mb-2">

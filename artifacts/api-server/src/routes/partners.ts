@@ -350,7 +350,7 @@ router.get("/partners/contacts", requireAuth, async (req: any, res): Promise<voi
         sessions = rows.map((s) => ({
           id: s.id,
           status: s.status,
-          deckSize: Array.isArray(s.deck) ? s.deck.length : 0,
+          deckSize: Array.isArray(s.tmdbIds) ? s.tmdbIds.length : 0,
           createdAt: s.createdAt.toISOString(),
           path: `/match/${s.id}`,
         }));

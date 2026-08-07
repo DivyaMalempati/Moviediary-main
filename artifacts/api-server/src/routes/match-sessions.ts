@@ -17,6 +17,7 @@ import {
   type SwipeCandidate,
 } from "../lib/personalization.js";
 import { INDIA_COLD_START_LANGUAGES } from "../lib/languageDefaults.js";
+import { getMovieDetails } from "../lib/tmdb.js";
 import { logger } from "../lib/logger.js";
 
 const router: IRouter = Router();
@@ -150,6 +151,30 @@ function matchesFromSwipes(
 }
 
 /**
+ * Fetch film details from TMDB for an array of tmdb IDs, returning one SwipeCandidate per ID.
+ * Failed fetches get a stub placeholder so the deck always has exactly tmdbIds.length entries —
+ * this is important: completion is gated on both users swiping every stored tmdb_id, so a
+ * silently dropped card would make the session permanently un-completable.
+ */
+async function fetchDeckFilms(tmdbIds: number[]): Promise<SwipeCandidate[]> {
+  const results = await Promise.allSettled(tmdbIds.map((id) => getMovieDetails(id)));
+  return results.map((r, i) => {
+    if (r.status === "fulfilled") return r.value as SwipeCandidate;
+    // Stub so the user can still swipe this card (skip it) and the deck stays complete.
+    logger.warn({ tmdbId: tmdbIds[i] }, "TMDB fetch failed for deck card — using stub");
+    return {
+      tmdbId: tmdbIds[i],
+      title: "Film unavailable",
+      posterPath: null,
+      releaseYear: null,
+      originalLanguage: null,
+      overview: "Details couldn't be loaded right now. You can still swipe to skip.",
+      genres: null,
+    } satisfies SwipeCandidate;
+  });
+}
+
+/**
  * GET /match-sessions
  * List active watch-together sessions for the current partner link.
  */
@@ -178,7 +203,7 @@ router.get("/match-sessions", requireAuth, async (req: any, res): Promise<void> 
     sessions: sessions.map((s) => ({
       id: s.id,
       status: s.status,
-      deckSize: Array.isArray(s.deck) ? s.deck.length : 0,
+      deckSize: s.tmdbIds.length,
       createdAt: s.createdAt.toISOString(),
       path: `/match/${s.id}`,
     })),
@@ -188,8 +213,7 @@ router.get("/match-sessions", requireAuth, async (req: any, res): Promise<void> 
 /**
  * POST /match-sessions
  * Create a shared dual-swipe deck from both people's Preferences + tastes.
- * Common interest is discovered by mutual likes while swiping — not by typing
- * what the other person likes.
+ * Any prior active sessions for the same partner link are marked abandoned.
  */
 router.post("/match-sessions", requireAuth, async (req: any, res): Promise<void> => {
   if (!requireRegistered(req, res)) return;
@@ -315,11 +339,24 @@ router.post("/match-sessions", requireAuth, async (req: any, res): Promise<void>
   if (deck.length === 0) {
     res.status(409).json({
       error:
-        "Couldn’t build a shared deck right now — check Preferences for overlapping languages/genres, or try again in a moment",
+        "Couldn't build a shared deck right now — check Preferences for overlapping languages/genres, or try again in a moment",
       tasteOverlap: overlap,
     });
     return;
   }
+
+  const tmdbIds = deck.map((c) => c.tmdbId);
+
+  // Abandon any prior active sessions for this partner link before creating a fresh one.
+  await db
+    .update(matchSessionsTable)
+    .set({ status: "abandoned" })
+    .where(
+      and(
+        eq(matchSessionsTable.partnerLinkId, link.id),
+        eq(matchSessionsTable.status, "active"),
+      ),
+    );
 
   const [session] = await db
     .insert(matchSessionsTable)
@@ -327,7 +364,7 @@ router.post("/match-sessions", requireAuth, async (req: any, res): Promise<void>
       partnerLinkId: link.id,
       createdByUserId: req.userId,
       status: "active",
-      deck,
+      tmdbIds,
     })
     .returning();
 
@@ -360,13 +397,15 @@ router.get("/match-sessions/:id", requireAuth, async (req: any, res): Promise<vo
 
   const { session, link } = result;
   const partnerUserId = partnerOf(link, req.userId);
-  const swipes = await db
-    .select()
-    .from(matchSessionSwipesTable)
-    .where(eq(matchSessionSwipesTable.sessionId, session.id));
+  const [swipes, deck] = await Promise.all([
+    db
+      .select()
+      .from(matchSessionSwipesTable)
+      .where(eq(matchSessionSwipesTable.sessionId, session.id)),
+    fetchDeckFilms(session.tmdbIds),
+  ]);
 
   const matchedTmdbIds = matchesFromSwipes(swipes, req.userId, partnerUserId);
-  const deck = session.deck as SwipeCandidate[];
   const matches = deck.filter((c) => matchedTmdbIds.includes(c.tmdbId));
 
   res.json({
@@ -387,6 +426,72 @@ router.get("/match-sessions/:id", requireAuth, async (req: any, res): Promise<vo
     partnerSwipeCount: swipes.filter((s) => s.userId === partnerUserId).length,
     createdAt: session.createdAt.toISOString(),
   });
+});
+
+/**
+ * POST /match-sessions/:id/complete
+ * Called by the client when the calling user swipes their last card.
+ * Marks the session completed only if BOTH users have swiped every deck item.
+ * If the partner hasn't finished yet the session stays active and this is a no-op.
+ */
+router.post("/match-sessions/:id/complete", requireAuth, async (req: any, res): Promise<void> => {
+  if (!requireRegistered(req, res)) return;
+  const id = parseInt(req.params.id, 10);
+  if (!id) {
+    res.status(400).json({ error: "Invalid session id" });
+    return;
+  }
+
+  const result = await sessionForUser(id, req.userId);
+  if ("error" in result) {
+    res.status(result.error === "not_found" ? 404 : 403).json({ error: "Session not found" });
+    return;
+  }
+
+  const { session, link } = result;
+
+  // Already settled — idempotent.
+  if (session.status !== "active") {
+    res.json({ status: session.status, bothDone: session.status === "completed" });
+    return;
+  }
+
+  const partnerUserId = partnerOf(link, req.userId);
+  const deckSize = session.tmdbIds.length;
+
+  const swipes = await db
+    .select()
+    .from(matchSessionSwipesTable)
+    .where(eq(matchSessionSwipesTable.sessionId, session.id));
+
+  const mySwipeCount = swipes.filter((s) => s.userId === req.userId).length;
+  const partnerSwipeCount = swipes.filter((s) => s.userId === partnerUserId).length;
+  const myDone = mySwipeCount >= deckSize;
+  const partnerDone = partnerSwipeCount >= deckSize;
+
+  if (!myDone) {
+    // Caller hasn't finished their deck — refuse to complete.
+    res
+      .status(400)
+      .json({ error: "You haven't swiped all cards yet", mySwipeCount, deckSize });
+    return;
+  }
+
+  if (!partnerDone) {
+    // Caller is done but partner hasn't finished — session stays active.
+    res.json({ status: "active", bothDone: false, myDone: true, partnerDone: false });
+    return;
+  }
+
+  // Both done — mark completed.
+  const [updated] = await db
+    .update(matchSessionsTable)
+    .set({ status: "completed", completedAt: new Date() })
+    .where(and(eq(matchSessionsTable.id, session.id), eq(matchSessionsTable.status, "active")))
+    .returning();
+
+  const finalStatus = updated?.status ?? "completed";
+  res.json({ status: finalStatus, bothDone: true, completedAt: updated?.completedAt?.toISOString() ?? null });
 });
 
 /**
@@ -419,9 +524,7 @@ router.post("/match-sessions/:id/swipes", requireAuth, async (req: any, res): Pr
     return;
   }
 
-  const deck = session.deck as SwipeCandidate[];
-  const film = deck.find((c) => c.tmdbId === tmdbId);
-  if (!film) {
+  if (!session.tmdbIds.includes(tmdbId)) {
     res.status(400).json({ error: "Film not in this session deck" });
     return;
   }
@@ -445,9 +548,13 @@ router.post("/match-sessions/:id/swipes", requireAuth, async (req: any, res): Pr
 
   let matched = false;
   let addedToWatchlist = false;
+  let filmDetails: SwipeCandidate | null = null;
+
   if (direction === "like") {
+    // Fetch film details from TMDB for watchlist entry.
     try {
-      await ensureWatchlistEntry(req.userId, film);
+      filmDetails = (await getMovieDetails(tmdbId)) as SwipeCandidate;
+      await ensureWatchlistEntry(req.userId, filmDetails);
       addedToWatchlist = true;
     } catch (err) {
       // Swipe vote already saved — don't fail the ritual if library write races.
@@ -470,7 +577,33 @@ router.post("/match-sessions/:id/swipes", requireAuth, async (req: any, res): Pr
     matched = !!partnerSwipe;
   }
 
-  res.json({ matched, film: matched ? film : null, addedToWatchlist });
+  // Auto-complete the session if both users have now swiped every deck item.
+  // This is the server-authoritative path; the client /complete call is a
+  // belt-and-suspenders hint that triggers the same check.
+  try {
+    const partnerUserIdForCheck = partnerOf(link, req.userId);
+    const allSwipes = await db
+      .select({ userId: matchSessionSwipesTable.userId })
+      .from(matchSessionSwipesTable)
+      .where(eq(matchSessionSwipesTable.sessionId, session.id));
+
+    const deckSize = session.tmdbIds.length;
+    const myCount = allSwipes.filter((s) => s.userId === req.userId).length;
+    const partnerCount = allSwipes.filter((s) => s.userId === partnerUserIdForCheck).length;
+
+    if (myCount >= deckSize && partnerCount >= deckSize) {
+      await db
+        .update(matchSessionsTable)
+        .set({ status: "completed", completedAt: new Date() })
+        .where(
+          and(eq(matchSessionsTable.id, session.id), eq(matchSessionsTable.status, "active")),
+        );
+    }
+  } catch (err) {
+    logger.warn({ err }, "auto-complete check failed — session left active");
+  }
+
+  res.json({ matched, film: matched ? filmDetails : null, addedToWatchlist });
 });
 
 /**
@@ -503,10 +636,19 @@ router.post("/match-sessions/:id/log-match", requireAuth, async (req: any, res):
   }
   const { session, link } = result;
   const partnerUserId = partnerOf(link, req.userId);
-  const deck = session.deck as SwipeCandidate[];
-  const film = deck.find((c) => c.tmdbId === tmdbId);
-  if (!film) {
+
+  if (!session.tmdbIds.includes(tmdbId)) {
     res.status(400).json({ error: "Film not in this session deck" });
+    return;
+  }
+
+  // Fetch film details from TMDB.
+  let film: SwipeCandidate;
+  try {
+    film = (await getMovieDetails(tmdbId)) as SwipeCandidate;
+  } catch (err) {
+    logger.warn({ err, tmdbId }, "log-match: TMDB fetch failed");
+    res.status(502).json({ error: "Couldn't fetch film details — try again" });
     return;
   }
 
@@ -552,7 +694,7 @@ router.post("/match-sessions/:id/log-match", requireAuth, async (req: any, res):
       tmdbId: film.tmdbId,
       posterPath: film.posterPath,
       releaseYear: film.releaseYear,
-      releaseDate: (film as { releaseDate?: string | null }).releaseDate ?? null,
+      releaseDate: (film as any).releaseDate ?? null,
       originalLanguage: film.originalLanguage,
       overview: film.overview,
       genres: film.genres,
@@ -562,7 +704,7 @@ router.post("/match-sessions/:id/log-match", requireAuth, async (req: any, res):
     });
   }
 
-  res.json({ ok: true, loggedFor: [userId], film });
+  res.json({ ok: true, title: film.title });
 });
 
 export default router;

@@ -173,5 +173,63 @@ export async function ensureSchema(): Promise<void> {
       ON "collections" ("share_token");
   `);
 
+  // Match session deck migration: replace JSONB blob with integer[] of tmdb_ids.
+  // Step 1: add the new column (idempotent).
+  await pool.query(`
+    ALTER TABLE "match_sessions"
+      ADD COLUMN IF NOT EXISTS "tmdb_ids" integer[] DEFAULT '{}' NOT NULL;
+  `);
+  // Steps 2-4 only apply while the legacy "deck" JSONB column still exists.
+  // Use dynamic EXECUTE inside PL/pgSQL so that the SQL referencing "deck" is
+  // only parsed at execution time — static embedded SQL is parsed at block
+  // compilation time and would fail after the column has been dropped.
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'match_sessions' AND column_name = 'deck'
+      ) THEN
+        -- Step 2: backfill tmdb_ids from the JSONB deck (empty rows only).
+        EXECUTE $sql$
+          UPDATE "match_sessions"
+          SET "tmdb_ids" = ARRAY(
+            SELECT (elem->>'tmdbId')::integer
+            FROM jsonb_array_elements("deck") AS elem
+            WHERE elem->>'tmdbId' IS NOT NULL
+          )
+          WHERE "tmdb_ids" = '{}'
+            AND "deck" IS NOT NULL
+            AND jsonb_typeof("deck") = 'array'
+            AND jsonb_array_length("deck") > 0
+        $sql$;
+
+        -- Step 3: retroactively complete sessions where both partners swiped everything.
+        EXECUTE $sql$
+          UPDATE "match_sessions" ms
+          SET "status" = 'completed', "completed_at" = NOW()
+          FROM "partner_links" pl
+          WHERE pl."id" = ms."partner_link_id"
+            AND ms."status" = 'active'
+            AND ms."completed_at" IS NULL
+            AND (
+              SELECT COUNT(*)
+              FROM (
+                SELECT s."user_id"
+                FROM "match_session_swipes" s
+                WHERE s."session_id" = ms."id"
+                  AND s."user_id" IN (pl."user_low_id", pl."user_high_id")
+                GROUP BY s."user_id"
+                HAVING COUNT(*) >= jsonb_array_length(ms."deck")
+              ) AS completed_users
+            ) >= 2
+        $sql$;
+
+        -- Step 4: drop the old column now that migration is done.
+        EXECUTE 'ALTER TABLE "match_sessions" DROP COLUMN "deck"';
+      END IF;
+    END $$;
+  `);
+
   logger.info("Schema ensure complete");
 }

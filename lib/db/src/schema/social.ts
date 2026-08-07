@@ -6,7 +6,6 @@ import {
   timestamp,
   uniqueIndex,
   index,
-  jsonb,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -82,9 +81,9 @@ export const matchSessionsTable = pgTable(
     id: serial("id").primaryKey(),
     partnerLinkId: integer("partner_link_id").notNull(),
     createdByUserId: text("created_by_user_id").notNull(),
-    status: text("status").notNull().default("active"), // active | completed | cancelled
-    /** Ordered deck snapshot: SwipeCandidate[] with source buckets. */
-    deck: jsonb("deck").notNull().$type<Array<Record<string, unknown>>>(),
+    status: text("status").notNull().default("active"), // active | completed | abandoned
+    /** Ordered deck tmdb IDs — full film data fetched from TMDB on demand. */
+    tmdbIds: integer("tmdb_ids").array().notNull().default([]),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
   },

@@ -239,10 +239,14 @@ export default function MatchSessionPage() {
 
   const swipe = useCallback(
     async (direction: "like" | "pass") => {
-      if (!current || busy || !sessionId) return;
+      if (!current || busy || !sessionId || !session) return;
       setBusy(true);
       const film = current;
-      setActed((prev) => new Set(prev).add(film.tmdbId));
+      // Optimistically mark as acted so the next card shows immediately.
+      const nextActed = new Set(acted).add(film.tmdbId);
+      setActed(nextActed);
+      // Check if this is the last card (deck fully swiped after this).
+      const isLastCard = session.deck.filter((f) => !nextActed.has(f.tmdbId)).length === 0;
       try {
         const res = await authFetch(`${BASE}/api/match-sessions/${sessionId}/swipes`, {
           method: "POST",
@@ -261,9 +265,17 @@ export default function MatchSessionPage() {
         if (data.matched && data.film) {
           setCelebration(data.film);
         }
+        // If the deck is now complete, mark the session as completed on the server.
+        if (isLastCard) {
+          void authFetch(`${BASE}/api/match-sessions/${sessionId}/complete`, {
+            method: "POST",
+          }).catch(() => {
+            // Best-effort — don't block the results screen if complete fails.
+          });
+        }
         await refetch();
       } catch {
-        toast.error("Swipe didn’t save — try again");
+        toast.error("Swipe didn't save — try again");
         setActed((prev) => {
           const next = new Set(prev);
           next.delete(film.tmdbId);
@@ -273,7 +285,7 @@ export default function MatchSessionPage() {
         setBusy(false);
       }
     },
-    [busy, current, queryClient, refetch, sessionId],
+    [acted, busy, current, queryClient, refetch, session, sessionId],
   );
 
   // Keyboard: ← not interested, → interested (same as card drag).
