@@ -218,9 +218,11 @@ function ProfileShell({
         </div>
 
         <Tabs defaultValue="profile">
-          <TabsList className="w-full">
+          <TabsList className="w-full" data-tour="profile-tabs">
             <TabsTrigger value="profile" className="flex-1">Profile</TabsTrigger>
-            <TabsTrigger value="collections" className="flex-1">Collections</TabsTrigger>
+            <TabsTrigger value="collections" className="flex-1" data-tour="profile-collections-tab">
+              Collections
+            </TabsTrigger>
           </TabsList>
 
           {/* ── Profile tab ─────────────────────────────────────────────── */}
@@ -229,6 +231,7 @@ function ProfileShell({
               <Link href="/partner">
                 <button
                   type="button"
+                  data-tour="profile-together"
                   className="w-full flex items-center gap-3 px-1 py-3 text-left text-sm hover:text-foreground text-foreground/90 transition-colors"
                 >
                   <Users className="w-4 h-4 text-muted-foreground" />

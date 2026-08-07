@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
-import { motion, AnimatePresence } from "framer-motion";
+import {
+  motion,
+  AnimatePresence,
+  useMotionValue,
+  useTransform,
+  animate,
+  type PanInfo,
+} from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { getPosterUrl } from "@/lib/movie-utils";
+import { absoluteAppUrl } from "@/lib/app-url";
 import { authFetch } from "@/lib/demo-auth";
 import { invalidateLibrary } from "@/lib/queryClient";
 import { RatingPickerDialog } from "@/components/rating-picker-dialog";
@@ -24,6 +32,7 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 /** Brief cue on each mutual like — full match list lives at deck end. */
 const MATCH_TOAST_MS = 2200;
+const SWIPE_THRESHOLD = 90;
 
 type DeckFilm = {
   tmdbId: number;
@@ -53,6 +62,126 @@ async function fetchMatchSession(sessionId: number): Promise<SessionPayload> {
   const res = await authFetch(`${BASE}/api/match-sessions/${sessionId}`);
   if (!res.ok) throw new Error("load failed");
   return (await res.json()) as SessionPayload;
+}
+
+/** Draggable Together card — left = not interested, right = interested. */
+function TogetherSwipeCard({
+  film,
+  isTop,
+  stackIndex,
+  disabled,
+  onInterested,
+  onNotInterested,
+}: {
+  film: DeckFilm;
+  isTop: boolean;
+  stackIndex: number;
+  disabled: boolean;
+  onInterested: (film: DeckFilm) => void;
+  onNotInterested: (film: DeckFilm) => void;
+}) {
+  const x = useMotionValue(0);
+  const rotate = useTransform(x, [-200, 0, 200], [-14, 0, 14]);
+  const interestedOverlay = useTransform(x, [0, 120], [0, 0.55]);
+  const passOverlay = useTransform(x, [-120, 0], [0.55, 0]);
+  const interestedLabel = useTransform(x, [20, 80], [0, 1]);
+  const passLabel = useTransform(x, [-80, -20], [1, 0]);
+
+  const posterUrl = getPosterUrl(film.posterPath, "w780");
+  const scale = 1 - stackIndex * 0.04;
+  const yOffset = stackIndex * 10;
+
+  const handleDragEnd = async (_: unknown, info: PanInfo) => {
+    if (disabled) {
+      animate(x, 0, { type: "spring", stiffness: 350, damping: 25 });
+      return;
+    }
+    if (info.offset.x > SWIPE_THRESHOLD) {
+      await animate(x, 650, { duration: 0.25 });
+      onInterested(film);
+    } else if (info.offset.x < -SWIPE_THRESHOLD) {
+      await animate(x, -650, { duration: 0.25 });
+      onNotInterested(film);
+    } else {
+      animate(x, 0, { type: "spring", stiffness: 350, damping: 25 });
+    }
+  };
+
+  return (
+    <motion.div
+      style={{
+        x: isTop ? x : 0,
+        y: yOffset,
+        rotate: isTop ? rotate : 0,
+        scale,
+        zIndex: 10 - stackIndex,
+      }}
+      drag={isTop && !disabled ? "x" : false}
+      dragConstraints={{ left: 0, right: 0 }}
+      dragElastic={0.7}
+      onDragEnd={handleDragEnd}
+      className={cn(
+        "absolute inset-0 rounded-2xl overflow-hidden border border-border bg-secondary shadow-xl select-none",
+        isTop && !disabled && "cursor-grab active:cursor-grabbing",
+      )}
+    >
+      {posterUrl ? (
+        <img
+          src={posterUrl}
+          alt={film.title}
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+          draggable={false}
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+          No poster
+        </div>
+      )}
+
+      {isTop && (
+        <>
+          <motion.div
+            style={{ opacity: interestedOverlay }}
+            className="absolute inset-0 bg-emerald-500 pointer-events-none"
+          />
+          <motion.div
+            style={{ opacity: passOverlay }}
+            className="absolute inset-0 bg-rose-600 pointer-events-none"
+          />
+          <motion.div
+            style={{ opacity: interestedLabel }}
+            className="absolute top-5 right-4 z-20 pointer-events-none"
+          >
+            <div className="px-3 py-1.5 rounded-xl border-[3px] border-emerald-400 rotate-[-12deg] bg-black/40 backdrop-blur-sm">
+              <span className="text-emerald-300 font-black text-sm tracking-widest uppercase">
+                Interested
+              </span>
+            </div>
+          </motion.div>
+          <motion.div
+            style={{ opacity: passLabel }}
+            className="absolute top-5 left-4 z-20 pointer-events-none"
+          >
+            <div className="px-3 py-1.5 rounded-xl border-[3px] border-rose-400 rotate-[12deg] bg-black/40 backdrop-blur-sm">
+              <span className="text-rose-300 font-black text-sm tracking-widest uppercase">
+                Not interested
+              </span>
+            </div>
+          </motion.div>
+        </>
+      )}
+
+      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4 pt-16">
+        <h2 className="text-xl font-semibold text-white">{film.title}</h2>
+        <p className="text-sm text-white/70">
+          {[film.releaseYear, film.source].filter(Boolean).join(" · ")}
+        </p>
+        {film.overview && (
+          <p className="text-xs text-white/60 mt-2 line-clamp-3">{film.overview}</p>
+        )}
+      </div>
+    </motion.div>
+  );
 }
 
 export default function MatchSessionPage() {
@@ -147,7 +276,7 @@ export default function MatchSessionPage() {
     [busy, current, queryClient, refetch, sessionId],
   );
 
-  // Keyboard: ← pass, → like (parity with solo Swipe).
+  // Keyboard: ← not interested, → interested (same as card drag).
   useEffect(() => {
     if (!current || busy) return;
     const onKey = (e: KeyboardEvent) => {
@@ -213,7 +342,7 @@ export default function MatchSessionPage() {
     );
   }
 
-  const posterUrl = current ? getPosterUrl(current.posterPath, "w780") : null;
+  const stackFilms = remaining.slice(0, 3);
 
   return (
     <>
@@ -230,7 +359,7 @@ export default function MatchSessionPage() {
               size="sm"
               className="h-7 text-xs gap-1"
               onClick={() => {
-                const url = `${window.location.origin}${BASE}/match/${sessionId}`;
+                const url = absoluteAppUrl(`/match/${sessionId}`);
                 void navigator.clipboard.writeText(url).then(
                   () => toast.success("Link copied — send it so they can swipe the same deck"),
                   () => toast.message(url),
@@ -298,23 +427,20 @@ export default function MatchSessionPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="relative aspect-[2/3] rounded-2xl overflow-hidden border border-border bg-secondary">
-              {posterUrl ? (
-                <img src={posterUrl} alt={current.title} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                  No poster
-                </div>
-              )}
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4 pt-16">
-                <h2 className="text-xl font-semibold text-white">{current.title}</h2>
-                <p className="text-sm text-white/70">
-                  {[current.releaseYear, current.source].filter(Boolean).join(" · ")}
-                </p>
-                {current.overview && (
-                  <p className="text-xs text-white/60 mt-2 line-clamp-3">{current.overview}</p>
-                )}
-              </div>
+            <div className="relative aspect-[2/3] w-full">
+              {stackFilms
+                .map((film, i) => (
+                  <TogetherSwipeCard
+                    key={film.tmdbId}
+                    film={film}
+                    isTop={i === 0}
+                    stackIndex={i}
+                    disabled={busy}
+                    onInterested={() => void swipe("like")}
+                    onNotInterested={() => void swipe("pass")}
+                  />
+                ))
+                .reverse()}
             </div>
 
             <div className="flex items-center justify-center gap-6">
@@ -323,7 +449,7 @@ export default function MatchSessionPage() {
                 variant="outline"
                 className="rounded-full w-14 h-14"
                 disabled={busy}
-                aria-label={`Pass on ${current.title}`}
+                aria-label={`Not interested in ${current.title}`}
                 onClick={() => void swipe("pass")}
               >
                 <X className="w-6 h-6" aria-hidden />
@@ -332,14 +458,14 @@ export default function MatchSessionPage() {
                 size="lg"
                 className={cn("rounded-full w-14 h-14 bg-primary text-primary-foreground")}
                 disabled={busy}
-                aria-label={`Like ${current.title}`}
+                aria-label={`Interested in ${current.title}`}
                 onClick={() => void swipe("like")}
               >
                 <Heart className="w-6 h-6" aria-hidden />
               </Button>
             </div>
             <p className="text-center text-xs text-muted-foreground">
-              {remaining.length} left · ← pass · → like · matches at the end
+              {remaining.length} left · swipe ← not interested · → interested · matches at the end
             </p>
           </div>
         )}

@@ -1,21 +1,22 @@
 import { RATING_LABELS, getPosterUrl } from "@/lib/movie-utils";
 import { splitDiaryNote } from "@/lib/diary-notes";
 import { getSyncSessionHeaders } from "@/lib/demo-auth";
+import { absoluteAppUrl, getPublicOrigin } from "@/lib/app-url";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 /**
  * Public landing URL for share captions so recipients can try the app.
- * Prefer VITE_APP_SHARE_URL when set; otherwise the current host + base path
- * (works for Replit preview / production deploys).
+ * Always follows the host the user opened (cinevault.me vs mustwatch.it.com, etc.).
  */
 export function getAppShareUrl(): string {
+  if (typeof window !== "undefined") {
+    const url = absoluteAppUrl("/");
+    return url.replace(/\/$/, "") || getPublicOrigin();
+  }
   const fromEnv = (import.meta.env.VITE_APP_SHARE_URL as string | undefined)?.trim();
   if (fromEnv) return fromEnv.replace(/\/$/, "");
-  if (typeof window !== "undefined" && window.location?.origin) {
-    return `${window.location.origin}${BASE || ""}` || window.location.origin;
-  }
-  return "https://cinevault.app";
+  return "https://cinevault.me";
 }
 
 export type ShareMovieInput = {

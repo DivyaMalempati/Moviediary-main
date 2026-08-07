@@ -844,61 +844,51 @@ export default function MovieDetailsPage() {
                 {!hasProviders ? (
                   <p className="text-sm text-muted-foreground italic">Not available to stream in India.</p>
                 ) : (
-                  <div className="space-y-4">
-                    {watchProviders.flatrate && watchProviders.flatrate.length > 0 && (
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">Stream</p>
-                        <div className="flex flex-wrap gap-2">
-                          {watchProviders.flatrate.map((p) => (
-                            <div key={p.name} title={p.name} className="w-11 h-11 rounded-xl overflow-hidden bg-secondary border border-border shrink-0">
-                              {p.logoPath ? (
-                                <img src={`https://image.tmdb.org/t/p/original${p.logoPath}`} alt={p.name} className="w-full h-full object-cover" />
-                              ) : (
-                                <span className="flex items-center justify-center w-full h-full text-[10px] font-semibold text-muted-foreground text-center leading-tight px-0.5">{p.name}</span>
-                              )}
+                  <div className="space-y-2">
+                    <div className="flex items-start gap-4 overflow-x-auto pb-0.5 scrollbar-none">
+                      {(
+                        [
+                          { label: "Stream", items: watchProviders.flatrate ?? [] },
+                          { label: "Rent", items: watchProviders.rent ?? [] },
+                          { label: "Buy", items: watchProviders.buy ?? [] },
+                        ] as const
+                      )
+                        .filter((g) => g.items.length > 0)
+                        .map((group) => (
+                          <div key={group.label} className="shrink-0 space-y-1.5">
+                            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                              {group.label}
+                            </p>
+                            <div className="flex items-center gap-1.5">
+                              {group.items.map((p) => (
+                                <div
+                                  key={p.name}
+                                  title={p.name}
+                                  className="w-9 h-9 rounded-lg overflow-hidden bg-secondary border border-border shrink-0"
+                                >
+                                  {p.logoPath ? (
+                                    <img
+                                      src={`https://image.tmdb.org/t/p/original${p.logoPath}`}
+                                      alt={p.name}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <span className="flex items-center justify-center w-full h-full text-[8px] font-semibold text-muted-foreground text-center leading-tight px-0.5">
+                                      {p.name}
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {watchProviders.rent && watchProviders.rent.length > 0 && (
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">Rent</p>
-                        <div className="flex flex-wrap gap-2">
-                          {watchProviders.rent.map((p) => (
-                            <div key={p.name} title={p.name} className="w-11 h-11 rounded-xl overflow-hidden bg-secondary border border-border shrink-0">
-                              {p.logoPath ? (
-                                <img src={`https://image.tmdb.org/t/p/original${p.logoPath}`} alt={p.name} className="w-full h-full object-cover" />
-                              ) : (
-                                <span className="flex items-center justify-center w-full h-full text-[10px] font-semibold text-muted-foreground text-center leading-tight px-0.5">{p.name}</span>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {watchProviders.buy && watchProviders.buy.length > 0 && (
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">Buy</p>
-                        <div className="flex flex-wrap gap-2">
-                          {watchProviders.buy.map((p) => (
-                            <div key={p.name} title={p.name} className="w-11 h-11 rounded-xl overflow-hidden bg-secondary border border-border shrink-0">
-                              {p.logoPath ? (
-                                <img src={`https://image.tmdb.org/t/p/original${p.logoPath}`} alt={p.name} className="w-full h-full object-cover" />
-                              ) : (
-                                <span className="flex items-center justify-center w-full h-full text-[10px] font-semibold text-muted-foreground text-center leading-tight px-0.5">{p.name}</span>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                          </div>
+                        ))}
+                    </div>
                     {watchProviders.link && (
                       <a
                         href={watchProviders.link}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-block text-xs text-primary hover:underline mt-1"
+                        className="inline-block text-xs text-primary hover:underline"
                       >
                         View all options on JustWatch →
                       </a>

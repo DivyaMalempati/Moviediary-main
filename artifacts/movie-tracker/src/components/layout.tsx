@@ -23,6 +23,7 @@ import { ClerkBoundary } from "@/components/clerk-boundary";
 import { BOTTOM_NAV, SIDEBAR_NAV, enabledNav } from "@/lib/features";
 import { tourTargetForHref } from "@/lib/feature-guide";
 import { isDiscoverTab } from "@/components/discover-content";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 function navItemActive(location: string, href: string): boolean {
   const [hrefPath, hrefSearch] = href.split("?");
@@ -136,11 +137,17 @@ function DemoUserSection() {
 export function Layout({ children }: LayoutProps) {
   const [location] = useLocation();
   const demo = isDemoMode();
+  const isMobile = useIsMobile();
   const sidebarItems = enabledNav(SIDEBAR_NAV);
   const bottomItems = enabledNav(BOTTOM_NAV);
 
   return (
-    <div className="min-h-[100dvh] flex flex-col md:flex-row bg-background text-foreground">
+    <div
+      className={cn(
+        "min-h-[100dvh] flex bg-background text-foreground",
+        isMobile ? "flex-col" : "flex-row",
+      )}
+    >
       {demo && (
         <div className="fixed top-0 inset-x-0 z-[100] bg-amber-400 text-black text-xs sm:text-sm font-medium py-1.5 px-3 flex items-center justify-center gap-3">
           <span>Demo mode — your data stays on this device</span>
@@ -154,7 +161,13 @@ export function Layout({ children }: LayoutProps) {
         </div>
       )}
 
-      <aside className={`hidden md:flex w-64 flex-col border-r border-border bg-card/30 backdrop-blur-md sticky top-0 h-screen ${demo ? "pt-8" : ""}`}>
+      <aside
+        className={cn(
+          "w-64 flex-col border-r border-border bg-card/30 backdrop-blur-md sticky top-0 h-screen",
+          isMobile ? "hidden" : "flex",
+          demo && "pt-8",
+        )}
+      >
         <div className="p-6 pb-2">
           <Link href="/watched" className="flex items-center gap-3 group">
             <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
@@ -197,11 +210,18 @@ export function Layout({ children }: LayoutProps) {
         </div>
       </aside>
 
-      <main className={`flex-1 flex flex-col min-w-0 pb-20 md:pb-0 ${demo ? "pt-8" : ""}`}>
+      <main
+        className={cn(
+          "flex-1 flex flex-col min-w-0",
+          isMobile ? "pb-20" : "pb-0",
+          demo && "pt-8",
+        )}
+      >
         <div className="flex-1 overflow-y-auto">{children}</div>
       </main>
 
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-lg border-t border-border flex items-center justify-around px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      {isMobile && (
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-lg border-t border-border flex items-center justify-around px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         {bottomItems.map(({ href, label }) => {
           const Icon = iconForHref(href);
           const isActive = navItemActive(location, href);
@@ -222,6 +242,7 @@ export function Layout({ children }: LayoutProps) {
           );
         })}
       </nav>
+      )}
     </div>
   );
 }

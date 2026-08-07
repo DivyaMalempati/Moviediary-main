@@ -2,8 +2,16 @@
  * CORS origin allowlist for credentialed API requests.
  *
  * Configure extras with CORS_ORIGINS (comma-separated) and/or APP_ORIGIN /
- * FRONTEND_ORIGIN. Replit preview/publish hosts are always allowed.
+ * FRONTEND_ORIGIN. Replit preview/publish hosts and known Cinevault domains
+ * are always allowed.
  */
+
+const KNOWN_PRODUCTION_HOSTS = new Set([
+  "cinevault.me",
+  "www.cinevault.me",
+  "mustwatch.it.com",
+  "www.mustwatch.it.com",
+]);
 
 function configuredOrigins(): string[] {
   const fromList = (process.env.CORS_ORIGINS ?? "")
@@ -39,6 +47,7 @@ export function isOriginAllowed(origin: string | undefined): boolean {
     const { hostname } = new URL(origin);
     if (isLocalHost(hostname)) return true;
     if (isReplitHost(hostname)) return true;
+    if (KNOWN_PRODUCTION_HOSTS.has(hostname.toLowerCase())) return true;
   } catch {
     return false;
   }

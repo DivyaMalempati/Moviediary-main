@@ -130,8 +130,14 @@
     @apply border-border;
   }
 
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
   body {
     @apply font-sans antialiased bg-background text-foreground selection:bg-primary selection:text-primary-foreground;
+    overflow-x: hidden;
   }
 }
 
@@ -216,4 +222,17 @@
   .border.active-elevate-2:not(.no-active-interaction-elevate)::after {
     inset: -1px;
   }
+}
+
+/* Clerk sign-in/up: force visible Google button label on dark theme */
+.cl-socialButtonsBlockButton,
+.cl-socialButtonsBlockButton span,
+.cl-socialButtonsBlockButtonText {
+  color: #f0f0f0 !important;
+}
+
+/* Hide Clerk "Development mode" footer badge (dev instance keys) */
+.cl-internal-b3fm6y,
+[data-localization-key="developmentMode"] {
+  display: none !important;
 }

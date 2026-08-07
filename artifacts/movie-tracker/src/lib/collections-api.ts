@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getAuthHeaders } from "./demo-auth";
+import { absoluteAppUrl } from "./app-url";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -93,8 +94,7 @@ export function collectionSharePath(token: string): string {
 }
 
 export function collectionShareUrl(token: string): string {
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-  return `${origin}${BASE}${collectionSharePath(token)}`;
+  return absoluteAppUrl(collectionSharePath(token));
 }
 
 // ── Query keys ────────────────────────────────────────────────────────────────

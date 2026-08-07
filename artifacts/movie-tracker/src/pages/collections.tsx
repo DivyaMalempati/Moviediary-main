@@ -550,7 +550,7 @@ function CollectionList() {
         {/* Header */}
         <section className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold flex items-center gap-3">
+            <h1 data-tour="collections-heading" className="text-3xl font-bold flex items-center gap-3">
               <FolderOpen className="w-8 h-8 text-primary" /> Collections
             </h1>
             <p className="text-muted-foreground mt-1">Named shelves to organise your library.</p>

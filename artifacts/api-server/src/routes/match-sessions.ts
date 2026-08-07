@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, inArray, isNotNull, or } from "drizzle-orm";
+import { and, desc, eq, isNotNull, or } from "drizzle-orm";
 import {
   db,
   moviesTable,
@@ -206,14 +206,27 @@ router.post("/match-sessions", requireAuth, async (req: any, res): Promise<void>
     buildTasteProfile(partnerUserId),
     loadPrefs(req.userId),
     loadPrefs(partnerUserId),
+    // Only exclude already-watched titles — watchlist films are fair game for movie night.
     db
       .select({ tmdbId: moviesTable.tmdbId })
       .from(moviesTable)
-      .where(and(eq(moviesTable.userId, req.userId), isNotNull(moviesTable.tmdbId))),
+      .where(
+        and(
+          eq(moviesTable.userId, req.userId),
+          eq(moviesTable.status, "watched"),
+          isNotNull(moviesTable.tmdbId),
+        ),
+      ),
     db
       .select({ tmdbId: moviesTable.tmdbId })
       .from(moviesTable)
-      .where(and(eq(moviesTable.userId, partnerUserId), isNotNull(moviesTable.tmdbId))),
+      .where(
+        and(
+          eq(moviesTable.userId, partnerUserId),
+          eq(moviesTable.status, "watched"),
+          isNotNull(moviesTable.tmdbId),
+        ),
+      ),
     db
       .select({ dismissedTmdbIds: userPreferencesTable.dismissedTmdbIds })
       .from(userPreferencesTable)
@@ -254,26 +267,9 @@ router.post("/match-sessions", requireAuth, async (req: any, res): Promise<void>
     ...(dismissB[0]?.dismissedTmdbIds ?? []),
   ]);
 
-  // Exclude prior Together passes for this pair so the same skips don't resurface.
-  const priorSessions = await db
-    .select({ id: matchSessionsTable.id })
-    .from(matchSessionsTable)
-    .where(eq(matchSessionsTable.partnerLinkId, link.id));
-  const priorSessionIds = priorSessions.map((s) => s.id);
-  if (priorSessionIds.length > 0) {
-    const priorPasses = await db
-      .select({ tmdbId: matchSessionSwipesTable.tmdbId })
-      .from(matchSessionSwipesTable)
-      .where(
-        and(
-          inArray(matchSessionSwipesTable.sessionId, priorSessionIds),
-          eq(matchSessionSwipesTable.direction, "pass"),
-        ),
-      );
-    for (const row of priorPasses) excludeIds.add(row.tmdbId);
-  }
+  // Prior Together passes are allowed back — tastes change and a fresh night may reconsider.
 
-  const deck = await getPersonalizedSwipePool({
+  let deck = await getPersonalizedSwipePool({
     profile,
     explicitPrefs,
     fallbackLanguages: [...INDIA_COLD_START_LANGUAGES],
@@ -282,6 +278,48 @@ router.post("/match-sessions", requireAuth, async (req: any, res): Promise<void>
     // Recent underrated titles in shared genres first (not popular safe hits).
     mode: "together",
   });
+
+  // Fallback: tight shared filters / TMDB misses can yield an empty Together deck.
+  // Retry with India cold-start languages and no OTT lock so movie night still works.
+  if (deck.length < 4) {
+    logger.warn(
+      {
+        partnerLinkId: link.id,
+        firstDeckSize: deck.length,
+        excludeCount: excludeIds.size,
+        genres: explicitPrefs.genres,
+        languages: explicitPrefs.languages,
+      },
+      "Together deck thin — retrying with looser filters",
+    );
+    const loosePrefs: ExplicitPreferences = {
+      ...explicitPrefs,
+      languages: [],
+      providerIds: [],
+      mutedGenres: explicitPrefs.mutedGenres ?? [],
+    };
+    const retry = await getPersonalizedSwipePool({
+      profile: {
+        ...profile,
+        topLanguages: [...INDIA_COLD_START_LANGUAGES],
+      },
+      explicitPrefs: loosePrefs,
+      fallbackLanguages: [...INDIA_COLD_START_LANGUAGES],
+      page: 1,
+      excludeIds,
+      mode: "together",
+    });
+    if (retry.length > deck.length) deck = retry;
+  }
+
+  if (deck.length === 0) {
+    res.status(409).json({
+      error:
+        "Couldn’t build a shared deck right now — check Preferences for overlapping languages/genres, or try again in a moment",
+      tasteOverlap: overlap,
+    });
+    return;
+  }
 
   const [session] = await db
     .insert(matchSessionsTable)
@@ -299,6 +337,7 @@ router.post("/match-sessions", requireAuth, async (req: any, res): Promise<void>
     partnerUserId,
     status: session.status,
     deck,
+    deckSize: deck.length,
     tasteOverlap: overlap,
     createdAt: session.createdAt.toISOString(),
   });
