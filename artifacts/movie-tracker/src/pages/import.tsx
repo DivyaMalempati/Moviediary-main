@@ -63,7 +63,7 @@ function isLetterboxdCsv(headerCols: string[]): boolean {
   return headerCols.includes("name") && headerCols.includes("letterboxd uri");
 }
 
-function parseCSV(text: string): { rows: ImportRow[]; source: "letterboxd" | "cinevault" | "generic" } {
+function parseCSV(text: string, defaultStatus: "watched" | "watchlist" = "watched"): { rows: ImportRow[]; source: "letterboxd" | "cinevault" | "generic" } {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   if (lines.length === 0) return { rows: [], source: "generic" };
 
@@ -119,7 +119,7 @@ function parseCSV(text: string): { rows: ImportRow[]; source: "letterboxd" | "ci
       const statusRaw = (statusIdx >= 0 ? cols[statusIdx] : "") ?? "";
       const status = (["watched", "watchlist"].includes(statusRaw.toLowerCase())
         ? statusRaw.toLowerCase()
-        : "watched") as "watched" | "watchlist";
+        : defaultStatus) as "watched" | "watchlist";
       const ratingRaw = (ratingIdx >= 0 ? cols[ratingIdx] : "") ?? "";
       const rating = ratingRaw || undefined;
       const yearRaw = (yearIdx >= 0 ? cols[yearIdx] : "") ?? "";
@@ -138,7 +138,7 @@ function parseCSV(text: string): { rows: ImportRow[]; source: "letterboxd" | "ci
     const title = cols[0] ?? "";
     const status = (["watched", "watchlist"].includes(cols[1]?.toLowerCase())
       ? cols[1].toLowerCase()
-      : "watched") as "watched" | "watchlist";
+      : defaultStatus) as "watched" | "watchlist";
     const rating = cols[2] || undefined;
     const year = cols[3] ? parseInt(cols[3], 10) || undefined : undefined;
     const watchedAt = cols[4]?.trim() || undefined;
@@ -167,8 +167,8 @@ function asStatusHeading(line: string): "watched" | "watchlist" | null {
   return null;
 }
 
-function parseTitleList(text: string): ImportRow[] {
-  let currentStatus: "watched" | "watchlist" = "watched";
+function parseTitleList(text: string, defaultStatus: "watched" | "watchlist" = "watched"): ImportRow[] {
+  let currentStatus: "watched" | "watchlist" = defaultStatus;
   const results: ImportRow[] = [];
   const isNumbered = /^\s*\d+[.)]\s+\S/.test(text);
 
@@ -193,10 +193,10 @@ function parseTitleList(text: string): ImportRow[] {
 
 // ── Parse entry point ─────────────────────────────────────────────────────────
 
-function parseInput(raw: string): { rows: ImportRow[]; source: "letterboxd" | "cinevault" | "generic" | "list" } {
+function parseInput(raw: string, defaultStatus: "watched" | "watchlist" = "watched"): { rows: ImportRow[]; source: "letterboxd" | "cinevault" | "generic" | "list" } {
   const hasCsv = raw.includes(",");
-  if (hasCsv) return parseCSV(raw);
-  return { rows: parseTitleList(raw), source: "list" };
+  if (hasCsv) return parseCSV(raw, defaultStatus);
+  return { rows: parseTitleList(raw, defaultStatus), source: "list" };
 }
 
 // ── Template ─────────────────────────────────────────────────────────────────
@@ -234,25 +234,31 @@ export default function ImportPage() {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [preview, setPreview] = useState<{ rows: ImportRow[]; source: string }>({ rows: [], source: "" });
+  const [defaultStatus, setDefaultStatus] = useState<"watched" | "watchlist">("watched");
   const fileRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
 
-  const parse = useCallback((raw: string) => {
-    const parsed = parseInput(raw);
+  const parse = useCallback((raw: string, status: "watched" | "watchlist" = "watched") => {
+    const parsed = parseInput(raw, status);
     setPreview(parsed);
     return parsed;
   }, []);
 
   const handleText = (val: string) => {
     setText(val);
-    if (val.trim()) parse(val);
+    if (val.trim()) parse(val, defaultStatus);
     else setPreview({ rows: [], source: "" });
+  };
+
+  const handleDefaultStatus = (val: "watched" | "watchlist") => {
+    setDefaultStatus(val);
+    if (text.trim()) parse(text, val);
   };
 
   const handleFile = (file: File) => {
     file.text().then((content) => {
       setText(content);
-      parse(content);
+      parse(content, defaultStatus);
     });
   };
 
@@ -264,7 +270,7 @@ export default function ImportPage() {
   };
 
   const runImport = async () => {
-    const { rows } = parse(text);
+    const { rows } = parse(text, defaultStatus);
     if (rows.length === 0) {
       toast.error("Nothing to import — paste titles or upload a CSV");
       return;
@@ -413,6 +419,37 @@ Dune Part Two`}
           </Button>
         </div>
       </div>
+
+      {/* Default status toggle — only shown for non-Letterboxd sources */}
+      {(preview.source !== "letterboxd") && (
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-muted-foreground shrink-0">Import as</span>
+          <div className="inline-flex rounded-full border border-border bg-secondary/40 p-0.5">
+            {(["watched", "watchlist"] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => handleDefaultStatus(s)}
+                className={cn(
+                  "px-4 py-1 rounded-full text-sm font-medium transition-all capitalize",
+                  defaultStatus === s
+                    ? "bg-white text-black shadow"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {s === "watched" ? "Watched" : "Watchlist"}
+              </button>
+            ))}
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {preview.source === "list"
+              ? "Applies to all titles (add a "Watchlist" heading to override per-section)"
+              : preview.source === "generic" || preview.source === "cinevault"
+              ? "Applies to rows without a status column"
+              : "Applies to all titles without an explicit status"}
+          </span>
+        </div>
+      )}
 
       {/* Drop zone + textarea */}
       <div
