@@ -850,11 +850,12 @@ export default function MovieDetailsPage() {
                         <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">Stream</p>
                         <div className="flex flex-wrap gap-2">
                           {watchProviders.flatrate.map((p) => (
-                            <div key={p.name} className="flex items-center gap-2 bg-secondary border border-border rounded-lg px-3 py-1.5">
-                              {p.logoPath && (
-                                <img src={`https://image.tmdb.org/t/p/original${p.logoPath}`} alt={p.name} className="w-5 h-5 rounded object-cover" />
+                            <div key={p.name} title={p.name} className="w-11 h-11 rounded-xl overflow-hidden bg-secondary border border-border shrink-0">
+                              {p.logoPath ? (
+                                <img src={`https://image.tmdb.org/t/p/original${p.logoPath}`} alt={p.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="flex items-center justify-center w-full h-full text-[10px] font-semibold text-muted-foreground text-center leading-tight px-0.5">{p.name}</span>
                               )}
-                              <span className="text-sm font-medium">{p.name}</span>
                             </div>
                           ))}
                         </div>
@@ -865,11 +866,12 @@ export default function MovieDetailsPage() {
                         <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">Rent</p>
                         <div className="flex flex-wrap gap-2">
                           {watchProviders.rent.map((p) => (
-                            <div key={p.name} className="flex items-center gap-2 bg-secondary border border-border rounded-lg px-3 py-1.5">
-                              {p.logoPath && (
-                                <img src={`https://image.tmdb.org/t/p/original${p.logoPath}`} alt={p.name} className="w-5 h-5 rounded object-cover" />
+                            <div key={p.name} title={p.name} className="w-11 h-11 rounded-xl overflow-hidden bg-secondary border border-border shrink-0">
+                              {p.logoPath ? (
+                                <img src={`https://image.tmdb.org/t/p/original${p.logoPath}`} alt={p.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="flex items-center justify-center w-full h-full text-[10px] font-semibold text-muted-foreground text-center leading-tight px-0.5">{p.name}</span>
                               )}
-                              <span className="text-sm font-medium">{p.name}</span>
                             </div>
                           ))}
                         </div>
@@ -880,11 +882,12 @@ export default function MovieDetailsPage() {
                         <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">Buy</p>
                         <div className="flex flex-wrap gap-2">
                           {watchProviders.buy.map((p) => (
-                            <div key={p.name} className="flex items-center gap-2 bg-secondary border border-border rounded-lg px-3 py-1.5">
-                              {p.logoPath && (
-                                <img src={`https://image.tmdb.org/t/p/original${p.logoPath}`} alt={p.name} className="w-5 h-5 rounded object-cover" />
+                            <div key={p.name} title={p.name} className="w-11 h-11 rounded-xl overflow-hidden bg-secondary border border-border shrink-0">
+                              {p.logoPath ? (
+                                <img src={`https://image.tmdb.org/t/p/original${p.logoPath}`} alt={p.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="flex items-center justify-center w-full h-full text-[10px] font-semibold text-muted-foreground text-center leading-tight px-0.5">{p.name}</span>
                               )}
-                              <span className="text-sm font-medium">{p.name}</span>
                             </div>
                           ))}
                         </div>
