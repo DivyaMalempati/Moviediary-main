@@ -280,7 +280,9 @@ export default function UpcomingPage() {
 
         <section className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold">Your upcoming films</h2>
+            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              <CalendarClock className="h-4 w-4" /> Your upcoming films
+            </h2>
             {savedUnreleased.length > 0 && (
               <p className="text-xs text-muted-foreground">
                 {savedUnreleased.length} saved · unreleased
@@ -334,7 +336,9 @@ export default function UpcomingPage() {
         <section className="space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-lg font-semibold">Coming to India</h2>
+              <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                <CalendarClock className="h-4 w-4" /> Coming to India
+              </h2>
               <p className="text-sm text-muted-foreground">Next 90 days · theatrical / announced dates</p>
             </div>
             <div className="flex flex-wrap gap-1.5">
