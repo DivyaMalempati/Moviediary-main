@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { useListMovies, useUpdateMovie, getListMoviesQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Bell, Bookmark, CalendarClock, Download, Loader2, Search, Star, X } from "lucide-react";
+import { Bell, Bookmark, CalendarClock, Loader2, Search, Star, X } from "lucide-react";
 import { isFeatureEnabled } from "@/lib/features";
 import {
   dismissReleaseReminder,
@@ -25,31 +25,6 @@ import {
 } from "@/lib/release-reminders";
 import { RatingPickerDialog } from "@/components/rating-picker-dialog";
 import { toast } from "sonner";
-
-// ── CSV export ────────────────────────────────────────────────────────────────
-function exportCSV(movies: any[], filename: string) {
-  const cols = ["title", "status", "rating", "year", "language", "genres", "overview", "added"];
-  const rows = movies.map((m) => [
-    m.title,
-    "watchlist",
-    "",
-    m.releaseYear ?? "",
-    m.originalLanguage ?? "",
-    (m.genres as string[] | null)?.join("; ") ?? "",
-    m.overview ?? "",
-    m.createdAt ? new Date(m.createdAt).toLocaleDateString() : "",
-  ]);
-  const csv = [cols, ...rows]
-    .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
-    .join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 // ── Sort ──────────────────────────────────────────────────────────────────────
 type SortKey = "year_desc" | "newest" | "oldest" | "az" | "release_soon";
@@ -275,15 +250,6 @@ export default function WatchlistPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 text-xs h-9 shrink-0"
-              onClick={() => exportCSV(movies ?? [], "cinevault_watchlist.csv")}
-              disabled={!movies?.length}
-            >
-              <Download className="w-3 h-3" /> Export
-            </Button>
           </div>
         )}
 
