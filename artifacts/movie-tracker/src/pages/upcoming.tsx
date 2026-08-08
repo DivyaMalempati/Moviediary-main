@@ -140,6 +140,12 @@ export default function UpcomingPage() {
     [watchlist],
   );
 
+  // Only future-dated films for the "Your upcoming" grid (released ones are in Just out / Watchlist)
+  const savedUnreleased = useMemo(
+    () => lookingForward.filter((f) => f.daysUntil > 0),
+    [lookingForward],
+  );
+
   const justOut = useMemo(
     () => lookingForward.filter((f) => f.daysUntil < 0),
     [lookingForward],
@@ -274,26 +280,28 @@ export default function UpcomingPage() {
 
         <section className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold">Looking forward</h2>
-            <p className="text-xs text-muted-foreground">
-              {lookingForward.length} on your watchlist with a release date
-            </p>
+            <h2 className="text-lg font-semibold">Your upcoming films</h2>
+            {savedUnreleased.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {savedUnreleased.length} saved · unreleased
+              </p>
+            )}
           </div>
           {watchlistLoading ? (
             <div className="flex justify-center py-10">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
             </div>
-          ) : lookingForward.length === 0 ? (
+          ) : savedUnreleased.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border bg-card/40 px-6 py-10 text-center">
               <Heart className="mx-auto mb-3 h-8 w-8 text-muted-foreground opacity-50" />
-              <p className="text-sm font-medium">Nothing marked yet</p>
+              <p className="text-sm font-medium">Nothing saved yet</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Pick a film below and tap Remind me to track its release.
+                Add an unreleased film from your watchlist or tap Remind me below.
               </p>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 md:gap-6">
-              {lookingForward.map((film) => (
+              {savedUnreleased.map((film) => (
                 <Link key={film.id} href={`/movie/${film.id}`} className="group space-y-2">
                   <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-secondary">
                     {getPosterUrl(film.posterPath, "w500") ? (
@@ -307,9 +315,9 @@ export default function UpcomingPage() {
                       <p className="text-[11px] font-medium text-white/95">
                         {film.daysUntil === 0
                           ? "Out today"
-                          : film.daysUntil > 0
-                            ? `In ${film.daysUntil}d`
-                            : "Just out"}
+                          : film.daysUntil === 1
+                            ? "Tomorrow"
+                            : `In ${film.daysUntil}d`}
                       </p>
                     </div>
                   </div>

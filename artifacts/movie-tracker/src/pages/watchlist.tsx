@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { useListMovies, useUpdateMovie, getListMoviesQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Bell, Bookmark, Download, Loader2, Search, Star, X } from "lucide-react";
+import { Bell, Bookmark, CalendarClock, Download, Loader2, Search, Star, X } from "lucide-react";
 import { isFeatureEnabled } from "@/lib/features";
 import {
   dismissReleaseReminder,
@@ -125,11 +125,27 @@ export default function WatchlistPage() {
     return candidates[0] ?? null;
   }, [movies, releaseReminderDismissed]);
 
+  const unreleasedCount = useMemo(
+    () =>
+      (movies ?? []).filter((m) =>
+        m.releaseDate
+          ? new Date(`${m.releaseDate}T12:00:00`) > new Date()
+          : false,
+      ).length,
+    [movies],
+  );
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const base = q
-      ? (movies ?? []).filter((m) => m.title.toLowerCase().includes(q))
-      : (movies ?? []);
+    const base = (movies ?? []).filter((m) => {
+      // Exclude unreleased movies — they live on the Upcoming page
+      const isFuture = m.releaseDate
+        ? new Date(`${m.releaseDate}T12:00:00`) > new Date()
+        : false;
+      if (isFuture) return false;
+      if (q && !m.title.toLowerCase().includes(q)) return false;
+      return true;
+    });
     return sortWatchlist(base, sort);
   }, [movies, query, sort]);
 
@@ -211,6 +227,20 @@ export default function WatchlistPage() {
               <X className="w-4 h-4" />
             </button>
           </div>
+        )}
+
+        {unreleasedCount > 0 && (
+          <Link
+            href="/upcoming"
+            className="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 hover:bg-primary/10 transition-colors"
+          >
+            <CalendarClock className="w-4 h-4 text-primary shrink-0" />
+            <span className="text-sm flex-1">
+              <span className="font-medium">{unreleasedCount} unreleased {unreleasedCount === 1 ? "film" : "films"}</span>
+              <span className="text-muted-foreground"> moved to Upcoming</span>
+            </span>
+            <span className="text-xs text-primary font-medium shrink-0">View →</span>
+          </Link>
         )}
 
         <div className="flex items-center justify-between gap-4">
