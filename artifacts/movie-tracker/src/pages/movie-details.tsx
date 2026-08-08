@@ -628,13 +628,13 @@ export default function MovieDetailsPage() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto p-6 md:p-10 pt-16 md:pt-20 grid grid-cols-1 md:grid-cols-3 gap-10">
+      <div className="max-w-7xl mx-auto p-6 md:p-10 pt-4 md:pt-20 grid grid-cols-1 md:grid-cols-3 gap-10">
         <div className="md:col-span-2 space-y-10">
           {/* Overview */}
           {movie.overview && (
             <section>
               <h3 className="text-xl font-semibold mb-3">Synopsis</h3>
-              <p className="text-muted-foreground leading-relaxed text-lg">
+              <p className="text-muted-foreground leading-relaxed text-sm md:text-base">
                 {movie.overview}
               </p>
             </section>
