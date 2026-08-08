@@ -160,6 +160,7 @@ export default function WatchlistPage() {
               <img
                 src={releasePosterUrl(releaseReminder)!}
                 alt=""
+                loading="lazy"
                 className="w-12 h-[72px] rounded-md object-cover shrink-0 shadow"
               />
             ) : (

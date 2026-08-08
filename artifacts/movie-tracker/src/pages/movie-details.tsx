@@ -680,8 +680,9 @@ export default function MovieDetailsPage() {
                                 >
                                   {p.logoPath ? (
                                     <img
-                                      src={`https://image.tmdb.org/t/p/original${p.logoPath}`}
+                                      src={`https://image.tmdb.org/t/p/w92${p.logoPath}`}
                                       alt={p.name}
+                                      loading="lazy"
                                       className="w-full h-full object-cover"
                                     />
                                   ) : (

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ClerkProvider, SignIn, SignUp, Show, useClerk } from "@clerk/react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { dark } from "@clerk/themes";
@@ -10,24 +10,28 @@ import { ClerkAuthTokenBridge } from "@/components/clerk-auth-token-bridge";
 import { isDemoMode, initDemoMode, disableDemoMode, enableDemoMode, clearAppSession } from "@/lib/demo-auth";
 // disableDemoMode used when Clerk session appears / leaving guest mode
 
+// Eagerly loaded — these are the common first-paint screens
 import LandingPage from "@/pages/landing";
-import LibraryPage from "@/pages/library";
 import WatchedPage from "@/pages/watched";
 import WatchlistPage from "@/pages/watchlist";
-import UpcomingPage from "@/pages/upcoming";
 import AddPage from "@/pages/add";
-import SuggestionsPage from "@/pages/suggestions";
-import SwipePage from "@/pages/swipe";
-import MovieDetailsPage from "@/pages/movie-details";
-import ImportPage from "@/pages/import";
-import ProfilePage from "@/pages/profile";
-import CollectionsPage from "@/pages/collections";
-import SharedCollectionPage from "@/pages/shared-collection";
-import StatsPage from "@/pages/stats";
-import PartnerPage, { PairInvitePage } from "@/pages/partner";
-import MatchSessionPage from "@/pages/match-session";
-import GuidePage from "@/pages/guide";
-import NotFound from "@/pages/not-found";
+
+// Lazy loaded — only fetched when the user navigates to them
+const LibraryPage        = lazy(() => import("@/pages/library"));
+const UpcomingPage       = lazy(() => import("@/pages/upcoming"));
+const SuggestionsPage    = lazy(() => import("@/pages/suggestions"));
+const SwipePage          = lazy(() => import("@/pages/swipe"));
+const MovieDetailsPage   = lazy(() => import("@/pages/movie-details"));
+const ImportPage         = lazy(() => import("@/pages/import"));
+const ProfilePage        = lazy(() => import("@/pages/profile"));
+const CollectionsPage    = lazy(() => import("@/pages/collections"));
+const SharedCollectionPage = lazy(() => import("@/pages/shared-collection"));
+const StatsPage          = lazy(() => import("@/pages/stats"));
+const PartnerPage        = lazy(() => import("@/pages/partner"));
+const PairInvitePage     = lazy(() => import("@/pages/partner").then(m => ({ default: m.PairInvitePage })));
+const MatchSessionPage   = lazy(() => import("@/pages/match-session"));
+const GuidePage          = lazy(() => import("@/pages/guide"));
+const NotFound           = lazy(() => import("@/pages/not-found"));
 import { FeatureGate } from "@/components/feature-gate";
 import { FeatureTourProvider } from "@/components/feature-tour-context";
 import { FeatureWalkthroughHost } from "@/components/feature-walkthrough";
@@ -139,6 +143,7 @@ function gated(feature: Parameters<typeof FeatureGate>[0]["feature"], component:
 function AppPages() {
   return (
     <Layout>
+      <Suspense fallback={null}>
       <Switch>
         <Route path="/library" component={LibraryPage} />
         <Route path="/watched" component={WatchedPage} />
@@ -159,6 +164,7 @@ function AppPages() {
         <Route path="/stats" component={gated("stats", StatsPage)} />
         <Route component={NotFound} />
       </Switch>
+      </Suspense>
     </Layout>
   );
 }

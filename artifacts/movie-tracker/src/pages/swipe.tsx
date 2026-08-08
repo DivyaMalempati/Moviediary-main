@@ -321,8 +321,9 @@ function ProviderRow({
           >
             {p.logoPath && (
               <img
-                src={`${TMDB_IMG}/original${p.logoPath}`}
+                src={`${TMDB_IMG}/w92${p.logoPath}`}
                 alt=""
+                loading="lazy"
                 className="w-4 h-4 rounded object-cover"
               />
             )}
