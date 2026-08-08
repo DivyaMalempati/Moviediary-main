@@ -12,6 +12,7 @@ interface TmdbMovieCardProps {
   originalLanguage?: string | null;
   year?: number | null;
   releaseYear?: number | null;
+  releaseDate?: string | null;
   overview?: string | null;
   inLibrary?: boolean;
   libraryStatus?: "watched" | "watchlist";
@@ -28,6 +29,7 @@ export function TmdbMovieCard({
   originalLanguage,
   year,
   releaseYear,
+  releaseDate,
   overview,
   inLibrary = false,
   libraryStatus,
@@ -41,6 +43,7 @@ export function TmdbMovieCard({
   const displayYear = year ?? releaseYear;
   const alreadyWatched = inLibrary && libraryStatus === "watched";
   const onWatchlist = inLibrary && libraryStatus === "watchlist";
+  const isFutureRelease = !!(releaseDate && releaseDate > new Date().toISOString().slice(0, 10));
 
   return (
     <div className="flex bg-card border border-border rounded-xl overflow-hidden shadow-sm hover-elevate">
@@ -79,15 +82,17 @@ export function TmdbMovieCard({
             </div>
           ) : onWatchlist ? (
             <>
-              <Button
-                size="sm"
-                variant="default"
-                onClick={onAddWatched}
-                disabled={isAddingWatched || isAddingWatchlist}
-                className="flex-1 text-xs h-8"
-              >
-                {isAddingWatched ? "Saving…" : "Mark Watched"}
-              </Button>
+              {!isFutureRelease && (
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={onAddWatched}
+                  disabled={isAddingWatched || isAddingWatchlist}
+                  className="flex-1 text-xs h-8"
+                >
+                  {isAddingWatched ? "Saving…" : "Mark Watched"}
+                </Button>
+              )}
               <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-secondary rounded-lg px-2.5 h-8">
                 <Check className="w-3 h-3 shrink-0" />
                 On watchlist
@@ -95,15 +100,17 @@ export function TmdbMovieCard({
             </>
           ) : (
             <>
-              <Button
-                size="sm"
-                variant="default"
-                onClick={onAddWatched}
-                disabled={isAddingWatched || isAddingWatchlist}
-                className="flex-1 text-xs h-8"
-              >
-                {isAddingWatched ? "Adding…" : "Mark Watched"}
-              </Button>
+              {!isFutureRelease && (
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={onAddWatched}
+                  disabled={isAddingWatched || isAddingWatchlist}
+                  className="flex-1 text-xs h-8"
+                >
+                  {isAddingWatched ? "Adding…" : "Mark Watched"}
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="outline"

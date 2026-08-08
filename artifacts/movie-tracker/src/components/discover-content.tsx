@@ -164,9 +164,11 @@ function SuggestionPosterCard({
       {/* Action buttons */}
       {!inLibrary && (
         <div className="flex gap-1">
-          <Button size="sm" className="flex-1 h-7 text-[10px] px-1 gap-1" onClick={() => onAdd(movie, "watched")}>
-            <Eye className="w-3 h-3" /> Watched
-          </Button>
+          {!(movie.releaseDate && movie.releaseDate > new Date().toISOString().slice(0, 10)) && (
+            <Button size="sm" className="flex-1 h-7 text-[10px] px-1 gap-1" onClick={() => onAdd(movie, "watched")}>
+              <Eye className="w-3 h-3" /> Watched
+            </Button>
+          )}
           <Button size="sm" variant="outline" className="flex-1 h-7 text-[10px] px-1 gap-1 bg-transparent" onClick={() => onAdd(movie, "watchlist")}>
             <BookmarkPlus className="w-3 h-3" /> Save
           </Button>
@@ -283,9 +285,11 @@ function AiFriendCard({
         {/* Actions */}
         {!inLibrary ? (
           <div className="flex gap-1.5 pt-0.5">
-            <Button size="sm" className="h-7 text-[10px] px-3 gap-1" onClick={() => onAdd(movie, "watched")}>
-              <Eye className="w-3 h-3" /> Watched it
-            </Button>
+            {!(movie.releaseDate && movie.releaseDate > new Date().toISOString().slice(0, 10)) && (
+              <Button size="sm" className="h-7 text-[10px] px-3 gap-1" onClick={() => onAdd(movie, "watched")}>
+                <Eye className="w-3 h-3" /> Watched it
+              </Button>
+            )}
             <Button size="sm" variant="outline" className="h-7 text-[10px] px-3 gap-1 bg-transparent" onClick={() => onAdd(movie, "watchlist")}>
               <BookmarkPlus className="w-3 h-3" /> Save
             </Button>
