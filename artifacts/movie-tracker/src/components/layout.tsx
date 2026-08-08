@@ -147,7 +147,7 @@ export function Layout({ children }: LayoutProps) {
 
   return (
     <div
-      className="min-h-[100dvh] flex flex-col md:flex-row bg-background text-foreground"
+      className="min-h-[100dvh] flex flex-col lg:flex-row bg-background text-foreground"
     >
       {demo && (
         <div className="fixed top-0 inset-x-0 z-[100] bg-amber-400 text-black text-xs sm:text-sm font-medium py-1.5 px-3 flex items-center justify-center gap-3">
@@ -165,7 +165,7 @@ export function Layout({ children }: LayoutProps) {
       <aside
         className={cn(
           "w-64 flex-col border-r border-border bg-card/30 backdrop-blur-md sticky top-0 h-screen",
-          "hidden md:flex",
+          "hidden lg:flex",
           demo && "pt-8",
         )}
       >
@@ -213,14 +213,14 @@ export function Layout({ children }: LayoutProps) {
 
       <main
         className={cn(
-          "flex-1 flex flex-col min-w-0 pb-20 md:pb-0",
+          "flex-1 flex flex-col min-w-0 pb-20 lg:pb-0",
           demo && "pt-8",
         )}
       >
         <div className="flex-1 overflow-y-auto">{children}</div>
       </main>
 
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-lg border-t border-border flex items-center justify-around px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-lg border-t border-border flex items-center justify-around px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         {bottomItems.map(({ href, label }) => {
           const Icon = iconForHref(href);
           const isActive = navItemActive(location, href);
@@ -247,7 +247,7 @@ export function Layout({ children }: LayoutProps) {
         type="button"
         onClick={() => setFeedbackOpen(true)}
         title="Share feature request"
-        className="fixed z-40 flex items-center justify-center rounded-full shadow-lg transition-all duration-200 bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 w-12 h-12 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 md:bottom-6 md:right-6"
+        className="fixed z-40 flex items-center justify-center rounded-full shadow-lg transition-all duration-200 bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 w-12 h-12 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 lg:bottom-6 lg:right-6"
       >
         <MessageSquarePlus className="w-5 h-5" />
       </button>
