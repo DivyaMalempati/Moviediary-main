@@ -36,7 +36,9 @@ import {
   getAuthHeaders,
   getPendingClaimGuestToken,
   clearPendingClaimGuestToken,
+  clearAppSession,
 } from "@/lib/demo-auth";
+import { useUser, useClerk } from "@clerk/react";
 import { invalidateLibrary } from "@/lib/queryClient";
 import { isFeatureEnabled } from "@/lib/features";
 import { cn } from "@/lib/utils";
@@ -217,6 +219,9 @@ function Section({ title, movies, badge, defaultOpen = true, onRewatch }: {
 export default function WatchedPage() {
   const queryClient = useQueryClient();
   const rewatchMovie = useRewatchMovie();
+  const { user } = useUser();
+  const { signOut } = useClerk();
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const [pendingRewatch, setPendingRewatch] = useState<any | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [sharePayload, setSharePayload] = useState<ShareMovieInput | null>(null);
@@ -616,9 +621,29 @@ export default function WatchedPage() {
               {(movies?.length ?? 0) === 0 ? "Start adding movies to build your library." : "Try adjusting your filters."}
             </p>
             {(movies?.length ?? 0) === 0 && (
-              <div className="flex items-center justify-center gap-3">
-                <Link href="/add"><Button size="sm" className="bg-white text-black hover:bg-white/90">Search & add</Button></Link>
-                <Link href="/profile"><Button size="sm" variant="outline" className="gap-1.5"><Upload className="w-3.5 h-3.5" /> Import / Export</Button></Link>
+              <div className="flex flex-col items-center gap-4">
+                <div className="flex items-center justify-center gap-3">
+                  <Link href="/add"><Button size="sm" className="bg-white text-black hover:bg-white/90">Search & add</Button></Link>
+                  <Link href="/profile"><Button size="sm" variant="outline" className="gap-1.5"><Upload className="w-3.5 h-3.5" /> Import / Export</Button></Link>
+                </div>
+                {user && (
+                  <div className="mt-2 rounded-xl border border-border bg-secondary/40 px-4 py-3 text-center max-w-xs">
+                    <p className="text-xs text-muted-foreground">
+                      Signed in as <span className="font-medium text-foreground">{user.primaryEmailAddress?.emailAddress}</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Not your library?</p>
+                    <button
+                      type="button"
+                      className="mt-2 text-xs underline text-foreground"
+                      onClick={() => {
+                        clearAppSession();
+                        void signOut({ redirectUrl: `${window.location.origin}${basePath || ""}/` });
+                      }}
+                    >
+                      Sign out and try a different account
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
