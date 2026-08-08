@@ -4,11 +4,8 @@ import WatchlistPage from "./watchlist";
 import { cn } from "@/lib/utils";
 
 export default function LibraryPage() {
-  const [, setLocation] = useLocation();
-  const params =
-    typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search)
-      : new URLSearchParams();
+  const [location, setLocation] = useLocation();
+  const params = new URLSearchParams(location.includes("?") ? location.split("?")[1] : "");
   const tab = params.get("tab") === "watchlist" ? "watchlist" : "watched";
 
   const setTab = (t: "watched" | "watchlist") => {
