@@ -25,6 +25,23 @@ async function tmdbFetch(path: string, params: Record<string, string> = {}): Pro
   return res;
 }
 
+// ── Simple in-memory TTL cache for expensive/repeated TMDB calls ────────────
+const TMDB_DETAIL_TTL  = 4 * 60 * 60 * 1000;  // 4 h  — movie details/credits
+const TMDB_LIST_TTL    = 2 * 60 * 60 * 1000;  // 2 h  — similar / recommendations
+const TMDB_PROVIDER_TTL = 6 * 60 * 60 * 1000; // 6 h  — watch providers (stable)
+
+interface CacheEntry<T> { value: T; expiresAt: number }
+const tmdbCache = new Map<string, CacheEntry<unknown>>();
+
+function cacheGet<T>(key: string): T | undefined {
+  const entry = tmdbCache.get(key) as CacheEntry<T> | undefined;
+  if (!entry || Date.now() > entry.expiresAt) { tmdbCache.delete(key); return undefined; }
+  return entry.value;
+}
+function cacheSet<T>(key: string, value: T, ttl: number): void {
+  tmdbCache.set(key, { value, expiresAt: Date.now() + ttl });
+}
+
 // ── Genre id/name map (cached in-memory) ────────────────────────────────────
 // TMDB's discover/similar/recommendations/trending endpoints return
 // `genre_ids: number[]`, NOT full `genres: [{id,name}]` objects — only the
@@ -240,6 +257,9 @@ export async function getPersonMovieCredits(
 }
 
 export async function getMovieDetails(tmdbId: number) {
+  const cacheKey = `detail:${tmdbId}`;
+  const cached = cacheGet<Awaited<ReturnType<typeof getMovieDetails>>>(cacheKey);
+  if (cached) return cached;
   // append_to_response=credits pulls cast/crew in one round-trip so swipe
   // flip-details (and any other callers) can show director + top billed actors
   // without a second TMDB request.
@@ -260,25 +280,37 @@ export async function getMovieDetails(tmdbId: number) {
     .map((c) => c.name);
   const runtimeMinutes =
     typeof data.runtime === "number" && data.runtime > 0 ? data.runtime : null;
-  return { ...mapped, director, cast, runtimeMinutes };
+  const result = { ...mapped, director, cast, runtimeMinutes };
+  cacheSet(cacheKey, result, TMDB_DETAIL_TTL);
+  return result;
 }
 
 export async function getSimilarMovies(tmdbId: number) {
+  const cacheKey = `similar:${tmdbId}`;
+  const cached = cacheGet<Awaited<ReturnType<typeof getSimilarMovies>>>(cacheKey);
+  if (cached) return cached;
   const [res, { idToName }] = await Promise.all([
     tmdbFetch(`/movie/${tmdbId}/similar`),
     getGenreMaps(),
   ]);
   const data = (await res.json()) as { results: TmdbMovieRaw[] };
-  return data.results.map((m) => mapTmdbMovie(m, idToName));
+  const result = data.results.map((m) => mapTmdbMovie(m, idToName));
+  cacheSet(cacheKey, result, TMDB_LIST_TTL);
+  return result;
 }
 
 export async function getRecommendations(tmdbId: number) {
+  const cacheKey = `recs:${tmdbId}`;
+  const cached = cacheGet<Awaited<ReturnType<typeof getRecommendations>>>(cacheKey);
+  if (cached) return cached;
   const [res, { idToName }] = await Promise.all([
     tmdbFetch(`/movie/${tmdbId}/recommendations`),
     getGenreMaps(),
   ]);
   const data = (await res.json()) as { results: TmdbMovieRaw[] };
-  return data.results.map((m) => mapTmdbMovie(m, idToName));
+  const result = data.results.map((m) => mapTmdbMovie(m, idToName));
+  cacheSet(cacheKey, result, TMDB_LIST_TTL);
+  return result;
 }
 
 export async function getTrendingIndia() {
@@ -341,6 +373,9 @@ export async function getUpcomingReleases(opts?: {
 }
 
 export async function getWatchProviders(tmdbId: number, watchRegion = "IN") {
+  const cacheKey = `providers:${tmdbId}:${watchRegion}`;
+  const cached = cacheGet<Awaited<ReturnType<typeof getWatchProviders>>>(cacheKey);
+  if (cached) return cached;
   const res = await tmdbFetch(`/movie/${tmdbId}/watch/providers`);
   const data = (await res.json()) as {
     results?: Record<
@@ -361,7 +396,7 @@ export async function getWatchProviders(tmdbId: number, watchRegion = "IN") {
     logoPath: p.logo_path ? p.logo_path : null,
   });
 
-  return {
+  const result = {
     tmdbId,
     watchRegion,
     link: region?.link ?? null,
@@ -369,6 +404,8 @@ export async function getWatchProviders(tmdbId: number, watchRegion = "IN") {
     rent: region?.rent?.map(mapProvider) ?? null,
     buy: region?.buy?.map(mapProvider) ?? null,
   };
+  cacheSet(cacheKey, result, TMDB_PROVIDER_TTL);
+  return result;
 }
 
 /** Catalog of streaming providers for a watch region (for preference pickers). */

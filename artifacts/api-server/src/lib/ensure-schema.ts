@@ -231,5 +231,23 @@ export async function ensureSchema(): Promise<void> {
     END $$;
   `);
 
+  // Movies table indexes — speed up every /api/movies and /api/movies/stats query.
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS "movies_user_created_idx"
+      ON "movies" ("user_id", "created_at" DESC);
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS "movies_user_status_created_idx"
+      ON "movies" ("user_id", "status", "created_at" DESC);
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS "movies_user_tmdbid_idx"
+      ON "movies" ("user_id", "tmdb_id");
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS "movies_user_lang_idx"
+      ON "movies" ("user_id", "original_language");
+  `);
+
   logger.info("Schema ensure complete");
 }
