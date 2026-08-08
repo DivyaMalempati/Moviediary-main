@@ -642,212 +642,6 @@ export default function MovieDetailsPage() {
             </section>
           )}
 
-          {/* Watch history */}
-          {movie.status === "watched" && (() => {
-            const times = 1 + (movie.rewatchCount ?? 0);
-            const dated = [...(movie.rewatchDates ?? [])].slice().reverse();
-            const hasRewatches =
-              (movie.rewatchCount ?? 0) > 0 || (movie.rewatchDates?.length ?? 0) > 0;
-            // Prefer dedicated first-watch field; for never-rewatched titles,
-            // fall back to watchedAt (legacy rows before firstWatchedAt existed).
-            const firstIso =
-              movie.firstWatchedAt ??
-              (!hasRewatches ? movie.watchedAt ?? null : null);
-            const undated =
-              (movie.rewatchCount ?? 0) - (movie.rewatchDates?.length ?? 0);
-            return (
-              <section>
-                <h3 className="text-xl font-semibold mb-3 flex items-center gap-2">
-                  <RotateCcw className="w-5 h-5 text-primary" />
-                  Watch history
-                </h3>
-                <p className="text-sm text-muted-foreground mb-3">
-                  Watched ×{times}
-                  {(movie.rewatchCount ?? 0) > 0
-                    ? ` · ${movie.rewatchCount} rewatch${movie.rewatchCount === 1 ? "" : "es"}`
-                    : ""}
-                </p>
-                <ul className="space-y-2 text-sm">
-                  <li className="flex flex-col gap-2 text-muted-foreground">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Calendar className="w-3.5 h-3.5 shrink-0" />
-                      <span>
-                        {hasRewatches ? "First watched" : "Watched"}{" "}
-                        {firstIso ? (
-                          <span className="text-foreground font-medium">
-                            {formatWatchDate(firstIso)}
-                          </span>
-                        ) : (
-                          <span className="text-foreground/80 italic">date unknown</span>
-                        )}
-                      </span>
-                      {!editingWatchDate && (
-                        <button
-                          type="button"
-                          className="text-xs text-primary hover:underline"
-                          onClick={() => {
-                            setEditingRewatchIndex(null);
-                            setWatchDateDraft(toWatchDateInput(firstIso));
-                            setEditingWatchDate(true);
-                          }}
-                        >
-                          Edit date
-                        </button>
-                      )}
-                    </div>
-                    {editingWatchDate && (
-                      <div className="flex flex-wrap items-center gap-2 pl-5">
-                        <Input
-                          type="date"
-                          value={watchDateDraft}
-                          max={todayInputValue()}
-                          onChange={(e) => setWatchDateDraft(e.target.value)}
-                          className="h-8 w-auto bg-secondary border-border text-sm"
-                        />
-                        <Button
-                          size="sm"
-                          className="h-8"
-                          onClick={() => saveFirstWatchDate(watchDateDraft || null)}
-                        >
-                          Save
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 text-muted-foreground"
-                          onClick={() => saveFirstWatchDate(null)}
-                        >
-                          Not sure
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 text-muted-foreground"
-                          onClick={() => setEditingWatchDate(false)}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    )}
-                  </li>
-                  {dated.map((iso, i) => {
-                    const chronoIndex = (movie.rewatchDates?.length ?? 0) - 1 - i;
-                    const editing = editingRewatchIndex === chronoIndex;
-                    return (
-                      <li
-                        key={`${iso}-${chronoIndex}`}
-                        className="flex flex-col gap-2 text-muted-foreground"
-                      >
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Calendar className="w-3.5 h-3.5 shrink-0" />
-                          <span>
-                            Rewatched{" "}
-                            <span className="text-foreground font-medium">
-                              {formatWatchDate(iso)}
-                            </span>
-                          </span>
-                          {!editing && (
-                            <>
-                              <button
-                                type="button"
-                                className="text-xs text-primary hover:underline"
-                                onClick={() => {
-                                  setEditingWatchDate(false);
-                                  setEditingRewatchIndex(chronoIndex);
-                                  setRewatchDateDraft(toWatchDateInput(iso));
-                                }}
-                              >
-                                Edit date
-                              </button>
-                              <button
-                                type="button"
-                                className="text-xs text-destructive hover:underline"
-                                onClick={() => {
-                                  const label = formatWatchDate(iso);
-                                  if (
-                                    !window.confirm(
-                                      label
-                                        ? `Delete rewatch on ${label}? This removes that rewatch from your count.`
-                                        : "Delete this rewatch?",
-                                    )
-                                  ) {
-                                    return;
-                                  }
-                                  deleteRewatchDate(chronoIndex, label);
-                                }}
-                              >
-                                Delete
-                              </button>
-                            </>
-                          )}
-                        </div>
-                        {editing && (
-                          <div className="flex flex-wrap items-center gap-2 pl-5">
-                            <Input
-                              type="date"
-                              value={rewatchDateDraft}
-                              max={todayInputValue()}
-                              onChange={(e) => setRewatchDateDraft(e.target.value)}
-                              className="h-8 w-auto bg-secondary border-border text-sm"
-                            />
-                            <Button
-                              size="sm"
-                              className="h-8"
-                              disabled={!rewatchDateDraft}
-                              onClick={() =>
-                                saveRewatchDate(chronoIndex, rewatchDateDraft)
-                              }
-                            >
-                              Save
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 text-destructive"
-                              onClick={() => {
-                                const label = formatWatchDate(iso);
-                                if (
-                                  !window.confirm(
-                                    label
-                                      ? `Delete rewatch on ${label}? This removes that rewatch from your count. You can log it again with Rewatch.`
-                                      : "Delete this rewatch? You can log it again with Rewatch.",
-                                  )
-                                ) {
-                                  return;
-                                }
-                                deleteRewatchDate(chronoIndex, label);
-                              }}
-                            >
-                              Delete
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 text-muted-foreground"
-                              onClick={() => setEditingRewatchIndex(null)}
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                        )}
-                      </li>
-                    );
-                  })}
-                  {undated > 0 && (
-                    <li className="text-xs text-muted-foreground/80 pl-5">
-                      {undated} rewatch{undated === 1 ? "" : "es"} logged without a date
-                    </li>
-                  )}
-                  {movie.createdAt && (
-                    <li className="text-xs text-muted-foreground/70 pl-5">
-                      Added to diary {formatWatchDate(movie.createdAt)}
-                    </li>
-                  )}
-                </ul>
-              </section>
-            );
-          })()}
-
           {/* Where to Watch */}
           {movie.tmdbId && (() => {
             const hasProviders = (watchProviders?.flatrate?.length ?? 0) > 0
@@ -1091,6 +885,116 @@ export default function MovieDetailsPage() {
               </div>
             </div>
           </section>
+
+          {/* Watch history */}
+          {movie.status === "watched" && (() => {
+            const times = 1 + (movie.rewatchCount ?? 0);
+            const dated = [...(movie.rewatchDates ?? [])].slice().reverse();
+            const hasRewatches =
+              (movie.rewatchCount ?? 0) > 0 || (movie.rewatchDates?.length ?? 0) > 0;
+            const firstIso =
+              movie.firstWatchedAt ??
+              (!hasRewatches ? movie.watchedAt ?? null : null);
+            const undated =
+              (movie.rewatchCount ?? 0) - (movie.rewatchDates?.length ?? 0);
+            return (
+              <section>
+                <h3 className="text-xl font-semibold mb-3 flex items-center gap-2">
+                  <RotateCcw className="w-5 h-5 text-primary" />
+                  Watch history
+                </h3>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Watched ×{times}
+                  {(movie.rewatchCount ?? 0) > 0
+                    ? ` · ${movie.rewatchCount} rewatch${movie.rewatchCount === 1 ? "" : "es"}`
+                    : ""}
+                </p>
+                <ul className="space-y-2 text-sm">
+                  <li className="flex flex-col gap-2 text-muted-foreground">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Calendar className="w-3.5 h-3.5 shrink-0" />
+                      <span>
+                        {hasRewatches ? "First watched" : "Watched"}{" "}
+                        {firstIso ? (
+                          <span className="text-foreground font-medium">
+                            {formatWatchDate(firstIso)}
+                          </span>
+                        ) : (
+                          <span className="text-foreground/80 italic">date unknown</span>
+                        )}
+                      </span>
+                      {!editingWatchDate && (
+                        <button
+                          type="button"
+                          className="text-xs text-primary hover:underline"
+                          onClick={() => {
+                            setEditingRewatchIndex(null);
+                            setWatchDateDraft(toWatchDateInput(firstIso));
+                            setEditingWatchDate(true);
+                          }}
+                        >
+                          Edit date
+                        </button>
+                      )}
+                    </div>
+                    {editingWatchDate && (
+                      <div className="flex flex-wrap items-center gap-2 pl-5">
+                        <Input
+                          type="date"
+                          value={watchDateDraft}
+                          max={todayInputValue()}
+                          onChange={(e) => setWatchDateDraft(e.target.value)}
+                          className="h-8 w-auto bg-secondary border-border text-sm"
+                        />
+                        <Button size="sm" className="h-8" onClick={() => saveFirstWatchDate(watchDateDraft || null)}>Save</Button>
+                        <Button size="sm" variant="ghost" className="h-8 text-muted-foreground" onClick={() => saveFirstWatchDate(null)}>Not sure</Button>
+                        <Button size="sm" variant="ghost" className="h-8 text-muted-foreground" onClick={() => setEditingWatchDate(false)}>Cancel</Button>
+                      </div>
+                    )}
+                  </li>
+                  {dated.map((iso, i) => {
+                    const chronoIndex = (movie.rewatchDates?.length ?? 0) - 1 - i;
+                    const editing = editingRewatchIndex === chronoIndex;
+                    return (
+                      <li key={`${iso}-${chronoIndex}`} className="flex flex-col gap-2 text-muted-foreground">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Calendar className="w-3.5 h-3.5 shrink-0" />
+                          <span>
+                            Rewatched{" "}
+                            <span className="text-foreground font-medium">{formatWatchDate(iso)}</span>
+                          </span>
+                          {!editing && (
+                            <>
+                              <button type="button" className="text-xs text-primary hover:underline" onClick={() => { setEditingWatchDate(false); setEditingRewatchIndex(chronoIndex); setRewatchDateDraft(toWatchDateInput(iso)); }}>Edit date</button>
+                              <button type="button" className="text-xs text-destructive hover:underline" onClick={() => { const label = formatWatchDate(iso); if (!window.confirm(label ? `Delete rewatch on ${label}? This removes that rewatch from your count.` : "Delete this rewatch?")) return; deleteRewatchDate(chronoIndex, label); }}>Delete</button>
+                            </>
+                          )}
+                        </div>
+                        {editing && (
+                          <div className="flex flex-wrap items-center gap-2 pl-5">
+                            <Input type="date" value={rewatchDateDraft} max={todayInputValue()} onChange={(e) => setRewatchDateDraft(e.target.value)} className="h-8 w-auto bg-secondary border-border text-sm" />
+                            <Button size="sm" className="h-8" disabled={!rewatchDateDraft} onClick={() => saveRewatchDate(chronoIndex, rewatchDateDraft)}>Save</Button>
+                            <Button size="sm" variant="ghost" className="h-8 text-destructive" onClick={() => { const label = formatWatchDate(iso); if (!window.confirm(label ? `Delete rewatch on ${label}? This removes that rewatch from your count. You can log it again with Rewatch.` : "Delete this rewatch? You can log it again with Rewatch.")) return; deleteRewatchDate(chronoIndex, label); }}>Delete</Button>
+                            <Button size="sm" variant="ghost" className="h-8 text-muted-foreground" onClick={() => setEditingRewatchIndex(null)}>Cancel</Button>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                  {undated > 0 && (
+                    <li className="text-xs text-muted-foreground/80 pl-5">
+                      {undated} rewatch{undated === 1 ? "" : "es"} logged without a date
+                    </li>
+                  )}
+                  {movie.createdAt && (
+                    <li className="text-xs text-muted-foreground/70 pl-5">
+                      Added to diary {formatWatchDate(movie.createdAt)}
+                    </li>
+                  )}
+                </ul>
+              </section>
+            );
+          })()}
         </div>
 
         {/* Sidebar content */}
