@@ -302,7 +302,7 @@ export default function UpcomingPage() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 md:gap-6">
+            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 md:gap-4">
               {savedUnreleased.map((film) => (
                 <Link key={film.id} href={`/movie/${film.id}`} className="group space-y-2">
                   <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-secondary">
@@ -372,7 +372,7 @@ export default function UpcomingPage() {
               No dated releases in this window. Try another language.
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 md:gap-6">
+            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 md:gap-4">
               {upcoming.map((movie) => (
                 <UpcomingPoster
                   key={movie.tmdbId}
