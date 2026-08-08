@@ -501,14 +501,16 @@ export default function MovieDetailsPage() {
       </div>
 
       {/* Hero Header */}
-      <div className="relative w-full h-[38vh] md:h-[60vh] bg-black">
+      <div className="relative w-full bg-black md:h-[60vh]">
         {posterUrl ? (
           <>
-            <img 
-              src={posterUrl} 
-              alt={movie.title} 
-              className="w-full h-full object-cover opacity-40 blur-sm"
-            />
+            <div className="absolute inset-0">
+              <img 
+                src={posterUrl} 
+                alt={movie.title} 
+                className="w-full h-full object-cover opacity-40 blur-sm"
+              />
+            </div>
             <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent" />
             <div className="absolute inset-0 bg-gradient-to-r from-background via-background/50 to-transparent" />
           </>
@@ -519,8 +521,8 @@ export default function MovieDetailsPage() {
           </div>
         )}
 
-        <div className="absolute bottom-0 left-0 right-0 p-4 md:p-10 max-w-7xl mx-auto flex flex-row gap-4 md:gap-8 items-center md:items-end z-10">
-          <div className="w-20 md:w-48 aspect-[2/3] rounded-xl overflow-hidden shadow-2xl border-2 border-border/50 bg-secondary flex-shrink-0 relative transform md:translate-y-8">
+        <div className="relative md:absolute md:bottom-0 md:left-0 md:right-0 p-4 md:p-10 max-w-7xl mx-auto flex flex-row gap-4 md:gap-8 items-center md:items-end z-10">
+          <div className="w-1/3 md:w-48 aspect-[2/3] rounded-xl overflow-hidden shadow-2xl border-2 border-border/50 bg-secondary flex-shrink-0 relative md:transform md:translate-y-8">
             {posterUrl ? (
               <img src={posterUrl} alt={movie.title} className="w-full h-full object-cover" />
             ) : (
