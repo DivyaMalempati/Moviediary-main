@@ -501,7 +501,7 @@ export default function MovieDetailsPage() {
       </div>
 
       {/* Hero Header */}
-      <div className="relative w-full h-[50vh] md:h-[60vh] bg-black">
+      <div className="relative w-full h-[38vh] md:h-[60vh] bg-black">
         {posterUrl ? (
           <>
             <img 
@@ -519,7 +519,7 @@ export default function MovieDetailsPage() {
           </div>
         )}
 
-        <div className="absolute bottom-0 left-0 right-0 p-4 md:p-10 max-w-7xl mx-auto flex flex-row gap-4 md:gap-8 items-end z-10">
+        <div className="absolute bottom-0 left-0 right-0 p-4 md:p-10 max-w-7xl mx-auto flex flex-row gap-4 md:gap-8 items-center md:items-end z-10">
           <div className="w-20 md:w-48 aspect-[2/3] rounded-xl overflow-hidden shadow-2xl border-2 border-border/50 bg-secondary flex-shrink-0 relative transform md:translate-y-8">
             {posterUrl ? (
               <img src={posterUrl} alt={movie.title} className="w-full h-full object-cover" />
@@ -528,8 +528,8 @@ export default function MovieDetailsPage() {
             )}
           </div>
           
-          <div className="flex-1 space-y-4">
-            <div className="flex flex-wrap items-center gap-3">
+          <div className="flex-1 space-y-2 md:space-y-4">
+            <div className="flex flex-wrap items-center gap-2 md:gap-3">
               <button
                 type="button"
                 onClick={() => setLanguageOpen(true)}
@@ -552,7 +552,7 @@ export default function MovieDetailsPage() {
               ) : null}
             </div>
             
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-white drop-shadow-md">
+            <h1 className="text-xl md:text-5xl lg:text-6xl font-bold tracking-tight text-white drop-shadow-md leading-tight">
               {movie.title}
             </h1>
 
@@ -566,7 +566,7 @@ export default function MovieDetailsPage() {
               </div>
             )}
             
-            <div className="flex items-center gap-3 pt-2 flex-wrap">
+            <div className="flex items-center gap-2 md:gap-3 pt-1 md:pt-2 flex-wrap">
               {(() => {
                 const isFuture = movie.releaseDate
                   ? new Date(`${movie.releaseDate}T12:00:00`) > new Date()
