@@ -29,7 +29,7 @@ import {
 } from "@/lib/movie-utils";
 import { LanguageBadge } from "@/components/language-badge";
 import { MoviePosterCard } from "@/components/movie-card";
-import { Star, Heart, Bookmark, Check, Trash2, ArrowLeft, Loader2, Calendar, Clapperboard, Tv, Eye, BookmarkPlus, Film, FolderOpen, Plus, X, RotateCcw, Ban, Zap } from "lucide-react";
+import { Star, Heart, Bookmark, Check, Trash2, ArrowLeft, Loader2, Calendar, Clapperboard, Tv, Eye, BookmarkPlus, Film, FolderOpen, Plus, X, RotateCcw, Ban, Zap, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks/use-debounce";
 import { ShareMovieSheet } from "@/components/share-movie-sheet";
@@ -576,9 +576,9 @@ export default function MovieDetailsPage() {
                 // For unreleased movies on the watchlist, don't allow marking watched
                 if (isFuture && movie.status === "watchlist") {
                   return (
-                    <Button variant="outline" className="bg-background/50 backdrop-blur" disabled>
-                      <Bookmark className="w-4 h-4 mr-2" />
-                      In Watchlist · Unreleased
+                    <Button variant="outline" className="bg-background/50 backdrop-blur text-muted-foreground" disabled>
+                      <Clock className="w-4 h-4 mr-2 hidden md:inline-flex" />
+                      Unreleased
                     </Button>
                   );
                 }
