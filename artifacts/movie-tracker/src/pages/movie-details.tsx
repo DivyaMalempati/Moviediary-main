@@ -588,7 +588,7 @@ export default function MovieDetailsPage() {
                     className={movie.status === "watched" ? "bg-primary text-primary-foreground shadow-[0_0_20px_rgba(245,158,11,0.3)]" : "bg-background/50 backdrop-blur"}
                     onClick={toggleStatus}
                   >
-                    {movie.status === "watched" ? <Check className="w-4 h-4 mr-2" /> : <Bookmark className="w-4 h-4 mr-2" />}
+                    {movie.status === "watched" ? <Check className="w-4 h-4 mr-2 hidden md:inline-flex" /> : <Bookmark className="w-4 h-4 mr-2 hidden md:inline-flex" />}
                     {movie.status === "watched" ? "Watched" : "In Watchlist"}
                   </Button>
                 );
@@ -601,7 +601,7 @@ export default function MovieDetailsPage() {
                   onClick={handleRewatch}
                   disabled={rewatchMovie.isPending}
                 >
-                  <RotateCcw className="w-4 h-4 mr-2" />
+                  <RotateCcw className="w-4 h-4 mr-2 hidden md:inline-flex" />
                   Rewatch{(movie.rewatchCount ?? 0) > 0 ? ` · ×${1 + movie.rewatchCount}` : ""}
                 </Button>
               )}
