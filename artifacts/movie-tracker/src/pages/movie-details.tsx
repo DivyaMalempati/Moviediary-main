@@ -520,7 +520,7 @@ export default function MovieDetailsPage() {
         )}
 
         <div className="absolute bottom-0 left-0 right-0 p-6 md:p-10 max-w-7xl mx-auto flex flex-col md:flex-row gap-8 items-end z-10">
-          <div className="w-32 md:w-48 aspect-[2/3] rounded-xl overflow-hidden shadow-2xl border-2 border-border/50 bg-secondary flex-shrink-0 relative hidden md:block transform translate-y-8">
+          <div className="w-28 md:w-48 aspect-[2/3] rounded-xl overflow-hidden shadow-2xl border-2 border-border/50 bg-secondary flex-shrink-0 relative transform md:translate-y-8">
             {posterUrl ? (
               <img src={posterUrl} alt={movie.title} className="w-full h-full object-cover" />
             ) : (
