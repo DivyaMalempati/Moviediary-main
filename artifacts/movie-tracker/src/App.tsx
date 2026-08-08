@@ -11,6 +11,7 @@ import { isDemoMode, initDemoMode, disableDemoMode, enableDemoMode, clearAppSess
 // disableDemoMode used when Clerk session appears / leaving guest mode
 
 import LandingPage from "@/pages/landing";
+import LibraryPage from "@/pages/library";
 import WatchedPage from "@/pages/watched";
 import WatchlistPage from "@/pages/watchlist";
 import UpcomingPage from "@/pages/upcoming";
@@ -139,8 +140,9 @@ function AppPages() {
   return (
     <Layout>
       <Switch>
-        <Route path="/watched" component={WatchedPage} />
-        <Route path="/watchlist" component={WatchlistPage} />
+        <Route path="/library" component={LibraryPage} />
+        <Route path="/watched" component={() => <Redirect to="/library?tab=watched" />} />
+        <Route path="/watchlist" component={() => <Redirect to="/library?tab=watchlist" />} />
         <Route path="/upcoming" component={gated("upcoming", UpcomingPage)} />
         <Route path="/add" component={AddPage} />
         <Route path="/suggestions" component={gated("discover", SuggestionsPage)} />
@@ -264,7 +266,7 @@ function AuthPageShell({
 }
 
 function SignInPage() {
-  const afterAuth = absoluteAppUrl("/watched");
+  const afterAuth = absoluteAppUrl("/library");
 
   return (
     <AuthPageShell mode="sign-in">
@@ -281,7 +283,7 @@ function SignInPage() {
 }
 
 function SignUpPage() {
-  const afterAuth = absoluteAppUrl("/watched");
+  const afterAuth = absoluteAppUrl("/library");
 
   return (
     <AuthPageShell mode="sign-up">
@@ -319,7 +321,7 @@ function SignedInHomeRedirect() {
   } catch {
     /* ignore */
   }
-  return <Redirect to="/watched" />;
+  return <Redirect to="/library" />;
 }
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -363,8 +365,9 @@ function ClerkAppPages() {
   return (
     <Layout>
       <Switch>
-        <Route path="/watched" component={protect(null, WatchedPage)} />
-        <Route path="/watchlist" component={protect(null, WatchlistPage)} />
+        <Route path="/library" component={protect(null, LibraryPage)} />
+        <Route path="/watched" component={() => <Redirect to="/library?tab=watched" />} />
+        <Route path="/watchlist" component={() => <Redirect to="/library?tab=watchlist" />} />
         <Route path="/upcoming" component={protect("upcoming", UpcomingPage)} />
         <Route path="/add" component={protect(null, AddPage)} />
         <Route path="/suggestions" component={protect("discover", SuggestionsPage)} />
@@ -408,8 +411,8 @@ function ClerkProviderWithRoutes() {
       appearance={clerkAppearance}
       signInUrl={`${basePath}/sign-in`}
       signUpUrl={`${basePath}/sign-up`}
-      signInFallbackRedirectUrl={absoluteAppUrl("/watched")}
-      signUpFallbackRedirectUrl={absoluteAppUrl("/watched")}
+      signInFallbackRedirectUrl={absoluteAppUrl("/library")}
+      signUpFallbackRedirectUrl={absoluteAppUrl("/library")}
       localization={{
         signIn: { start: { title: "Welcome back", subtitle: "Sign in to your Cinevault" } },
         signUp: { start: { title: "Create your vault", subtitle: "Track every film you love" } },

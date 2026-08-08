@@ -288,25 +288,38 @@ function ProfileShell({
               </button>
 
               {isFeatureEnabled("import") && (
-                <Link href="/import">
-                  <button
+                <div className="flex items-center gap-2 py-2">
+                  <Link href="/import" className="flex-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full gap-2 text-sm"
+                    >
+                      <Upload className="w-4 h-4" />
+                      Import
+                    </Button>
+                  </Link>
+                  <Button
                     type="button"
-                    className="w-full flex items-center gap-3 px-1 py-3 text-left text-sm hover:text-foreground text-foreground/90 transition-colors"
+                    variant="outline"
+                    className="flex-1 gap-2 text-sm"
+                    onClick={exportLibrary}
                   >
-                    <Upload className="w-4 h-4 text-muted-foreground" />
-                    Import
-                  </button>
-                </Link>
+                    <Download className="w-4 h-4" />
+                    Export
+                  </Button>
+                </div>
               )}
-
-              <button
-                type="button"
-                onClick={exportLibrary}
-                className="w-full flex items-center gap-3 px-1 py-3 text-left text-sm hover:text-foreground text-foreground/90 transition-colors"
-              >
-                <Download className="w-4 h-4 text-muted-foreground" />
-                Export library
-              </button>
+              {!isFeatureEnabled("import") && (
+                <button
+                  type="button"
+                  onClick={exportLibrary}
+                  className="w-full flex items-center gap-3 px-1 py-3 text-left text-sm hover:text-foreground text-foreground/90 transition-colors"
+                >
+                  <Download className="w-4 h-4 text-muted-foreground" />
+                  Export library
+                </button>
+              )}
             </div>
 
             <div className="pt-4 border-t border-border mt-4">

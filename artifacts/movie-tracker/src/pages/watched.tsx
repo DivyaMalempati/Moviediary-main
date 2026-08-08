@@ -505,7 +505,6 @@ export default function WatchedPage() {
           <div className="relative z-10">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h1 className="text-3xl font-bold mb-2">My Cinema</h1>
                 <p className="text-muted-foreground flex items-center gap-2">
                   <span className="font-mono text-primary font-bold text-lg">{stats?.totalWatched || 0}</span> films watched
                 </p>

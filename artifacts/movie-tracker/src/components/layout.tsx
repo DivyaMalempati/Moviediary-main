@@ -52,6 +52,8 @@ interface LayoutProps {
 
 function iconForHref(href: string): LucideIcon {
   switch (href) {
+    case "/library":
+      return BookOpen;
     case "/watched":
       return Eye;
     case "/watchlist":
@@ -172,7 +174,7 @@ export function Layout({ children }: LayoutProps) {
         )}
       >
         <div className="p-6 pb-2">
-          <Link href="/watched" className="flex items-center gap-3 group">
+          <Link href="/library" className="flex items-center gap-3 group">
             <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
               <Clapperboard className="w-5 h-5" />
             </div>

@@ -92,23 +92,17 @@ export type NavItem = {
 
 /** Desktop sidebar — Add (Log) + Discover; Together lives under Profile. */
 export const SIDEBAR_NAV: NavItem[] = [
-  { href: "/watched", label: "Watched", feature: "watched" },
-  { href: "/watchlist", label: "Watchlist", feature: "watchlist" },
+  { href: "/library", label: "Library", feature: "watched" },
   { href: "/swipe", label: "Swipe", feature: "swipe" },
   { href: "/add", label: "Add", feature: "add" },
-  { href: "/add?tab=search", label: "Discover", feature: "discover" },
   { href: "/upcoming", label: "Upcoming", feature: "upcoming" },
-  { href: "/guide", label: "Guide", feature: "guide" },
-  // Labs
   { href: "/collections", label: "Collections", feature: "collections" },
-  { href: "/stats", label: "Stats", feature: "stats" },
-  { href: "/import", label: "Import", feature: "import" },
+  { href: "/guide", label: "Guide", feature: "guide" },
 ];
 
-/** Mobile bottom bar — Add instead of Together (Together is on Profile). */
+/** Mobile bottom bar — 4 tabs: Library, Swipe, Add, Profile. */
 export const BOTTOM_NAV: NavItem[] = [
-  { href: "/watched", label: "Watched", feature: "watched" },
-  { href: "/watchlist", label: "Watchlist", feature: "watchlist" },
+  { href: "/library", label: "Library", feature: "watched" },
   { href: "/swipe", label: "Swipe", feature: "swipe" },
   { href: "/add", label: "Add", feature: "add" },
   { href: "/profile", label: "Profile", feature: "profile" },
