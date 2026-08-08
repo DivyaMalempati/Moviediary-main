@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { useListMovies, useGetMovieStats, useRewatchMovie, getListMoviesQueryKey, getGetMovieStatsQueryKey } from "@workspace/api-client-react";
 import {
-  Clapperboard, Search, Loader2, Upload, X, Download, ChevronDown, RotateCcw, Bell, Users,
+  Clapperboard, Search, Loader2, Upload, X, Download, ChevronDown, RotateCcw, Bell,
 } from "lucide-react";
 import { RewatchLogDialog } from "@/components/rewatch-log-dialog";
 import { ShareMovieSheet } from "@/components/share-movie-sheet";
@@ -503,19 +503,10 @@ export default function WatchedPage() {
             <Clapperboard className="w-32 h-32" />
           </div>
           <div className="relative z-10">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-muted-foreground flex items-center gap-2">
-                  <span className="font-mono text-primary font-bold text-lg">{stats?.totalWatched || 0}</span> films watched
-                </p>
-              </div>
-              <Link
-                href="/partner"
-                className="inline-flex items-center gap-2 rounded-lg border border-border bg-secondary/60 hover:bg-secondary px-3 py-2 text-sm font-medium transition-colors shrink-0"
-              >
-                <Users className="w-4 h-4" />
-                Together
-              </Link>
+            <div className="flex items-start gap-4">
+              <p className="text-muted-foreground flex items-center gap-2">
+                <span className="font-mono text-primary font-bold text-lg">{stats?.totalWatched || 0}</span> films watched
+              </p>
             </div>
             {stats?.byLanguage && stats.byLanguage.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-4">
