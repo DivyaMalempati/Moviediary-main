@@ -266,7 +266,7 @@ function AuthPageShell({
 }
 
 function SignInPage() {
-  const afterAuth = absoluteAppUrl("/library");
+  const afterAuth = absoluteAppUrl("/watched");
 
   return (
     <AuthPageShell mode="sign-in">
@@ -283,7 +283,7 @@ function SignInPage() {
 }
 
 function SignUpPage() {
-  const afterAuth = absoluteAppUrl("/library");
+  const afterAuth = absoluteAppUrl("/watched");
 
   return (
     <AuthPageShell mode="sign-up">
@@ -321,7 +321,7 @@ function SignedInHomeRedirect() {
   } catch {
     /* ignore */
   }
-  return <Redirect to="/library" />;
+  return <Redirect to="/watched" />;
 }
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -411,8 +411,8 @@ function ClerkProviderWithRoutes() {
       appearance={clerkAppearance}
       signInUrl={`${basePath}/sign-in`}
       signUpUrl={`${basePath}/sign-up`}
-      signInFallbackRedirectUrl={absoluteAppUrl("/library")}
-      signUpFallbackRedirectUrl={absoluteAppUrl("/library")}
+      signInFallbackRedirectUrl={absoluteAppUrl("/watched")}
+      signUpFallbackRedirectUrl={absoluteAppUrl("/watched")}
       localization={{
         signIn: { start: { title: "Welcome back", subtitle: "Sign in to your Cinevault" } },
         signUp: { start: { title: "Create your vault", subtitle: "Track every film you love" } },
