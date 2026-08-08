@@ -577,7 +577,7 @@ export default function MovieDetailsPage() {
                 if (isFuture && movie.status === "watchlist") {
                   return (
                     <Button variant="outline" className="bg-background/50 backdrop-blur text-muted-foreground" disabled>
-                      <Clock className="w-4 h-4 mr-2 hidden md:inline-flex" />
+                      <Clock className="w-4 h-4 mr-2" />
                       Unreleased
                     </Button>
                   );
