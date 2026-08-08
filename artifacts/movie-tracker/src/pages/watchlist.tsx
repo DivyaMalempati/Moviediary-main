@@ -243,20 +243,6 @@ export default function WatchlistPage() {
           </Link>
         )}
 
-        <div className="flex items-center justify-between gap-4">
-          <div className="ml-auto">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 text-xs h-8 shrink-0"
-              onClick={() => exportCSV(movies ?? [], "cinevault_watchlist.csv")}
-              disabled={!movies?.length}
-            >
-              <Download className="w-3 h-3" /> Export
-            </Button>
-          </div>
-        </div>
-
         {!isLoading && (movies?.length ?? 0) > 0 && (
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative max-w-sm flex-1 min-w-[12rem]">
@@ -289,6 +275,15 @@ export default function WatchlistPage() {
                 ))}
               </SelectContent>
             </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-xs h-9 shrink-0"
+              onClick={() => exportCSV(movies ?? [], "cinevault_watchlist.csv")}
+              disabled={!movies?.length}
+            >
+              <Download className="w-3 h-3" /> Export
+            </Button>
           </div>
         )}
 
