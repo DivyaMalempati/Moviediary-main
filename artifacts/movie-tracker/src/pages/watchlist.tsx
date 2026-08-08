@@ -244,11 +244,6 @@ export default function WatchlistPage() {
         )}
 
         <div className="flex items-center justify-between gap-4">
-          {isFeatureEnabled("upcoming") && (
-            <Link href="/upcoming" className="text-xs text-primary hover:underline">
-              Looking for theatrical dates? Open Upcoming →
-            </Link>
-          )}
           <div className="ml-auto">
             <Button
               variant="outline"
