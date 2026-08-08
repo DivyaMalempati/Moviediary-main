@@ -90,9 +90,10 @@ export type NavItem = {
   feature: AppFeature;
 };
 
-/** Desktop sidebar — Add (Log) + Discover; Together lives under Profile. */
+/** Desktop sidebar */
 export const SIDEBAR_NAV: NavItem[] = [
-  { href: "/library", label: "Library", feature: "watched" },
+  { href: "/watched", label: "Watched", feature: "watched" },
+  { href: "/watchlist", label: "Watchlist", feature: "watchlist" },
   { href: "/swipe", label: "Swipe", feature: "swipe" },
   { href: "/add", label: "Add", feature: "add" },
   { href: "/upcoming", label: "Upcoming", feature: "upcoming" },
@@ -100,9 +101,10 @@ export const SIDEBAR_NAV: NavItem[] = [
   { href: "/guide", label: "Guide", feature: "guide" },
 ];
 
-/** Mobile bottom bar — 4 tabs: Library, Swipe, Add, Profile. */
+/** Mobile bottom bar */
 export const BOTTOM_NAV: NavItem[] = [
-  { href: "/library", label: "Library", feature: "watched" },
+  { href: "/watched", label: "Watched", feature: "watched" },
+  { href: "/watchlist", label: "Watchlist", feature: "watchlist" },
   { href: "/swipe", label: "Swipe", feature: "swipe" },
   { href: "/add", label: "Add", feature: "add" },
   { href: "/profile", label: "Profile", feature: "profile" },

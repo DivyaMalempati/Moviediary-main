@@ -141,8 +141,8 @@ function AppPages() {
     <Layout>
       <Switch>
         <Route path="/library" component={LibraryPage} />
-        <Route path="/watched" component={() => <Redirect to="/library?tab=watched" />} />
-        <Route path="/watchlist" component={() => <Redirect to="/library?tab=watchlist" />} />
+        <Route path="/watched" component={WatchedPage} />
+        <Route path="/watchlist" component={WatchlistPage} />
         <Route path="/upcoming" component={gated("upcoming", UpcomingPage)} />
         <Route path="/add" component={AddPage} />
         <Route path="/suggestions" component={gated("discover", SuggestionsPage)} />
@@ -366,8 +366,8 @@ function ClerkAppPages() {
     <Layout>
       <Switch>
         <Route path="/library" component={protect(null, LibraryPage)} />
-        <Route path="/watched" component={() => <Redirect to="/library?tab=watched" />} />
-        <Route path="/watchlist" component={() => <Redirect to="/library?tab=watchlist" />} />
+        <Route path="/watched" component={protect(null, WatchedPage)} />
+        <Route path="/watchlist" component={protect(null, WatchlistPage)} />
         <Route path="/upcoming" component={protect("upcoming", UpcomingPage)} />
         <Route path="/add" component={protect(null, AddPage)} />
         <Route path="/suggestions" component={protect("discover", SuggestionsPage)} />
