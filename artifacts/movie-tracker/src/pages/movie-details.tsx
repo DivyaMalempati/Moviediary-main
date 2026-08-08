@@ -567,14 +567,30 @@ export default function MovieDetailsPage() {
             )}
             
             <div className="flex items-center gap-3 pt-2 flex-wrap">
-              <Button 
-                variant={movie.status === "watched" ? "default" : "outline"} 
-                className={movie.status === "watched" ? "bg-primary text-primary-foreground shadow-[0_0_20px_rgba(245,158,11,0.3)]" : "bg-background/50 backdrop-blur"}
-                onClick={toggleStatus}
-              >
-                {movie.status === "watched" ? <Check className="w-4 h-4 mr-2" /> : <Bookmark className="w-4 h-4 mr-2" />}
-                {movie.status === "watched" ? "Watched" : "In Watchlist"}
-              </Button>
+              {(() => {
+                const isFuture = movie.releaseDate
+                  ? new Date(`${movie.releaseDate}T12:00:00`) > new Date()
+                  : false;
+                // For unreleased movies on the watchlist, don't allow marking watched
+                if (isFuture && movie.status === "watchlist") {
+                  return (
+                    <Button variant="outline" className="bg-background/50 backdrop-blur" disabled>
+                      <Bookmark className="w-4 h-4 mr-2" />
+                      In Watchlist · Unreleased
+                    </Button>
+                  );
+                }
+                return (
+                  <Button
+                    variant={movie.status === "watched" ? "default" : "outline"}
+                    className={movie.status === "watched" ? "bg-primary text-primary-foreground shadow-[0_0_20px_rgba(245,158,11,0.3)]" : "bg-background/50 backdrop-blur"}
+                    onClick={toggleStatus}
+                  >
+                    {movie.status === "watched" ? <Check className="w-4 h-4 mr-2" /> : <Bookmark className="w-4 h-4 mr-2" />}
+                    {movie.status === "watched" ? "Watched" : "In Watchlist"}
+                  </Button>
+                );
+              })()}
 
               {movie.status === "watched" && (
                 <Button

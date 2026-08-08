@@ -293,21 +293,27 @@ export default function WatchlistPage() {
                 posterPath={movie.posterPath}
                 language={movie.originalLanguage}
                 year={movie.releaseYear}
-                overlayAction={
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="shadow-lg shadow-black/50 bg-white text-black hover:bg-white/90"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleMarkWatched(movie.id);
-                    }}
-                  >
-                    <Star className="w-4 h-4 mr-2" />
-                    Rate
-                  </Button>
-                }
+                overlayAction={(() => {
+                  const isFuture = movie.releaseDate
+                    ? new Date(`${movie.releaseDate}T12:00:00`) > new Date()
+                    : false;
+                  if (isFuture) return undefined;
+                  return (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="shadow-lg shadow-black/50 bg-white text-black hover:bg-white/90"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleMarkWatched(movie.id);
+                      }}
+                    >
+                      <Star className="w-4 h-4 mr-2" />
+                      Rate
+                    </Button>
+                  );
+                })()}
               />
             ))}
           </div>
