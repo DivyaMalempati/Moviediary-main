@@ -213,29 +213,24 @@ export default function WatchlistPage() {
           </div>
         )}
 
-        <section className="flex items-start justify-between gap-4">
-          <div className="flex flex-col gap-2">
-            <h1 className="text-3xl font-bold flex items-center gap-3">
-              <Bookmark className="w-8 h-8 text-primary" />
-              Watchlist
-            </h1>
-            <p className="text-muted-foreground">Films you want to explore.</p>
-            {isFeatureEnabled("upcoming") && (
-              <Link href="/upcoming" className="text-xs text-primary hover:underline w-fit">
-                Looking for theatrical dates? Open Upcoming →
-              </Link>
-            )}
+        <div className="flex items-center justify-between gap-4">
+          {isFeatureEnabled("upcoming") && (
+            <Link href="/upcoming" className="text-xs text-primary hover:underline">
+              Looking for theatrical dates? Open Upcoming →
+            </Link>
+          )}
+          <div className="ml-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-xs h-8 shrink-0"
+              onClick={() => exportCSV(movies ?? [], "cinevault_watchlist.csv")}
+              disabled={!movies?.length}
+            >
+              <Download className="w-3 h-3" /> Export
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5 text-xs h-8 shrink-0 mt-1"
-            onClick={() => exportCSV(movies ?? [], "cinevault_watchlist.csv")}
-            disabled={!movies?.length}
-          >
-            <Download className="w-3 h-3" /> Export
-          </Button>
-        </section>
+        </div>
 
         {!isLoading && (movies?.length ?? 0) > 0 && (
           <div className="flex flex-wrap items-center gap-3">
